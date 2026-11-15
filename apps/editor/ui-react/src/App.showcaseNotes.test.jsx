@@ -3,9 +3,9 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-// The note-picker tests drive the real shell (sidebar + routes) with the web API
-// mocked. The other screens are stubbed so the assertions land on the canvas and
-// the picker popup, not on their unrelated data loads.
+// The merged Add dialog is one surface for notes and catalog shells. These tests
+// drive the real shell with the web API mocked and check that picking notes
+// writes immediately, with no draft Save.
 vi.mock("./lib/api.js", () => ({
   createCatalogEntry: vi.fn(),
   createCategory: vi.fn(),
@@ -26,10 +26,11 @@ vi.mock("./lib/api.js", () => ({
   renameShowcase: vi.fn(),
   reorderCollections: vi.fn(),
   reorderShowcases: vi.fn(),
+  reorderNodes: vi.fn(),
+  replaceCatalogEntryWithNote: vi.fn(),
   updateCatalogEntry: vi.fn(),
   updateNode: vi.fn(),
   updateNodeNotes: vi.fn(),
-  reorderNodes: vi.fn(),
 }));
 
 vi.mock("./components/NotesTable.jsx", () => ({
@@ -50,6 +51,7 @@ vi.mock("./components/NoteEditForm.jsx", () => ({
 
 import { ShellContent } from "./App.jsx";
 import {
+  createCatalogEntry,
   createShowcaseNode,
   getCategories,
   getCollections,
@@ -68,7 +70,6 @@ function note(overrides) {
     denomination: "1 leu",
     issue_date: "1917",
     catalog_number: "22",
-    updated_at: "rev",
     images: [],
     ...overrides,
   };
@@ -116,13 +117,18 @@ function renderAt(path) {
   );
 }
 
-async function openPicker() {
+async function openAddDialog() {
   const user = userEvent.setup();
-  renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-  // Categories render expanded, so the `+ notes` tile is on the canvas without
-  // opening anything.
-  await user.click(await screen.findByRole("button", { name: "Add notes" }));
-  return { user, dialog: await screen.findByRole("dialog", { name: "Add notes" }) };
+  renderAt(SHOWCASE_ROUTES.showcase(1));
+  await screen.findByRole("link", { name: "Kingdom" });
+  await user.click(
+    await screen.findByRole("button", { name: "Add to this level" }),
+  );
+  const dialog = await screen.findByRole("dialog", {
+    name: "Add to “Summer”",
+  });
+  await within(dialog).findByText("1 leu · 1917");
+  return { user, dialog };
 }
 
 beforeEach(() => {
@@ -143,38 +149,35 @@ beforeEach(() => {
   });
   getAllNotes.mockImplementation(async (collections) => ({
     notes: collections.flatMap((collection) =>
-      (collection.id === 1
-        ? [NOTE_A, NOTE_B, NOTE_C]
-        : [NOTE_D]
-      ).map((entry) => ({
-        ...entry,
-        collection_id: collection.id,
-        collection_name: collection.name,
-        collection_order: collection.id,
-      })),
+      (collection.id === 1 ? [NOTE_A, NOTE_B, NOTE_C] : [NOTE_D]).map(
+        (entry) => ({
+          ...entry,
+          collection_id: collection.id,
+          collection_name: collection.name,
+          collection_order: collection.id,
+        }),
+      ),
     ),
   }));
   createShowcaseNode.mockResolvedValue({ nodes: [] });
 });
 
-describe("the note picker", () => {
+describe("the merged add dialog", () => {
   test("lists notes across collections and keeps the catalog family rule", async () => {
-    const { user } = await openPicker();
+    const { user } = await openAddDialog();
 
-    // Every collection's notes are listed before a filter is chosen.
     expect(await screen.findByText("1 leu · 1917")).toBeInTheDocument();
     expect(screen.getByText("100 lei · 1943")).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Filter value"), "22");
 
-    // 22 and 22a match; 220 does not.
     expect(screen.getByText("1 leu · 1917")).toBeInTheDocument();
     expect(screen.getByText("1 leu · 1920")).toBeInTheDocument();
     expect(screen.queryByText("2 lei · 1920")).not.toBeInTheDocument();
     expect(screen.queryByText("100 lei · 1943")).not.toBeInTheDocument();
   });
 
-  test("the selection accumulates across filters and Add selected keeps it open", async () => {
+  test("selections accumulate across filters, then Add selected writes at once", async () => {
     createShowcaseNode.mockResolvedValue({
       nodes: [
         { id: 201, node_type: "note", note_id: 101, note: NOTE_A, children: [] },
@@ -183,44 +186,21 @@ describe("the note picker", () => {
       ],
     });
 
-    const { user, dialog } = await openPicker();
+    const { user, dialog } = await openAddDialog();
     const filter = screen.getByLabelText("Filter value");
 
     await user.type(filter, "22");
     await user.click(within(dialog).getByRole("button", { name: "Select all" }));
-    expect(
-      within(dialog).getByRole("button", { name: "Add selected (2)" }),
-    ).toBeInTheDocument();
 
     await user.clear(filter);
     await user.type(filter, "220");
-    expect(within(dialog).queryByText("1 leu · 1917")).not.toBeInTheDocument();
-    // The earlier picks survive the filter change.
-    expect(
-      within(dialog).getByRole("button", { name: "Add selected (2)" }),
-    ).toBeInTheDocument();
-
     await user.click(
       within(dialog).getByRole("checkbox", { name: /2 lei · 1920/ }),
     );
+
     await user.click(
       within(dialog).getByRole("button", { name: "Add selected (3)" }),
     );
-
-    // Staging is local: the popup stays open, the selection resets, and the
-    // cards render with no network call.
-    expect(createShowcaseNode).not.toHaveBeenCalled();
-    expect(within(dialog).getByRole("button", { name: "Add selected (0)" })).toBeInTheDocument();
-    // The added note cards render on the canvas.
-    expect(
-      await screen.findByRole("button", { name: "1 leu, Pick 22, 1917" }),
-    ).toBeInTheDocument();
-    // The header total updates with the tree.
-    expect(screen.getByText("3 notes")).toBeInTheDocument();
-
-    // Closing the picker and saving persists the batch.
-    await user.click(screen.getByRole("button", { name: "Done" }));
-    await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
       expect(createShowcaseNode).toHaveBeenCalledWith(1, {
@@ -229,19 +209,28 @@ describe("the note picker", () => {
         note_ids: [101, 102, 103],
       });
     });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(
+      await screen.findByRole("button", { name: "1 leu, Pick 22, 1917" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("3 notes")).toBeInTheDocument();
   });
 
   test("Deselect all removes only the currently filtered picks", async () => {
-    createShowcaseNode.mockResolvedValue({ nodes: [] });
+    createShowcaseNode.mockResolvedValue({
+      nodes: [
+        { id: 201, node_type: "note", note_id: 101, note: NOTE_A, children: [] },
+        { id: 202, node_type: "note", note_id: 102, note: NOTE_B, children: [] },
+      ],
+    });
 
-    const { user, dialog } = await openPicker();
+    const { user, dialog } = await openAddDialog();
     const filter = screen.getByLabelText("Filter value");
 
     await user.type(filter, "22");
     await user.click(within(dialog).getByRole("button", { name: "Select all" }));
-    expect(
-      within(dialog).getByRole("button", { name: "Add selected (2)" }),
-    ).toBeInTheDocument();
 
     await user.clear(filter);
     await user.type(filter, "220");
@@ -252,8 +241,9 @@ describe("the note picker", () => {
       within(dialog).getByRole("button", { name: "Add selected (3)" }),
     ).toBeInTheDocument();
 
-    // Deselect all only drops the 220 row; the earlier picks survive.
-    await user.click(within(dialog).getByRole("button", { name: "Deselect all" }));
+    await user.click(
+      within(dialog).getByRole("button", { name: "Deselect all" }),
+    );
     expect(
       within(dialog).getByRole("button", { name: "Add selected (2)" }),
     ).toBeInTheDocument();
@@ -261,11 +251,6 @@ describe("the note picker", () => {
     await user.click(
       within(dialog).getByRole("button", { name: "Add selected (2)" }),
     );
-
-    // Staged locally; Save persists the batch.
-    expect(createShowcaseNode).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Done" }));
-    await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
       expect(createShowcaseNode).toHaveBeenCalledWith(1, {
@@ -276,31 +261,44 @@ describe("the note picker", () => {
     });
   });
 
-  test("Add & close stages the notes and Save persists them", async () => {
-    createShowcaseNode.mockResolvedValue({
-      nodes: [{ id: 204, node_type: "note", note_id: 104, note: NOTE_D, children: [] }],
+  test("the Catalog shell tab creates planned shells with no note", async () => {
+    createCatalogEntry.mockResolvedValue({
+      node: {
+        id: 301,
+        node_type: "catalog_entry",
+        entry: {
+          catalog_number: "500",
+          denomination: "",
+          issue_date: "",
+          source: "",
+        },
+        specimens: [],
+        primary_note_id: null,
+        children: [],
+      },
     });
 
-    const { user } = await openPicker();
-
-    await user.type(screen.getByLabelText("Filter value"), "500");
-    await user.click(screen.getByRole("button", { name: "Select all" }));
-    await user.click(screen.getByRole("button", { name: "Add & close" }));
-
-    expect(createShowcaseNode).not.toHaveBeenCalled();
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    });
-
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    const { user, dialog } = await openAddDialog();
+    await user.click(within(dialog).getByRole("tab", { name: "Catalog shell" }));
+    await user.type(within(dialog).getByLabelText("Catalog numbers"), "500");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Add 1 shell" }),
+    );
 
     await waitFor(() => {
-      expect(createShowcaseNode).toHaveBeenCalledWith(1, {
-        type: "notes",
-        parent_id: 10,
-        note_ids: [104],
+      expect(createCatalogEntry).toHaveBeenCalledWith(1, {
+        parentId: 10,
+        entry: {
+          catalog_number: "500",
+          denomination: "",
+          issue_date: "",
+          source: "",
+        },
       });
     });
+    expect(
+      await screen.findByRole("button", { name: /is unseen\. Add notes/ }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -315,9 +313,11 @@ describe("a note already in the node", () => {
       ],
     });
 
-    const { dialog } = await openPicker();
+    const { dialog } = await openAddDialog();
 
-    const checkbox = within(dialog).getByRole("checkbox", { name: /1 leu · 1917/ });
+    const checkbox = within(dialog).getByRole("checkbox", {
+      name: /1 leu · 1917/,
+    });
     expect(checkbox).toBeDisabled();
     expect(within(dialog).getByText("added")).toBeInTheDocument();
   });

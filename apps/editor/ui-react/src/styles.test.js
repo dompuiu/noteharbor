@@ -2803,7 +2803,7 @@ describe("catalog header", () => {
   // band back instead, which keeps the layout where it was.
   test("the page head leaves room for the title's focus ring", () => {
     const clip = styles.match(
-      /\.collection-screen,\s*\.collection-screen > \.screen-stack,\s*\.collection-screen \.screen-body\s*\{([^}]*)\}/,
+      /\.collection-screen,\s*\.collection-screen > \.screen-stack,\s*\.collection-screen \.screen-body,\s*\.showcase-screen \.screen-body\s*\{([^}]*)\}/,
     );
     expect(clip).not.toBeNull();
     expect(clip[1]).toMatch(/padding-inline:\s*8px/);

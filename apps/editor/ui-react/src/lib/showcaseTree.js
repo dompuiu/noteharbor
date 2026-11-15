@@ -65,6 +65,24 @@ function findNodeById(nodes, nodeId) {
   return null;
 }
 
+// The parent id of a node, or null for a top-level node (and for an id that is
+// not in this tree). Insert-after and remove focus both need it.
+function findParentId(nodes, nodeId) {
+  for (const node of nodes ?? []) {
+    if ((node.children ?? []).some((child) => child.id === nodeId)) {
+      return node.id;
+    }
+
+    const nested = findParentId(node.children, nodeId);
+
+    if (nested != null) {
+      return nested;
+    }
+  }
+
+  return null;
+}
+
 // The card node that displays a Note, whether it is a note leaf or a Catalog
 // entry's specimen. Ownership is per Note, so a mark repaints the tree at this
 // node; `null` when the Note is not in this Showcase.
@@ -760,6 +778,7 @@ export {
   findNodeIdForNote,
   findNodeIdPath,
   findNodePath,
+  findParentId,
   hasCatalogEntries,
   hasSeenPrimary,
   isCatalogEntry,

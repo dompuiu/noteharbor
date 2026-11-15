@@ -148,29 +148,22 @@ const shortcutGroups = [
         description: "Show the focused note card's description and tags",
       },
       {
-        keys: ["Esc"],
+        keys: ["Drag"],
         description:
-          "Clear the card focus, then go up one level (exit edit mode at the root)",
+          "Drag a card onto another to reorder the level; use the card's ⋯ menu for add, rename, cover, and remove",
       },
       {
         keys: ["↓"],
-        description:
-          "Move focus from the showcase name or photo size to the cards (edit mode)",
+        description: "Move focus from the showcase name or photo size to the cards",
       },
       {
         keys: ["a"],
-        description: "Add notes to the focused card (edit mode)",
+        description: "Add a note after the focused card",
       },
       {
-        keys: ["g"],
-        description: "Add a grouping to the current level (edit mode)",
+        keys: ["Esc"],
+        description: "Clear the card focus, then go up one level",
       },
-      { keys: ["e"], description: "Rename the focused card (edit mode)" },
-      {
-        keys: ["e"],
-        description: "Enter edit mode when no card is focused (view mode)",
-      },
-      { keys: ["d"], description: "Remove the focused card (edit mode)" },
       { keys: ["?"], description: "Toggle this help" },
     ],
   },

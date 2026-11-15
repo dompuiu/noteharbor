@@ -1478,3 +1478,101 @@ async fn showcase_counts_positions_by_ownership() {
     assert_eq!(plain_row["entry_count"], json!(1));
     assert_eq!(plain_row["owned_count"], json!(1));
 }
+
+#[tokio::test]
+async fn catalog_entry_becomes_a_note_in_place() {
+    let (dir, state) = fresh_state();
+    let app = create_app(state);
+    let showcase = create_showcase(app.clone(), Some("Shell replacement")).await;
+    let showcase_id = showcase["id"].as_i64().unwrap();
+    let category = place_category(app.clone(), showcase_id, "Kingdom").await;
+    let category_id = category["id"].as_i64().unwrap();
+    let collection = create_collection(app.clone(), "Replacement notes").await;
+    let collection_id = collection["id"].as_i64().unwrap();
+    let first = create_note(app.clone(), collection_id, "1 leu").await;
+    let second = create_note(app.clone(), collection_id, "2 lei").await;
+
+    let (status, body) = add_catalog_entry(
+        app.clone(),
+        showcase_id,
+        category_id,
+        Some(json!([first["id"], second["id"]])),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let entry = body["node"].clone();
+    let entry_id = entry["id"].as_i64().unwrap();
+    assert_eq!(entry["specimens"].as_array().unwrap().len(), 2);
+
+    // Picking a library note turns the planned position into that one note,
+    // keeping its id and parent. The extra specimen links leave with the shell.
+    let (status, body) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/nodes/{entry_id}"),
+        Some(json!({ "node_type": "note", "note_id": second["id"] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let replaced = body["node"].clone();
+    assert_eq!(replaced["node_type"], json!("note"));
+    assert_eq!(replaced["note_id"], second["id"]);
+    assert_eq!(replaced["parent_node_id"], json!(category_id));
+    assert_eq!(replaced["note"]["denomination"], second["denomination"]);
+    assert!(replaced.get("entry").is_none());
+    assert!(replaced.get("specimens").is_none());
+    assert!(replaced.get("primary_note_id").is_none());
+    assert!(specimen_rows(&dir, entry_id).is_empty());
+
+    let in_tree = tree_child(app, showcase_id, json!(entry_id)).await;
+    assert_eq!(in_tree["node_type"], json!("note"));
+    assert_eq!(in_tree["note_id"], second["id"]);
+}
+
+#[tokio::test]
+async fn legacy_specimen_entries_migrate_to_single_note_cards() {
+    let (dir, state) = fresh_state();
+    let app = create_app(state);
+    let showcase = create_showcase(app.clone(), Some("Legacy catalog")).await;
+    let showcase_id = showcase["id"].as_i64().unwrap();
+    let category = place_category(app.clone(), showcase_id, "Kingdom").await;
+    let category_id = category["id"].as_i64().unwrap();
+    let collection = create_collection(app.clone(), "Legacy notes").await;
+    let collection_id = collection["id"].as_i64().unwrap();
+    let first = create_note(app.clone(), collection_id, "1 leu").await;
+    let second = create_note(app.clone(), collection_id, "2 lei").await;
+
+    let (status, body) = add_catalog_entry(
+        app.clone(),
+        showcase_id,
+        category_id,
+        Some(json!([first["id"], second["id"]])),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let entry_id = body["node"]["id"].as_i64().unwrap();
+    assert_eq!(specimen_rows(&dir, entry_id).len(), 2);
+
+    // Reopening the database runs the shell migration: the primary specimen
+    // becomes the node's note, and the extra specimen links are dropped.
+    drop(app);
+    let pool: DbPool = db::open_pool(&dir.path().join("banknotes.db")).expect("pool reopens");
+    let conn = pool.get().expect("connection");
+    let (node_type, note_id): (String, Option<i64>) = conn
+        .query_row(
+            "SELECT node_type, note_id FROM showcase_nodes WHERE id = ?1",
+            rusqlite::params![entry_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("migrated node");
+    assert_eq!(node_type, "note");
+    assert_eq!(note_id, first["id"].as_i64());
+    let remaining: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM showcase_catalog_notes WHERE node_id = ?1",
+            rusqlite::params![entry_id],
+            |row| row.get(0),
+        )
+        .expect("specimen count");
+    assert_eq!(remaining, 0);
+}

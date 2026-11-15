@@ -990,11 +990,6 @@ input[type="radio"] {
   align-items: center;
 }
 
-.showcase-name-error {
-  margin-bottom: 12px;
-  color: var(--danger);
-}
-
 .showcase-empty {
   padding: 24px 0;
 }
@@ -2328,8 +2323,9 @@ input[type="radio"] {
   text-transform: uppercase;
 }
 
-/* The owned check: a white disc over a busy photo, so the state survives any
-   banknote colour. */
+/* The check is a direct ownership toggle, not a menu trigger: a white disc
+   over a busy photo by default, turning solid green on hover/focus so the
+   mark reads clearly against any banknote colour. */
 .showcase-catalog-check {
   position: absolute;
   top: 14px;
@@ -2340,28 +2336,38 @@ input[type="radio"] {
 .showcase-card-check {
   display: grid;
   place-items: center;
-  width: 27px;
-  height: 27px;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  border: 1px solid rgba(37, 40, 43, 0.2);
+  border: 1px solid rgba(21, 122, 58, 0.42);
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.96);
+  background: #fff;
   color: var(--success);
-  box-shadow: 0 1px 3px rgba(37, 40, 43, 0.14);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.78),
+    0 2px 6px rgba(37, 40, 43, 0.28);
   cursor: pointer;
   transition:
     transform 0.12s ease,
-    background 0.12s ease;
+    background 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease,
+    color 0.12s ease;
 }
 
 .showcase-card-check:hover,
 .showcase-card-check:focus-visible {
-  transform: scale(1.08);
-  background: var(--success-bg);
+  border-color: var(--success);
+  background: var(--success);
+  color: #fff;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.9),
+    0 3px 9px rgba(21, 122, 58, 0.42);
+  transform: scale(1.1);
 }
 
 /* The ownership footer is the seen card's call to action; the card itself is
-   the menu trigger, so the footer is one visual row inside it. */
+   the toggle, so the footer is one visual row inside it. */
 .showcase-catalog-foot {
   display: flex;
   align-items: center;
@@ -2384,11 +2390,6 @@ input[type="radio"] {
   border: 1.5px dashed currentColor;
   border-radius: 50%;
   opacity: 0.75;
-}
-
-.showcase-catalog-caret {
-  flex: none;
-  opacity: 0.85;
 }
 
 .showcase-catalog-arrow {
@@ -2601,95 +2602,6 @@ input[type="radio"] {
   .showcase-entry-grid {
     grid-template-columns: 1fr;
   }
-}
-
-/* The ownership menu: a header naming the state, then the library-wide
-   ownership item and the specimen-manager entry. */
-.showcase-ownership-menu {
-  position: fixed;
-  z-index: 115;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 250px;
-  max-width: 320px;
-  padding: 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  box-shadow: var(--shadow-md);
-}
-
-.showcase-ownership-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 10px 8px;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.showcase-ownership-identity {
-  overflow: hidden;
-  color: var(--text);
-  font-size: 0.82rem;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.showcase-ownership-state {
-  flex: none;
-  padding: 1px 7px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-2);
-  color: var(--text-muted);
-  font-size: 0.66rem;
-  font-weight: 700;
-}
-
-.showcase-ownership-state--owned {
-  background: var(--success-bg);
-  color: var(--success);
-}
-
-.showcase-ownership-item {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  width: 100%;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.showcase-ownership-item:hover,
-.showcase-ownership-item:focus-visible {
-  background: var(--accent-soft);
-}
-
-.showcase-ownership-item small {
-  color: var(--text-faint);
-  font-size: 0.68rem;
-  line-height: 1.3;
-}
-
-.showcase-ownership-item b {
-  font-size: 0.8rem;
-  font-weight: 700;
-  line-height: 1.35;
-}
-
-.showcase-ownership-item em {
-  color: var(--text-faint);
-  font-size: 0.68rem;
-  font-style: normal;
-  line-height: 1.35;
 }
 
 /* The Undo affordance rides inside the transient toast. */
@@ -3816,7 +3728,8 @@ input[type="radio"] {
    move, only the edge the three of them clip at. */
 .collection-screen,
 .collection-screen > .screen-stack,
-.collection-screen .screen-body {
+.collection-screen .screen-body,
+.showcase-screen .screen-body {
   padding-inline: 8px;
   margin-inline: -8px;
 }
@@ -9649,4 +9562,253 @@ kbd {
    one step behind the catalog number it identifies. */
 td.table-col-collection {
   color: var(--text-muted);
+}
+
+/* ── One-view showcase canvas ────────────────────────────────────────────
+   There is no edit mode: every card is always draggable and always carries
+   its actions menu. The old edit-mode-only paddings and washes stay useful as
+   the cell chrome, so the rules are shared. */
+
+.showcase-screen .showcase-grid {
+  align-items: stretch;
+}
+
+.showcase-screen .showcase-reorder-cell {
+  padding-top: 40px;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease,
+    opacity 0.12s ease;
+}
+
+.showcase-reorder-cell--draggable {
+  cursor: grab;
+}
+
+.showcase-reorder-cell--draggable:active {
+  cursor: grabbing;
+}
+
+.showcase-reorder-cell--dragging {
+  opacity: 0.45;
+}
+
+.showcase-reorder-cell--drop-before {
+  box-shadow: inset 3px 0 0 var(--accent);
+  border-color: var(--accent);
+}
+
+.showcase-reorder-cell--drop-after {
+  box-shadow: inset -3px 0 0 var(--accent);
+  border-color: var(--accent);
+}
+
+/* The grip is an affordance, not a separate drag source: the whole item is
+   draggable, so the grip is a plain span the pointer can pass through. */
+.showcase-reorder-cell > .showcase-reorder-handle {
+  pointer-events: none;
+}
+
+.showcase-item-menu-trigger {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.showcase-item-menu-trigger:hover,
+.showcase-item-menu-trigger:focus-visible,
+.showcase-item-menu-trigger[aria-expanded="true"] {
+  border-color: var(--accent);
+  background: var(--surface);
+  color: var(--accent-strong);
+}
+
+/* The owned check shares the top-right corner with the menu; in one view the
+   menu owns that corner, so the check drops below it. */
+.showcase-reorder-cell .showcase-catalog-check {
+  top: 38px;
+  right: 10px;
+}
+
+.showcase-item-menu {
+  position: fixed;
+  z-index: 170;
+  min-width: 220px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.showcase-item-menu-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.showcase-item-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.showcase-item-menu-item .row-actions-menu-icon {
+  color: var(--text-muted);
+}
+
+.showcase-item-menu-item:hover .row-actions-menu-icon,
+.showcase-item-menu-item:focus-visible .row-actions-menu-icon,
+.showcase-item-menu-item--danger .row-actions-menu-icon {
+  color: currentColor;
+}
+
+.showcase-item-menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.showcase-item-menu-item:hover,
+.showcase-item-menu-item:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  outline: none;
+}
+
+.showcase-item-menu-item--danger {
+  color: var(--danger, #b3261e);
+}
+
+.showcase-item-menu-item--danger:hover,
+.showcase-item-menu-item--danger:focus-visible {
+  background: var(--danger-bg, #fdecea);
+  color: var(--danger, #b3261e);
+}
+
+/* The section header's menu sits at the right edge of the title block. */
+.showcase-category-head {
+  position: relative;
+  padding-right: 36px;
+}
+
+.showcase-category-head > .showcase-item-menu-trigger,
+.showcase-category-head > .showcase-item-menu {
+  position: absolute;
+}
+
+.showcase-category-head > .showcase-item-menu-trigger {
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+}
+
+/* One add tile replaces the old stack of edit-only tiles. */
+.showcase-tile--add {
+  justify-content: center;
+}
+
+.showcase-add-dialog {
+  width: min(920px, 100%);
+}
+
+.showcase-add-close {
+  align-self: flex-end;
+}
+
+.showcase-add-modes {
+  margin: 10px 0 4px;
+}
+
+.showcase-add-body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.showcase-picker-mode[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--accent-strong);
+  box-shadow: 0 0 0 1px var(--border-control);
+}
+
+.showcase-shell-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 2px;
+}
+
+.showcase-shell-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.55fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.showcase-shell-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.showcase-name-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.showcase-dialog {
+  width: min(560px, 100%);
+}
+
+@media (max-width: 720px) {
+  .showcase-shell-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.showcase-reorder-cell > .showcase-card,
+.showcase-reorder-cell > .showcase-cell {
+  flex: 1 1 auto;
+}
+
+.showcase-item-menu-item:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.showcase-item-menu-item:disabled:hover {
+  background: transparent;
+}
+
+.showcase-add-dialog .showcase-manager-head {
+  position: relative;
+  padding-right: 72px;
+}
+
+.showcase-add-dialog .showcase-add-close {
+  position: absolute;
+  top: 0;
+  right: 0;
 }

@@ -101,6 +101,7 @@ function ShowcaseNotePicker({
   excludeNoteIds,
   mode = "notes",
   notice = "",
+  singleSelect = false,
   onAdd,
   onClose,
   onModeChange = null,
@@ -329,6 +330,10 @@ function ShowcaseNotePicker({
     }
 
     setSelectedIds((current) => {
+      if (singleSelect) {
+        return current.has(noteId) ? new Set() : new Set([noteId]);
+      }
+
       const next = new Set(current);
 
       if (next.has(noteId)) {
@@ -497,7 +502,11 @@ function ShowcaseNotePicker({
         </h3>
       ) : (
         <div className="showcase-picker-head">
-          <h2 className="showcase-picker-title">Add notes to “{nodeLabel}”</h2>
+          <h2 className="showcase-picker-title">
+            {singleSelect
+              ? `Replace “${nodeLabel}” with a note`
+              : `Add notes to “${nodeLabel}”`}
+          </h2>
           <button className="button" onClick={onClose} type="button">
             Done
           </button>
@@ -522,12 +531,16 @@ function ShowcaseNotePicker({
           type="text"
           value={value}
         />
-        <button className="button" onClick={selectAll} type="button">
-          Select all
-        </button>
-        <button className="button" onClick={deselectAll} type="button">
-          Deselect all
-        </button>
+        {singleSelect ? null : (
+          <>
+            <button className="button" onClick={selectAll} type="button">
+              Select all
+            </button>
+            <button className="button" onClick={deselectAll} type="button">
+              Deselect all
+            </button>
+          </>
+        )}
       </div>
 
       {onModeChange ? (
@@ -668,9 +681,11 @@ function ShowcaseNotePicker({
           onClick={() => add(false)}
           type="button"
         >
-          Add selected ({selectedIds.size})
+          {singleSelect
+            ? "Use selected note"
+            : `Add selected (${selectedIds.size})`}
         </button>
-        {embedded ? null : (
+        {embedded || singleSelect ? null : (
           <button
             className="button button-primary"
             disabled={!selectedIds.size || busy}

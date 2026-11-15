@@ -230,11 +230,10 @@ describe("browsing a showcase read-only", () => {
     expect(
       await screen.findByRole("heading", { name: "Summer" }),
     ).toBeInTheDocument();
-    // Empty categories stay hidden in view mode so the presentation never
-    // shows an empty section.
+    // One view keeps empty categories visible so they can be filled.
     expect(
-      screen.queryByRole("heading", { name: "Vienna" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("heading", { name: "Vienna" }),
+    ).toBeInTheDocument();
     // A category always shows its contents: the child grouping and note are
     // visible without opening anything.
     expect(
@@ -276,14 +275,16 @@ describe("browsing a showcase read-only", () => {
     ).toBeInTheDocument();
   });
 
-  test("an empty category stays hidden inline", async () => {
+  test("an empty category stays visible so it can be filled", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
-    await screen.findByRole("heading", { name: "Summer" });
     expect(
-      screen.queryByRole("heading", { name: "Vienna" }),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText("No notes here yet.")).not.toBeInTheDocument();
+      await screen.findByRole("heading", { name: "Vienna" }),
+    ).toBeInTheDocument();
+    const section = screen.getByRole("region", { name: "Category Vienna" });
+    expect(
+      within(section).getByRole("button", { name: "Add to this level" }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -382,55 +383,32 @@ describe("view/edit mode switching", () => {
     ).toBeInTheDocument();
   });
 
-  test("the Edit toggle lands on the same drilled level", async () => {
-    renderAt(SHOWCASE_ROUTES.showcase(1));
-    await openSub();
-
-    await userEvent.click(screen.getByRole("link", { name: "Edit" }));
-
-    await waitFor(() => {
-      expect(currentPath()).toBe(SHOWCASE_ROUTES.showcaseEdit(1));
-    });
-    // The edit address keeps naming the drilled level.
-    await waitFor(() => {
-      expect(currentSearch()).toBe("?node=20");
-    });
-    const breadcrumb = await screen.findByRole("navigation", {
-      name: "Showcase breadcrumb",
-    });
-    expect(within(breadcrumb).getByText("Sub")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "10 lei, 1930" }),
-    ).toBeInTheDocument();
-  });
-
-  test("Cancel returns to the same drilled level in view", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Open grouping Sub" }),
-    );
-    expect(
-      await screen.findByRole("button", { name: "10 lei, 1930" }),
-    ).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  test("a drilled edit URL redirects to the view at the same level", async () => {
+    renderAt(`${SHOWCASE_ROUTES.showcaseEdit(1)}?node=20`);
 
     await waitFor(() => {
       expect(currentPath()).toBe(SHOWCASE_ROUTES.showcase(1));
     });
     expect(currentSearch()).toBe("?node=20");
-    expect(
-      screen.getByRole("button", { name: "10 lei, 1930" }),
-    ).toBeInTheDocument();
-  });
-
-  test("a drilled edit URL restores the level on load", async () => {
-    renderAt(`${SHOWCASE_ROUTES.showcaseEdit(1)}?node=20`);
-
+    const breadcrumb = await screen.findByRole("navigation", {
+      name: "Showcase breadcrumb",
+    });
+    expect(within(breadcrumb).getByText("Sub")).toBeInTheDocument();
     expect(
       await screen.findByRole("button", { name: "10 lei, 1930" }),
     ).toBeInTheDocument();
-    expect(currentSearch()).toBe("?node=20");
+  });
+
+  test("the one view has no Save or Cancel", async () => {
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    await screen.findByRole("heading", { name: "Summer" });
+    expect(
+      screen.queryByRole("button", { name: "Save" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Cancel" }),
+    ).not.toBeInTheDocument();
   });
 
   test("an unresolvable edit entry falls back to the root", async () => {
@@ -452,7 +430,7 @@ describe("entering a node", () => {
     expect(status).toHaveAttribute("aria-live", "polite");
 
     await waitFor(() => {
-      expect(status).toHaveTextContent("My showcase, 1 items");
+      expect(status).toHaveTextContent("My showcase, 2 items");
     });
 
     await openSub();

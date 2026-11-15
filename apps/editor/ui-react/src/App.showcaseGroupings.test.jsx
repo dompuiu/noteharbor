@@ -16,6 +16,7 @@ vi.mock("./lib/api.js", () => ({
   deleteNode: vi.fn(),
   getCategories: vi.fn(),
   getCollections: vi.fn(),
+  getAllNotes: vi.fn(async () => ({ notes: [] })),
   getHealth: vi.fn(),
   getShowcases: vi.fn(),
   getShowcaseTree: vi.fn(),
@@ -26,6 +27,7 @@ vi.mock("./lib/api.js", () => ({
   updateNode: vi.fn(),
   updateNodeNotes: vi.fn(),
   reorderNodes: vi.fn(),
+  replaceCatalogEntryWithNote: vi.fn(),
 }));
 
 vi.mock("./components/NotesTable.jsx", () => ({
@@ -301,13 +303,15 @@ describe("grouping drill navigation", () => {
     ).toBeInTheDocument();
   });
 
-  test("edit mode syncs the drill state to the URL without leaving the edit route", async () => {
+  test("a retired edit URL redirects to the view and keeps the drill", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await userEvent.click(await screen.findByRole("button", { name: "Open grouping Sub" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Open grouping Sub" }),
+    );
 
     expect(groupingCard("Deep")).toBeInTheDocument();
     expect(screen.getByTestId("pathname")).toHaveTextContent(
-      "/portfolio/showcases/1/edit",
+      SHOWCASE_ROUTES.showcase(1),
     );
     await waitFor(() => {
       expect(currentSearch()).toBe("?node=20");
@@ -340,7 +344,7 @@ describe("grouping cover", () => {
     );
   });
 
-  test("an empty grouping shows its name and a placeholder in edit mode", async () => {
+  test("an empty grouping shows its name and a placeholder", async () => {
     const emptyGrouping = groupingNode({ id: 20, name: "Sub" });
     getShowcaseTree.mockResolvedValue({
       showcase_id: 1,
@@ -348,16 +352,16 @@ describe("grouping cover", () => {
         { ...summerTree(), children: [noteNode(11, DERIVED_NOTE), emptyGrouping] },
       ],
     });
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
-    const card = await screen.findByRole("button", { name: "Open grouping Sub" });
+    const card = await screen.findByRole("button", {
+      name: "Open grouping Sub",
+    });
     expect(card.querySelector("img")).toBeNull();
-    // Edit mode renders the title in the footer row right after the cover
-    // (with the rename pencil), not inside the open button.
-    expect(card.closest(".showcase-cell")).toHaveTextContent("Sub");
+    expect(card).toHaveTextContent("Sub");
   });
 
-  test("an empty grouping stays hidden in view mode", async () => {
+  test("an empty grouping stays visible in the one view", async () => {
     const emptyGrouping = groupingNode({ id: 20, name: "Sub" });
     getShowcaseTree.mockResolvedValue({
       showcase_id: 1,
@@ -369,11 +373,11 @@ describe("grouping cover", () => {
 
     await screen.findByRole("heading", { name: "Summer" });
     expect(
-      screen.queryByRole("button", { name: "Open grouping Sub" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Open grouping Sub" }),
+    ).toBeInTheDocument();
   });
 
-  test("an empty nested grouping stays hidden on its drilled level in view mode", async () => {
+  test("an empty nested grouping stays visible on its drilled level", async () => {
     getShowcaseTree.mockResolvedValue({
       showcase_id: 1,
       nodes: [
@@ -397,11 +401,11 @@ describe("grouping cover", () => {
       await screen.findByRole("button", { name: "1, 2020" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Open grouping Deep" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Open grouping Deep" }),
+    ).toBeInTheDocument();
   });
 
-  test("a grouping holding only empty groupings stays hidden in view mode", async () => {
+  test("a grouping holding only empty groupings stays visible", async () => {
     const nestedEmpty = groupingNode({
       id: 30,
       name: "Deep",
@@ -420,8 +424,8 @@ describe("grouping cover", () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
     await screen.findByRole("heading", { name: "Summer" });
     expect(
-      screen.queryByRole("button", { name: "Open grouping Sub" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Open grouping Sub" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "1, 2020" }),
     ).toBeInTheDocument();
@@ -429,23 +433,21 @@ describe("grouping cover", () => {
 });
 
 describe("editing groupings on the canvas", () => {
-  test("creating a grouping stages it and saves it on Save", async () => {
+  test("creating a grouping from the add dialog writes immediately", async () => {
+    const user = userEvent.setup();
     createShowcaseNode.mockResolvedValue({
       node: groupingNode({ id: 40, name: "New group" }),
     });
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await screen.findByRole("button", { name: "Open grouping Sub" });
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "Add grouping" }),
+    await user.click(
+      screen.getByRole("button", { name: "Add to this level" }),
     );
-    await userEvent.type(screen.getByLabelText("Grouping name"), "New group");
-    await userEvent.click(screen.getByRole("button", { name: "Add grouping" }));
-
-    expect(groupingCard("New group")).toBeInTheDocument();
-    expect(createShowcaseNode).not.toHaveBeenCalled();
-
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("tab", { name: "Grouping" }));
+    await user.type(within(dialog).getByLabelText("Grouping name"), "New group");
+    await user.click(within(dialog).getByRole("button", { name: "Add grouping" }));
 
     await waitFor(() => {
       expect(createShowcaseNode).toHaveBeenCalledWith(1, {
@@ -454,56 +456,50 @@ describe("editing groupings on the canvas", () => {
         name: "New group",
       });
     });
+    expect(groupingCard("New group")).toBeInTheDocument();
   });
 
-  test("renaming a grouping stages the rename and saves it on Save", async () => {
+  test("renaming a grouping writes immediately from its menu", async () => {
+    const user = userEvent.setup();
     updateNode.mockResolvedValue({
       node: groupingNode({ id: 20, name: "Renamed" }),
     });
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await screen.findByRole("button", { name: "Open grouping Sub" });
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "Rename Sub" }),
-    );
-    const input = screen.getByLabelText("New name for Sub");
-    await userEvent.clear(input);
-    await userEvent.type(input, "Renamed");
-    const saves = screen.getAllByRole("button", { name: "Save" });
-    await userEvent.click(saves[saves.length - 1]);
-
-    expect(groupingCard("Renamed")).toBeInTheDocument();
-    expect(updateNode).not.toHaveBeenCalled();
-
-    await userEvent.click(screen.getAllByRole("button", { name: "Save" })[0]);
+    await user.click(screen.getByRole("button", { name: "Actions for Sub" }));
+    await user.click(screen.getByRole("menuitem", { name: "Rename grouping…" }));
+    const input = screen.getByLabelText("Name");
+    await user.clear(input);
+    await user.type(input, "Renamed");
+    await user.click(screen.getByRole("button", { name: "Save name" }));
 
     await waitFor(() => {
       expect(updateNode).toHaveBeenCalledWith(20, { name: "Renamed" });
     });
+    expect(groupingCard("Renamed")).toBeInTheDocument();
   });
 
-  test("removing a grouping stages the removal and deletes on Save", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+  test("removing a grouping confirms and deletes immediately", async () => {
+    const user = userEvent.setup();
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await screen.findByRole("button", { name: "Open grouping Sub" });
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "Remove Sub" }),
-    );
-
-    expect(
-      screen.queryByRole("button", { name: "Open grouping Sub" }),
-    ).not.toBeInTheDocument();
-    expect(deleteNode).not.toHaveBeenCalled();
-
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Actions for Sub" }));
+    await user.click(screen.getByRole("menuitem", { name: "Remove grouping…" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Remove" }));
 
     await waitFor(() => {
       expect(deleteNode).toHaveBeenCalledWith(20);
     });
+    expect(
+      screen.queryByRole("button", { name: "Open grouping Sub" }),
+    ).not.toBeInTheDocument();
   });
 
   test("drills one level at a time and never renders grandchildren inline", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await screen.findByRole("button", { name: "Open grouping Sub" });
 
     // Sub's own child note and the deeper grouping are not on the Summer level.
@@ -526,51 +522,40 @@ describe("editing groupings on the canvas", () => {
 });
 
 describe("setting a grouping cover from the canvas", () => {
-  test("setting the cover stages it and saves it on Save", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+  test("the note menu makes a note the grouping's cover immediately", async () => {
+    const user = userEvent.setup();
+    updateNode.mockResolvedValue({
+      node: groupingNode({ id: 20, name: "Sub", coverNote: DERIVED_NOTE }),
+    });
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await screen.findByRole("button", { name: "Open grouping Sub" });
-    await userEvent.click(groupingCard("Sub"));
+    await user.click(groupingCard("Sub"));
 
-    // The derived cover means no manual-cover control is shown yet.
-    expect(
-      screen.queryByRole("button", { name: "Clear cover" }),
-    ).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: "Set as cover" }));
-
-    // Staged locally: the clear control appears with no network call.
-    expect(updateNode).not.toHaveBeenCalled();
-    expect(
-      await screen.findByRole("button", { name: "Clear cover" }),
-    ).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(
+      screen.getByRole("button", { name: "Actions for 1 2020" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Make this the cover" }));
 
     await waitFor(() => {
       expect(updateNode).toHaveBeenCalledWith(20, { cover_note_id: 100 });
     });
   });
 
-  test("clearing a manual cover stages it and saves it on Save", async () => {
+  test("the grouping menu clears a manual cover immediately", async () => {
+    const user = userEvent.setup();
     getShowcaseTree.mockResolvedValue({
       showcase_id: 1,
       nodes: [summerTree({ coverNote: MANUAL_NOTE })],
     });
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await screen.findByRole("button", { name: "Open grouping Sub" });
-    await userEvent.click(groupingCard("Sub"));
-
-    const clear = await screen.findByRole("button", { name: "Clear cover" });
-    await userEvent.click(clear);
-
-    await waitFor(() => {
-      expect(
-        screen.queryByRole("button", { name: "Clear cover" }),
-      ).not.toBeInTheDocument();
+    updateNode.mockResolvedValue({
+      node: groupingNode({ id: 20, name: "Sub", coverNote: null }),
     });
-    expect(updateNode).not.toHaveBeenCalled();
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for Sub" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Clear the cover" }));
 
     await waitFor(() => {
       expect(updateNode).toHaveBeenCalledWith(20, { cover_note_id: null });

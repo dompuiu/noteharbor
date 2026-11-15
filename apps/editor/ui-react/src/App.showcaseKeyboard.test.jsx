@@ -1,16 +1,21 @@
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { act, configure, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  configure,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-// These tests render the full shell and open the note picker, so their async
-// queries can exceed Testing Library's 1000ms default under full-suite load.
-// Scoped to this file (each test file gets a fresh environment).
 configure({ asyncUtilTimeout: 5000 });
 
 // The keyboard tests drive the real shell (sidebar + routes) with the web API
-// mocked. Behavior is observed through focus and the route, never through the
-// screen's internals, so the table's model can be refactored freely.
+// mocked. A showcase is one editable view now, so the shortcuts only move focus,
+// open cards, and open the same merged Add dialog a click would.
 vi.mock("./lib/api.js", () => ({
   createCatalogEntry: vi.fn(),
   createCategory: vi.fn(),
@@ -29,6 +34,7 @@ vi.mock("./lib/api.js", () => ({
   renameCollection: vi.fn(),
   reorderCollections: vi.fn(),
   reorderNodes: vi.fn(),
+  replaceCatalogEntryWithNote: vi.fn(),
   updateCatalogEntry: vi.fn(),
   updateNode: vi.fn(),
   updateNodeNotes: vi.fn(),
@@ -52,14 +58,12 @@ vi.mock("./components/NoteEditForm.jsx", () => ({
 
 import { ShellContent } from "./App.jsx";
 import {
-  deleteNode,
+  getAllNotes,
   getCategories,
   getCollections,
   getHealth,
-  getAllNotes,
   getShowcases,
   getShowcaseTree,
-  reorderNodes,
 } from "./lib/api.js";
 import { CollectionsProvider } from "./lib/collections.jsx";
 import { ShowcasesProvider } from "./lib/showcases.jsx";
@@ -71,19 +75,13 @@ const FRONT = (id) => ({
   localPath: `/api/images/notes/${id}/front.jpg`,
 });
 
-const BACK = (id) => ({
-  type: "back",
-  variant: "thumbnail",
-  localPath: `/api/images/notes/${id}/back.jpg`,
-});
-
-function note(id, { denomination, issue_date, images }) {
+function note(id, { denomination, issue_date }) {
   return {
     id,
     denomination,
     issue_date,
     updated_at: `rev-${id}`,
-    images: images ?? [FRONT(id)],
+    images: [FRONT(id)],
   };
 }
 
@@ -93,7 +91,7 @@ function noteNode(id, theNote, position = 1) {
     node_type: "note",
     name: null,
     category_id: null,
-    parent_node_id: null,
+    parent_node_id: 10,
     note_id: theNote.id,
     cover_note_id: null,
     position,
@@ -138,7 +136,7 @@ function categoryNode({ id, name, children = [], position = 1 }) {
 const NOTE_WITH_BACK = note(100, {
   denomination: "1 leu",
   issue_date: "1917",
-  images: [FRONT(100), BACK(100)],
+  images: [FRONT(100), { ...FRONT(100), type: "back", localPath: "/api/images/notes/100/back.jpg" }],
 });
 
 function summerTree() {
@@ -171,6 +169,19 @@ function summerTree() {
   ];
 }
 
+function manyNotes(count) {
+  return Array.from({ length: count }, (_, index) =>
+    noteNode(
+      500 + index,
+      note(600 + index, {
+        denomination: "1 leu",
+        issue_date: `1917 #${index + 1}`,
+      }),
+      index + 1,
+    ),
+  );
+}
+
 function renderAt(path) {
   return render(
     <MemoryRouter initialEntries={[path]}>
@@ -189,6 +200,28 @@ function LocationProbe() {
   return <span data-testid="search">{location.search}</span>;
 }
 
+function search() {
+  return screen.getByTestId("search").textContent;
+}
+
+function stubGridRects(cards, columns, { height = 100 } = {}) {
+  cards.forEach((card, index) => {
+    const row = Math.floor(index / columns);
+    const column = index % columns;
+    card.getBoundingClientRect = () => ({
+      top: row * height,
+      bottom: row * height + height,
+      left: column * 200,
+      right: column * 200 + 200,
+      width: 200,
+      height,
+      x: column * 200,
+      y: row * height,
+      toJSON: () => {},
+    });
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   window.localStorage.clear();
@@ -202,8 +235,6 @@ beforeEach(() => {
   getCategories.mockResolvedValue({ categories: [] });
   getAllNotes.mockResolvedValue({ notes: [] });
   getShowcaseTree.mockResolvedValue({ showcase_id: 1, nodes: summerTree() });
-  deleteNode.mockResolvedValue({ success: true });
-  reorderNodes.mockResolvedValue({ nodes: [] });
 });
 
 async function firstContentCards() {
@@ -241,12 +272,12 @@ describe("moving card focus", () => {
     expect(note).toHaveFocus();
   });
 
-  test("Home and End focus the first and last card", async () => {
+  test("Home and End focus the first card and the last add tile", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    const { note, sub } = await firstContentCards();
+    const { note } = await firstContentCards();
 
     fireEvent.keyDown(document.body, { key: "End" });
-    expect(sub).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Create a category" })).toHaveFocus();
 
     fireEvent.keyDown(document.body, { key: "Home" });
     expect(note).toHaveFocus();
@@ -259,9 +290,10 @@ describe("moving card focus", () => {
     });
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
-    const cards = await screen.findAllByRole("button", {
-      name: /^1 leu, 1917 #/,
-    });
+    await screen.findAllByRole("button", { name: /^1 leu, 1917 #/ });
+    const cards = Array.from(
+      document.querySelectorAll(".showcase-screen .showcase-card, .showcase-screen .showcase-tile"),
+    );
     stubGridRects(cards, 3, { height: 100 });
     Object.defineProperty(window, "innerHeight", {
       configurable: true,
@@ -278,12 +310,8 @@ describe("moving card focus", () => {
   });
 });
 
-function search() {
-  return screen.getByTestId("search").textContent;
-}
-
 describe("opening the focused card", () => {
-  test("Enter opens a focused grouping card in view mode", async () => {
+  test("Enter opens a focused grouping card", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
     const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
 
@@ -293,28 +321,10 @@ describe("opening the focused card", () => {
     await waitFor(() => expect(search()).toBe("?node=20"));
   });
 
-  test("Enter opens an edit-mode grouping through its single click", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    
-    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
-    expect(
-      screen.queryByRole("button", { name: "Open grouping Deep" }),
-    ).not.toBeInTheDocument();
-
-    act(() => sub.focus());
-    await userEvent.keyboard("{Enter}");
-
-    expect(
-      await screen.findByRole("button", { name: "Open grouping Deep" }),
-    ).toBeInTheDocument();
-  });
-
-  test("Enter and Space open the preview on a view-mode note card", async () => {
+  test("Enter and Space open the preview on a note card", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
     const card = await screen.findByRole("button", { name: "1 leu, 1917" });
-    // Focus alone never flips; activation opens the showcase-wide preview at
-    // the visible face instead of drilling, so the drill param stays empty.
     act(() => card.focus());
     expect(card).toHaveAttribute("aria-pressed", "false");
 
@@ -360,30 +370,9 @@ describe("Escape and focus restoration", () => {
     ).toHaveFocus();
   });
 
-  test("focus returns to the card you drilled from after going up", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    
-    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
-    act(() => sub.focus());
-    await userEvent.keyboard("{Enter}");
-
-    expect(
-      await screen.findByRole("button", { name: "Open grouping Deep" }),
-    ).toBeInTheDocument();
-    expect(document.activeElement).toBe(document.body);
-
-    fireEvent.keyDown(document.body, { key: "Escape" });
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Open grouping Sub" }),
-      ).toHaveFocus(),
-    );
-  });
-
   test("the breadcrumb restores focus to the card you left", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    
+
     await userEvent.click(
       await screen.findByRole("button", { name: "Open grouping Sub" }),
     );
@@ -402,514 +391,108 @@ describe("Escape and focus restoration", () => {
   });
 });
 
-describe("editing from the keyboard", () => {
-  async function focusSub() {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    
+describe("keyboard add and menus", () => {
+  test("a opens the merged add dialog after the focused card", async () => {
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
-    // Let the name draft converge from the list before blurring it: the
-    // field is autofocused, so focusing away earlier would commit stale text.
-    await waitFor(() =>
-      expect(screen.getByLabelText("Showcase name")).toHaveValue("My showcase"),
-    );
+
     act(() => sub.focus());
-    return sub;
-  }
-
-  test("a opens the note picker for the focused card", async () => {
-    await focusSub();
-
     fireEvent.keyDown(document.body, { key: "a" });
 
-    const dialog = await screen.findByRole("dialog", { name: "Add notes" });
-    expect(dialog).toHaveTextContent("Sub");
-  });
-
-  test("g reveals the create-a-grouping field", async () => {
-    await focusSub();
-
-    fireEvent.keyDown(document.body, { key: "g" });
-
-    expect(await screen.findByLabelText("Grouping name")).toBeInTheDocument();
-  });
-
-  test("e starts renaming the focused card", async () => {
-    await focusSub();
-
-    fireEvent.keyDown(document.body, { key: "e" });
-
-    expect(await screen.findByLabelText("New name for Sub")).toBeInTheDocument();
-  });
-
-  test("d stages the removal of the focused card and Save deletes it", async () => {
-    await focusSub();
-
-    fireEvent.keyDown(document.body, { key: "d" });
-
-    expect(
-      screen.queryByRole("button", { name: "Open grouping Sub" }),
-    ).not.toBeInTheDocument();
-    expect(deleteNode).not.toHaveBeenCalled();
-
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => expect(deleteNode).toHaveBeenCalledWith(20));
-  });
-
-  test("the single-key actions do nothing in view mode", async () => {
-    renderAt(SHOWCASE_ROUTES.showcase(1));
-
-    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
-    act(() => sub.focus());
-
-    for (const key of ["a", "g", "e", "d"]) {
-      fireEvent.keyDown(document.body, { key });
-    }
-
-    expect(deleteNode).not.toHaveBeenCalled();
-    expect(screen.queryByLabelText("Grouping name")).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("dialog", { name: "Add notes" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Open grouping Sub" }),
-    ).toBeInTheDocument();
-  });
-
-  test("e with no card focused enters edit mode on the same level", async () => {
-    renderAt(`${SHOWCASE_ROUTES.showcase(1)}?node=20`);
-
-    await screen.findByRole("button", { name: "Open grouping Deep" });
-    expect(
-      screen.queryByLabelText("Showcase name"),
-    ).not.toBeInTheDocument();
-
-    if (document.activeElement instanceof HTMLElement) {
-      act(() => document.activeElement.blur());
-    }
-
-    fireEvent.keyDown(document.body, { key: "e" });
-
-    expect(await screen.findByLabelText("Showcase name")).toBeInTheDocument();
-    expect(
-      await screen.findByRole("button", { name: "Open grouping Deep" }),
-    ).toBeInTheDocument();
-    expect(search()).toBe("?node=20");
-  });
-
-  test("e with a focused card stays in view mode", async () => {
-    renderAt(SHOWCASE_ROUTES.showcase(1));
-
-    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
-    act(() => sub.focus());
-
-    fireEvent.keyDown(document.body, { key: "e" });
-
-    expect(
-      screen.queryByLabelText("Showcase name"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Open grouping Sub" }),
-    ).toBeInTheDocument();
-  });
-});
-
-describe("edit-mode header focus", () => {
-  function firstCard() {
-    const card = document.querySelector(".showcase-screen .showcase-card");
-    expect(card).not.toBeNull();
-    return card;
-  }
-
-  test("entering edit mode focuses the showcase name input", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-
-    const nameField = await screen.findByLabelText("Showcase name");
-    await waitFor(() => expect(nameField).toHaveFocus());
-  });
-
-  test("entering edit mode from view lands focus in the showcase name input", async () => {
-    renderAt(SHOWCASE_ROUTES.showcase(1));
-    await screen.findByRole("button", { name: "Open grouping Sub" });
-
-    if (document.activeElement instanceof HTMLElement) {
-      act(() => document.activeElement.blur());
-    }
-
-    fireEvent.keyDown(document.body, { key: "e" });
-
-    const nameField = await screen.findByLabelText("Showcase name");
-    await waitFor(() => expect(nameField).toHaveFocus());
-  });
-
-  test("Down arrow in the showcase name moves focus to the first card", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-
-    const nameField = await screen.findByLabelText("Showcase name");
-    await screen.findByRole("button", { name: "1 leu, 1917" });
-
-    act(() => nameField.focus());
-    fireEvent.keyDown(nameField, { key: "ArrowDown" });
-
-    expect(screen.getByRole("heading", { name: "Summer" })).toHaveFocus();
-  });
-
-  test("Down arrow in the photo size moves focus to the first card without changing the size", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-
-    const small = await screen.findByRole("radio", { name: "Small" });
-    await screen.findByRole("button", { name: "1 leu, 1917" });
-    expect(small).toBeChecked();
-
-    act(() => small.focus());
-    fireEvent.keyDown(small, { key: "ArrowDown" });
-
-    expect(screen.getByRole("heading", { name: "Summer" })).toHaveFocus();
-    expect(small).toBeChecked();
-  });
-
-  test("Up arrow in the photo size keeps focus without changing the size", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-
-    const small = await screen.findByRole("radio", { name: "Small" });
-    await screen.findByRole("button", { name: "1 leu, 1917" });
-    expect(small).toBeChecked();
-
-    act(() => small.focus());
-    fireEvent.keyDown(small, { key: "ArrowUp" });
-
-    expect(small).toHaveFocus();
-    expect(small).toBeChecked();
-  });
-
-  test("blurring the untouched name field leaves the draft clean", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-
-    const nameField = await screen.findByLabelText("Showcase name");
-    await waitFor(() => expect(nameField).toHaveValue("My showcase"));
-
-    const card = await screen.findByRole("button", { name: "1 leu, 1917" });
-    act(() => card.focus());
-
-    expect(nameField).toHaveValue("My showcase");
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
-  });
-});
-
-// Twelve notes in one category, for the page-sized movement test.
-function manyNotes(count) {
-  return Array.from({ length: count }, (_, index) =>
-    noteNode(
-      500 + index,
-      note(900 + index, {
-        denomination: "1 leu",
-        issue_date: `1917 #${index + 1}`,
-      }),
-      index + 1,
-    ),
-  );
-}
-
-describe("guards", () => {
-  test("the shortcuts stay out of a text field", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    const nameField = await screen.findByLabelText("Showcase name");
-
-    act(() => nameField.focus());
-    await userEvent.type(nameField, "gd");
-
-    expect(screen.queryByLabelText("Grouping name")).not.toBeInTheDocument();
-    expect(deleteNode).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole("dialog", {
+      name: "Add to “Summer”",
+    });
+    expect(dialog).toHaveTextContent("after the chosen item");
   });
 
   test("an open dialog disables the card shortcuts", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    
-    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
-    act(() => sub.focus());
-    fireEvent.keyDown(document.body, { key: "a" });
-    await screen.findByRole("dialog", { name: "Add notes" });
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    const { note } = await firstContentCards();
+    act(() => note.focus());
 
-    fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    fireEvent.keyDown(document.body, { key: "?" });
-
-    expect(document.activeElement.closest(".showcase-card")).toBeNull();
-    expect(
-      screen.queryByRole("dialog", { name: "Keyboard shortcuts" }),
-    ).not.toBeInTheDocument();
-  });
-
-  test("an open confirmation dialog also disables the card shortcuts", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await screen.findByRole("button", { name: "Open grouping Sub" });
-
+    const summer = screen.getByRole("region", { name: "Category Summer" });
     await userEvent.click(
-      screen.getByRole("button", { name: "Delete showcase" }),
+      within(summer).getByRole("button", { name: "Add to this level" }),
     );
-    await screen.findByRole("dialog");
+    await screen.findByRole("dialog", { name: "Add to “Summer”" });
 
     fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    fireEvent.keyDown(document.body, { key: "?" });
 
-    expect(document.activeElement.closest(".showcase-card")).toBeNull();
-    expect(
-      screen.queryByRole("dialog", { name: "Keyboard shortcuts" }),
-    ).not.toBeInTheDocument();
+    // Focus stayed in the dialog; the grid did not move.
+    expect(note).not.toHaveFocus();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
-  test("a Meta/Ctrl chord is left to the browser", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    
-    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
-    act(() => sub.focus());
-
-    fireEvent.keyDown(document.body, { key: "d", ctrlKey: true });
-    fireEvent.keyDown(sub, { key: "e", metaKey: true });
-
-    expect(deleteNode).not.toHaveBeenCalled();
-    expect(screen.queryByLabelText("New name for Sub")).not.toBeInTheDocument();
-  });
-
-  test("the sidebar keeps its own keys", async () => {
+  test("/ focuses the picker's filter field inside the add dialog", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
     await screen.findByRole("button", { name: "Open grouping Sub" });
 
-    const sidebar = document.getElementById("app-sidebar");
-    const link = sidebar.querySelector("a");
-
-    act(() => link.focus());
-    fireEvent.keyDown(link, { key: "ArrowDown" });
-
-    expect(document.activeElement.closest(".showcase-card")).toBeNull();
-  });
-});
-
-describe("the note picker", () => {
-  async function openPickerOnSub() {
-    getAllNotes.mockResolvedValue({ notes: [NOTE_WITH_BACK] });
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-
-    // Let the name draft converge before blurring it: the field is
-    // autofocused, so focusing a card earlier can lose card focus on the
-    // converging rerender and the "a" shortcut never opens the picker
-    // (the checkbox query then pends until the test times out).
-    await waitFor(() =>
-      expect(screen.getByLabelText("Showcase name")).toHaveValue("My showcase"),
+    const summer = screen.getByRole("region", { name: "Category Summer" });
+    await userEvent.click(
+      within(summer).getByRole("button", { name: "Add to this level" }),
     );
-    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
-    act(() => sub.focus());
-    fireEvent.keyDown(document.body, { key: "a" });
+    const dialog = await screen.findByRole("dialog", { name: "Add to “Summer”" });
+    const done = within(dialog).getByRole("button", { name: "Close add dialog" });
+    act(() => done.focus());
 
-    return screen.findByRole("dialog", { name: "Add notes" });
-  }
+    fireEvent.keyDown(done, { key: "/" });
 
-  test("/ focuses the picker's filter field from another control", async () => {
-    const dialog = await openPickerOnSub();
-
-    const checkbox = await within(dialog).findByRole("checkbox");
-    act(() => checkbox.focus());
-
-    fireEvent.keyDown(checkbox, { key: "/" });
-
-    expect(screen.getByLabelText("Filter value")).toHaveFocus();
+    expect(within(dialog).getByLabelText("Filter value")).toHaveFocus();
   });
 
-  test("a slash typed in the filter field stays a slash", async () => {
-    await openPickerOnSub();
-
-    const filter = await screen.findByLabelText("Filter value");
-    act(() => filter.focus());
-    await userEvent.keyboard("/");
-
-    expect(filter).toHaveValue("/");
-  });
-});
-
-describe("shortcut help", () => {
-  test("? opens the shortcut help with the Showcase keys", async () => {
+  test("the item menu opens by keyboard and returns focus to its trigger", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await screen.findByRole("button", { name: "Open grouping Sub" });
-
-    fireEvent.keyDown(document.body, { key: "?" });
-
-    const dialog = await screen.findByRole("dialog", {
-      name: "Keyboard shortcuts",
+    const trigger = await screen.findByRole("button", {
+      name: "Actions for Sub",
     });
-    expect(dialog).toHaveTextContent("Move focus between the cards");
-    expect(dialog).toHaveTextContent("Open the focused card");
-  });
 
-  test("the cards ignore the shortcuts while the help is open", async () => {
-    renderAt(SHOWCASE_ROUTES.showcase(1));
-    const note = await screen.findByRole("button", { name: "1 leu, 1917" });
-    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
+    act(() => trigger.focus());
+    await userEvent.keyboard("{Enter}");
+    const menu = await screen.findByRole("menu", { name: "Actions for Sub" });
+    expect(within(menu).getAllByRole("menuitem").length).toBeGreaterThan(0);
 
-    act(() => note.focus());
-    fireEvent.keyDown(document.body, { key: "?" });
-    await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
-
-    fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(note).toHaveFocus();
-
-    fireEvent.keyDown(document.body, { key: "Escape" });
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("dialog", { name: "Keyboard shortcuts" }),
-      ).not.toBeInTheDocument(),
-    );
-
-    fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(sub).toHaveFocus();
+    await userEvent.keyboard("{Escape}");
+    expect(trigger).toHaveFocus();
   });
 });
 
-// Assign every card a rect on a `columns`-wide grid so page movement can be
-// computed the way it is in a browser. jsdom reports all-zero rects otherwise.
-function stubGridRects(cards, columns, { width = 200, height = 100, gap = 0 }) {
-  const pitch = height + gap;
+describe("header focus", () => {
+  test("Down arrow in the showcase name moves focus to the first card", async () => {
+    const user = userEvent.setup();
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    const first = await screen.findByRole("button", { name: "1 leu, 1917" });
 
-  cards.forEach((card, index) => {
-    const column = index % columns;
-    const row = Math.floor(index / columns);
-
-    card.getBoundingClientRect = () => ({
-      top: row * pitch,
-      left: column * (width + gap),
-      width,
-      height,
-      right: column * (width + gap) + width,
-      bottom: row * pitch + height,
-      x: column * (width + gap),
-      y: row * pitch,
-    });
-  });
-}
-
-
-describe("edit-mode add tiles in the arrow sequence", () => {
-  test("the arrows walk from the cards through the add block", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-
-    const summer = await screen.findByRole("heading", { name: "Summer" });
-    const note = screen.getByRole("button", { name: "1 leu, 1917" });
-    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
-    const addNotes = screen.getAllByRole("button", { name: "Add notes" })[0];
-    const addCatalogEntry = screen.getAllByRole("button", {
-      name: "Add catalog entry",
-    })[0];
-    const addGrouping = screen.getAllByRole("button", {
-      name: "Add grouping",
-    })[0];
-
-    fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(summer).toHaveFocus();
-
-    fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(note).toHaveFocus();
-
-    fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(sub).toHaveFocus();
-
-    fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(addNotes).toHaveFocus();
-
-    fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(addCatalogEntry).toHaveFocus();
-
-    fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(addGrouping).toHaveFocus();
-
-    fireEvent.keyDown(document.body, { key: "ArrowUp" });
-    expect(addCatalogEntry).toHaveFocus();
-
-    fireEvent.keyDown(document.body, { key: "ArrowUp" });
-    expect(addNotes).toHaveFocus();
-  });
-
-  test("Home and End include the tiles at the ends of the sequence", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-
-    await screen.findByRole("button", { name: "1 leu, 1917" });
-
-    fireEvent.keyDown(document.body, { key: "End" });
-    expect(
-      screen.getByRole("button", { name: "Create a category" }),
-    ).toHaveFocus();
-
-    fireEvent.keyDown(document.body, { key: "Home" });
-    expect(screen.getByRole("heading", { name: "Summer" })).toHaveFocus();
-  });
-
-  test("Escape on a focused category header only clears the focus", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-
-    const summer = await screen.findByRole("heading", { name: "Summer" });
-    act(() => summer.focus());
-    expect(summer).toHaveFocus();
-
-    fireEvent.keyDown(document.body, { key: "Escape" });
-    expect(summer).not.toHaveFocus();
-    expect(document.activeElement).toBe(document.body);
-  });
-
-  test("Escape with nothing focused in edit mode at the root exits to view", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-
-    await screen.findByRole("heading", { name: "Summer" });
-    await waitFor(() =>
-      expect(screen.getByLabelText("Showcase name")).toHaveValue(
-        "My showcase",
-      ),
+    await user.click(
+      screen.getByRole("button", { name: "Rename showcase: My showcase" }),
     );
-    expect(
-      screen.queryByRole("button", { name: "Open grouping Sub" }),
-    ).toBeInTheDocument();
+    const field = await screen.findByLabelText("Showcase name");
 
-    if (document.activeElement instanceof HTMLElement) {
-      act(() => document.activeElement.blur());
-    }
+    act(() => field.focus());
+    fireEvent.keyDown(field, { key: "ArrowDown" });
 
-    fireEvent.keyDown(document.body, { key: "Escape" });
-
-    await waitFor(() =>
-      expect(
-        screen.queryByLabelText("Showcase name"),
-      ).not.toBeInTheDocument(),
-    );
-    expect(
-      screen.getByRole("button", { name: "Open grouping Sub" }),
-    ).toBeInTheDocument();
-    expect(search()).toBe("");
+    expect(first).toHaveFocus();
   });
 
-  test("the arrows from a card move relative to its own card", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+  test("an unchanged name cancels without renaming the showcase", async () => {
+    const user = userEvent.setup();
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
-    const summer = await screen.findByRole("heading", { name: "Summer" });
-    const note = screen.getByRole("button", { name: "1 leu, 1917" });
-    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Rename showcase: My showcase",
+      }),
+    );
+    const field = await screen.findByLabelText("Showcase name");
+    expect(field).toHaveValue("My showcase");
 
-    act(() => note.focus());
-    fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(sub).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "Save" }));
 
-    act(() => sub.focus());
-    fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(screen.getAllByRole("button", { name: "Add notes" })[0]).toHaveFocus();
-
-    act(() => note.focus());
-    fireEvent.keyDown(document.body, { key: "ArrowUp" });
-    expect(summer).toHaveFocus();
-
-    // The reported flow: category action -> note -> next item (never the
-    // first category again).
-    const renameSummer = screen.getByRole("button", {
-      name: "Rename Summer",
-    });
-    act(() => renameSummer.focus());
-    fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(note).toHaveFocus();
-    fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(sub).toHaveFocus();
+    expect(
+      await screen.findByRole("button", {
+        name: "Rename showcase: My showcase",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Showcase name")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "My showcase" })).toBeInTheDocument();
   });
 });

@@ -1269,8 +1269,34 @@ fn update_showcase_node(
             .map_err(classify)?;
         }
     } else if existing.node_type == "catalog_entry" {
-        // Metadata is replaced as a whole; the linked Notes stay untouched.
-        if body.get("entry").is_some() {
+        // A shell becomes a real note card in place: the node keeps its
+        // parent, position, and id, so replacing a shell never disturbs the
+        // surrounding order. Any legacy specimen links are dropped with it.
+        if body.get("note_id").is_some() {
+            let Some(note_id) = body.get("note_id").and_then(js_number) else {
+                return Err(DbError::Failed("A valid note id is required.".to_owned()));
+            };
+            if !note_exists(conn, note_id)? {
+                return Err(DbError::Failed("Note not found.".to_owned()));
+            }
+            let tx = conn.transaction().map_err(classify)?;
+            tx.execute(
+                "DELETE FROM showcase_catalog_notes WHERE node_id = ?1",
+                params![id],
+            )
+            .map_err(classify)?;
+            tx.execute(
+                "UPDATE showcase_nodes
+                 SET node_type = 'note', note_id = ?1, catalog_number = NULL,
+                     denomination = NULL, issue_date = NULL, source = NULL,
+                     updated_at = datetime('now')
+                 WHERE id = ?2",
+                params![note_id, id],
+            )
+            .map_err(classify)?;
+            tx.commit().map_err(classify)?;
+        } else if body.get("entry").is_some() {
+            // Metadata is replaced as a whole; the linked Notes stay untouched.
             let entry = parse_catalog_entry(body)?;
             conn.execute(
                 "UPDATE showcase_nodes

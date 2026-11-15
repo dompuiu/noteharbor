@@ -3,9 +3,9 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-// The reorder tests render the real shell (sidebar + routes) in edit mode with
-// the web API mocked. A drag on a cell is observed through the API call it
-// makes and the on-screen order it leaves behind.
+// A showcase is one editable canvas now: dragging a cell reorders it and
+// persists immediately. These tests observe the API call and the on-screen
+// order a drag leaves behind.
 vi.mock("./lib/api.js", () => ({
   createCatalogEntry: vi.fn(),
   createCategory: vi.fn(),
@@ -23,6 +23,7 @@ vi.mock("./lib/api.js", () => ({
   renameCollection: vi.fn(),
   reorderCollections: vi.fn(),
   reorderNodes: vi.fn(),
+  replaceCatalogEntryWithNote: vi.fn(),
   updateCatalogEntry: vi.fn(),
   updateNode: vi.fn(),
   updateNodeNotes: vi.fn(),
@@ -61,7 +62,6 @@ const NOTE_A = {
   id: 100,
   denomination: "1",
   issue_date: "2020",
-  updated_at: "2024-05-01",
   images: [
     {
       type: "front",
@@ -75,7 +75,6 @@ const NOTE_B = {
   id: 200,
   denomination: "5",
   issue_date: "1990",
-  updated_at: "2024-06-01",
   images: [
     {
       type: "front",
@@ -117,8 +116,6 @@ function groupingNode({ id, name, children = [] }) {
   };
 }
 
-// One category placement "Summer" whose children interleave a Grouping and two
-// notes: [Sub, note A, note B].
 function summerTree() {
   return {
     id: 10,
@@ -172,15 +169,25 @@ function makeDataTransfer() {
   };
 }
 
-function reorderLabels() {
-  // Scoped to the showcase canvas, whose handles share the "Reorder " prefix.
-  return within(document.querySelector(".showcase-screen"))
-    .getAllByRole("button", { name: /^Reorder / })
-    .map((handle) => handle.getAttribute("aria-label"));
+function cellFor(label) {
+  return screen
+    .getByRole("button", { name: label })
+    .closest(".showcase-reorder-cell");
+}
+
+function canvasOrder() {
+  return (
+    within(document.querySelector(".showcase-screen"))
+      .getAllByRole("button")
+      .map((card) => card.getAttribute("aria-label"))
+      .filter((label) =>
+        ["Open grouping Sub", "1, 2020", "5, 1990"].includes(label),
+      )
+  );
 }
 
 async function openSummer() {
-  await screen.findByRole("button", { name: "Reorder Sub" });
+  await screen.findByRole("button", { name: "Open grouping Sub" });
 }
 
 beforeEach(() => {
@@ -199,34 +206,33 @@ beforeEach(() => {
 });
 
 describe("showcase child reordering", () => {
-  test("edit mode shows a drag handle on each note and grouping", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+  test("every card sits in a draggable cell with an actions menu", async () => {
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
 
-    expect(reorderLabels()).toEqual([
-      "Reorder Sub",
-      "Reorder 1 2020",
-      "Reorder 5 1990",
-    ]);
+    const cells = document.querySelectorAll(
+      ".showcase-screen .showcase-reorder-cell",
+    );
+    expect(cells).toHaveLength(3);
+    cells.forEach((cell) => expect(cell).toHaveAttribute("draggable", "true"));
+    expect(
+      screen.getByRole("button", { name: "Actions for Sub" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Actions for 1 2020" }),
+    ).toBeInTheDocument();
   });
 
-  test("tabbing through the canvas never lands on a drag handle", async () => {
+  test("tabbing through the canvas never lands on the drag grip", async () => {
     const user = userEvent.setup();
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
 
-    const start = screen.getByRole("button", { name: "Remove Summer" });
+    const start = screen.getByRole("button", { name: "Actions for Sub" });
     act(() => start.focus());
 
     const canvas = document.querySelector(".showcase-screen");
 
-    await user.tab();
-    // The first child cell's handle sits before its card, so Tab must step
-    // over it straight to that cell's Remove control.
-    expect(screen.getByRole("button", { name: "Remove Sub" })).toHaveFocus();
-
-    // Keep walking across every child cell; dragging is pointer-only, so no
-    // stop inside the canvas may be a reorder handle the keys cannot operate.
     for (let step = 0; step < 20; step += 1) {
       await user.tab();
 
@@ -234,81 +240,63 @@ describe("showcase child reordering", () => {
         break;
       }
 
-      expect(
-        document.activeElement?.getAttribute("aria-label") ?? "",
-      ).not.toMatch(/^Reorder /);
+      expect(document.activeElement?.className ?? "").not.toContain(
+        "showcase-reorder-handle",
+      );
     }
   });
 
-  test("dragging a grouping past its notes stages the order and saves it on Save", async () => {
-    const user = userEvent.setup();
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+  test("dragging a grouping past its notes persists the order immediately", async () => {
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
 
-    const source = screen.getByRole("button", { name: "Reorder Sub" });
-    const targetHandle = screen.getByRole("button", { name: "Reorder 5 1990" });
-    const targetCell = targetHandle.closest(".showcase-reorder-cell");
+    const source = cellFor("Open grouping Sub");
+    const target = cellFor("5, 1990");
     const dataTransfer = makeDataTransfer();
 
     await act(async () => {
       source.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
     });
     await act(async () => {
-      targetCell.dispatchEvent(
-        dragEvent("dragover", { clientY: 0, clientX: 0, dataTransfer }),
+      target.dispatchEvent(
+        dragEvent("dragover", { clientY: 0, clientX: 5, dataTransfer }),
       );
     });
     await act(async () => {
-      targetCell.dispatchEvent(
-        dragEvent("drop", { clientY: 0, clientX: 0, dataTransfer }),
+      target.dispatchEvent(
+        dragEvent("drop", { clientY: 0, clientX: 5, dataTransfer }),
       );
     });
-
-    // Staged locally: the order changes with no network call.
-    expect(reorderLabels()).toEqual([
-      "Reorder 1 2020",
-      "Reorder 5 1990",
-      "Reorder Sub",
-    ]);
-    expect(reorderNodes).not.toHaveBeenCalled();
-
-    await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
       expect(reorderNodes).toHaveBeenCalledWith(1, 10, [11, 12, 20]);
     });
+    expect(canvasOrder()).toEqual(["1, 2020", "5, 1990", "Open grouping Sub"]);
   });
 
   test("a drag that lands a card back where it started persists nothing", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
 
-    const source = screen.getByRole("button", { name: "Reorder Sub" });
-    const targetHandle = screen.getByRole("button", { name: "Reorder 1 2020" });
-    const targetCell = targetHandle.closest(".showcase-reorder-cell");
+    const source = cellFor("Open grouping Sub");
+    const target = cellFor("1, 2020");
     const dataTransfer = makeDataTransfer();
 
     await act(async () => {
       source.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
     });
     await act(async () => {
-      // A negative clientX is left of the (all-zero) rect midpoint, so the
-      // placement is "before" — Sub stays immediately ahead of note A.
-      targetCell.dispatchEvent(
+      target.dispatchEvent(
         dragEvent("dragover", { clientY: 0, clientX: -5, dataTransfer }),
       );
     });
     await act(async () => {
-      targetCell.dispatchEvent(
+      target.dispatchEvent(
         dragEvent("drop", { clientY: 0, clientX: -5, dataTransfer }),
       );
     });
 
     expect(reorderNodes).not.toHaveBeenCalled();
-    expect(reorderLabels()).toEqual([
-      "Reorder Sub",
-      "Reorder 1 2020",
-      "Reorder 5 1990",
-    ]);
+    expect(canvasOrder()).toEqual(["Open grouping Sub", "1, 2020", "5, 1990"]);
   });
 });

@@ -232,42 +232,41 @@ describe("Sidebar navigation groups", () => {
     );
   });
 
-  test("`+ New showcase` stages a draft without posting and opens its edit route", async () => {
+  test("`+ New showcase` creates the showcase and opens its view", async () => {
     const user = userEvent.setup();
     await renderSidebar(CATALOG_ROUTES.collection(1));
 
     await user.click(newShowcaseButton());
 
-    // Deferred creation: nothing POSTs until Save.
-    expect(createShowcase).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(createShowcase).toHaveBeenCalledTimes(1);
+    });
     await waitFor(() => {
       expect(screen.getByTestId("pathname")).toHaveTextContent(
-        SHOWCASE_ROUTES.showcaseEdit("new"),
+        SHOWCASE_ROUTES.showcase(9),
       );
     });
-    // The draft is visible in the sidebar while it is pending.
-    const draft = screen.getByRole("link", {
-      name: "Unsaved showcase: Showcase",
-    });
-    expect(draft).toHaveClass("sidebar-link--pending");
-    expect(draft).toHaveAttribute("title", "Showcase");
+    expect(
+      screen.getByRole("link", { name: "Showcase" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /Unsaved showcase/ }),
+    ).not.toBeInTheDocument();
   });
 
-  test("leaving the draft route discards the pending showcase", async () => {
+  test("a failed showcase create reports it without leaving the rail", async () => {
     const user = userEvent.setup();
+    createShowcase.mockRejectedValue(new Error("The server is unreachable."));
     await renderSidebar(CATALOG_ROUTES.collection(1));
 
     await user.click(newShowcaseButton());
-    await screen.findByRole("link", { name: "Unsaved showcase: Showcase" });
 
-    await user.click(screen.getByRole("link", { name: "Default" }));
-
-    await waitFor(() => {
-      expect(screen.queryByRole("link", { name: "Unsaved showcase: Showcase" })).not.toBeInTheDocument();
-    });
-    // The row does not disappear wordlessly.
-    expect(await screen.findByText("Showcase draft discarded.")).toBeInTheDocument();
-    expect(createShowcase).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText("The server is unreachable."),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("pathname")).toHaveTextContent(
+      CATALOG_ROUTES.collection(1),
+    );
   });
 
   test("a link click moves focus into the page, off the rail", async () => {
@@ -1488,15 +1487,15 @@ describe("Sidebar showcase reordering", () => {
     expect(container.querySelector(".toast")).toBeNull();
   });
 
-  test("a pending showcase draft is never draggable", async () => {
+  test("a newly created showcase appears as a normal draggable row", async () => {
     const user = userEvent.setup();
     await renderSidebar(CATALOG_ROUTES.collection(1));
 
     await user.click(newShowcaseButton());
-    const draft = await screen.findByRole("link", { name: "Unsaved showcase: Showcase" });
+    const row = await screen.findByRole("link", { name: "Showcase" });
 
-    expect(draft.closest(".sidebar-row")).toBeNull();
-    expect(draft.getAttribute("draggable")).toBe("false");
+    expect(row.closest(".sidebar-row")).not.toBeNull();
+    expect(row).not.toHaveClass("sidebar-link--pending");
   });
 });
 

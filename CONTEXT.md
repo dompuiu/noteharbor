@@ -77,20 +77,12 @@ A standalone node inside a Showcase that nests further Groupings, notes, and Cat
 One occurrence of a Category inside a Showcase, owning the notes, groupings, and Catalog entries shown there.
 _Avoid_: Instance, occurrence
 
-**Catalog entry**:
-A Showcase leaf that represents one Catalog value, carrying its own catalog metadata and holding zero or more specimens. A Showcase with catalog entries reads as a catalog checklist; without them it stays a presentation-only Showcase.
-_Avoid_: Slot, want
-
-**Specimen**:
-A Note attached to a Catalog entry: the Note's role in that entry, not a copy of the library record. The same Note may be a specimen in several entries and Showcases.
-_Avoid_: Item, sample, copy
-
-**Primary specimen**:
-The one specimen whose image and metadata the card and the Note slideshow show; display-only, it never decides ownership.
-_Avoid_: Default note
+**Catalog shell**:
+A planned Showcase leaf that represents one Catalog value. It carries catalog metadata only, never notes: it is a placeholder that becomes that note card in place once the collector picks a library note. A Showcase with catalog shells reads as a catalog checklist; without them it stays a presentation-only Showcase.
+_Avoid_: Slot, want, specimen container
 
 **Owned / Seen / Unseen**:
-The state of a Note or Catalog entry. **Owned**: the Note is owned, or at least one specimen is. **Seen**: a Note that is not owned, or a Catalog entry with specimens but none owned. **Unseen**: a Catalog entry with no specimens. **Missing** is the umbrella for Seen and Unseen.
+The state of a Note or Catalog shell. **Owned**: the Note is owned. **Seen**: a Note that is not owned. **Unseen**: a Catalog shell that still has no note. **Missing** is the umbrella for Seen and Unseen.
 _Avoid_: Have / want, present / absent (as states)
 
 **Cover image**:

@@ -640,15 +640,17 @@ Handles:
 
 Direct route for editing or reviewing one note outside the overlay flow.
 
-### Showcases (`/portfolio/showcases/:id/view` and `/portfolio/showcases/:id/edit`)
+### Showcases (`/portfolio/showcases/:id/view`)
 
-The read-only presentation and its authoring canvas. Both browse one level at a time and look the same; edit mode adds the controls. The `view` / `edit` tail is a one-word swap, and the View/Edit toggle keeps the drilled level across modes.
+One always-editable canvas. There is no draft or Save/Cancel: adds, renames, removals, cover choices, and drag reorders write immediately. The retired `/edit` URL redirects to the same view.
 
-- View mode is URL-synced: the current node is `?node=<nodeId>` (the root has no parameter), so Back and shared links work. A bare `/portfolio/showcases/:id` URL redirects to the view mode with the query kept.
-- Edit mode keeps the drill in memory and live-syncs it to `?node=<nodeId>` (replacing, so Back still leaves the screen instead of stepping the drill). Flipping the `view` / `edit` tail — by toggle or by hand — stays on the same level. It adds the `+ create a category` / `+ notes` / `+ grouping` tiles, drag handles, rename/remove controls, and a Grouping's manual-cover controls.
-- Nothing expands inline — a Category or Grouping is opened to show its direct children.
-- A three-way photo-size control (Small / Medium / Large) applies in both modes and is remembered per browser.
-- The header shows the showcase total note count and links between the two modes.
+- The drill is URL-synced: the current Grouping is `?node=<nodeId>` (the root has no parameter), so Back and shared links work. A bare `/portfolio/showcases/:id` URL redirects to the view with the query kept.
+- Every card is draggable onto another to reorder its level. Each card also has a `⋯` menu: add a note, grouping, or catalog shell after it; rename/remove a grouping; set or clear a cover; replace a catalog shell with a library note.
+- Categories render expanded at the root; Groupings still drill to show their direct children.
+- The `+ Add` tile opens one dialog with Notes, Catalog shell, and Grouping tabs.
+- A Catalog shell is a planned card: it carries catalog metadata only, never notes. Picking a note turns the same card into that note in place, preserving order.
+- A three-way photo-size control (Small / Medium / Large) is remembered per browser.
+- The header shows the showcase total note count or the catalog owned/seen/unseen summary.
 
 ### Viewer Apps
 

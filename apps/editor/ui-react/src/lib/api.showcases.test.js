@@ -109,7 +109,7 @@ describe("showcase API calls", () => {
 });
 
 describe("catalog entry API calls", () => {
-  test("createCatalogEntry posts the metadata and the first specimens", async () => {
+  test("createCatalogEntry posts metadata only, with no notes", async () => {
     const fetchMock = stubFetch(async () =>
       jsonResponse(201, { node: { id: 9, node_type: "catalog_entry" } }),
     );
@@ -122,7 +122,7 @@ describe("catalog entry API calls", () => {
     };
 
     await expect(
-      createCatalogEntry(3, { parentId: 7, entry, noteIds: [4, 5] }),
+      createCatalogEntry(3, { parentId: 7, entry }),
     ).resolves.toEqual({ node: { id: 9, node_type: "catalog_entry" } });
     expect(fetchMock).toHaveBeenCalledWith("/api/showcases/3/nodes", {
       method: "POST",
@@ -131,50 +131,7 @@ describe("catalog entry API calls", () => {
         node_type: "catalog_entry",
         parent_id: 7,
         entry,
-        note_ids: [4, 5],
       }),
-    });
-  });
-
-  test("createCatalogEntry omits note_ids when no specimens are chosen", async () => {
-    const fetchMock = stubFetch(async () => jsonResponse(201, { node: { id: 9 } }));
-
-    const entry = {
-      catalog_number: "22a",
-      denomination: "",
-      issue_date: "",
-      source: "",
-    };
-
-    await createCatalogEntry(3, { parentId: 7, entry });
-
-    expect(fetchMock).toHaveBeenCalledWith("/api/showcases/3/nodes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        node_type: "catalog_entry",
-        parent_id: 7,
-        entry,
-      }),
-    });
-  });
-
-  test("updateCatalogEntry PUTs the metadata without touching the note", async () => {
-    const fetchMock = stubFetch(async () => jsonResponse(200, { node: { id: 9 } }));
-
-    const entry = {
-      catalog_number: "22b",
-      denomination: "20 lei",
-      issue_date: "1877",
-      source: "My collection",
-    };
-
-    await updateCatalogEntry(9, entry);
-
-    expect(fetchMock).toHaveBeenCalledWith("/api/nodes/9", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entry }),
     });
   });
 

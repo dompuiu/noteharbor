@@ -1,5 +1,3 @@
-import { AnchoredPopover } from "./AnchoredPopover.jsx";
-import { handleMenuNavigation } from "../lib/menuNavigation.js";
 import { firstAvailableNoteImage } from "../lib/showcaseImages.js";
 import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 import {
@@ -8,22 +6,19 @@ import {
   isCatalogEntry,
   nodeCatalogState,
   primarySpecimen,
-  specimenSummary,
 } from "../lib/showcaseTree.js";
 import { ShowcaseCatalogWell } from "./ShowcaseCatalogWell.jsx";
 
-// One card in a catalog Showcase. A Catalog entry and a note leaf share the
-// three states the checklist paints (owned, seen, unseen); they differ only in
-// what the body opens and whether the multi-specimen strip exists. The card
-// itself is one button so keyboard navigation still sees one card per grid
-// cell; the check and the strip sit beside it and fall back to the card when a
-// shortcut starts on them.
+// One card in a catalog Showcase. A real note leaf is owned or seen; a catalog
+// shell is always unseen. The card itself is one button so keyboard navigation
+// still sees one card per grid cell; the ownership control sits beside it as a
+// direct toggle, never a second menu (the item menu carries the same action).
 //
-// Owned: the primary photo, a white check disc that opens the ownership menu.
-// Seen: the primary photo desaturated, a SEEN tag, and an ownership footer
-// (the card itself is the menu trigger).
-// Unseen: a recessed specimen well carrying the catalog identity; the whole
-// card opens the note finder.
+// Owned: the note photo and a white check disc that marks it not owned.
+// Seen: the note photo desaturated, a SEEN tag, and the card itself marks it
+// owned.
+// Unseen: a recessed shell well carrying the catalog identity; the whole card
+// opens the finder that replaces the shell with a note.
 function noteLabel(note) {
   return showcaseNoteDisplayParts(note).join(" · ") || "Untitled note";
 }
@@ -59,153 +54,9 @@ function CheckIcon() {
   );
 }
 
-function StackIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      className="showcase-catalog-strip-icon"
-      focusable="false"
-      height="12"
-      viewBox="0 0 24 24"
-      width="12"
-    >
-      <rect
-        fill="none"
-        height="15"
-        rx="2"
-        stroke="currentColor"
-        strokeWidth="2"
-        width="13"
-        x="8"
-        y="3"
-      />
-      <path
-        d="M4 7v11a2 2 0 0 0 2 2h11"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-      />
-    </svg>
-  );
-}
-
-function ChevronIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      className="showcase-catalog-caret"
-      focusable="false"
-      height="12"
-      viewBox="0 0 24 24"
-      width="12"
-    >
-      <path
-        d="m6 9 6 6 6-6"
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="2"
-      />
-    </svg>
-  );
-}
-
-// The ownership menu is the same for a check disc and a seen footer: a header
-// naming the card's state, the library-wide ownership toggle naming the
-// displayed note, and (for an entry with specimens) the way into the specimen
-// manager. The trigger is supplied so the card can keep one card-level button.
-function OwnershipMenu({
-  node,
-  note,
-  renderTrigger,
-  state,
-  onOpenManager,
-  onToggleOwned,
-}) {
-  const entry = isCatalogEntry(node);
-  const owned = state === "owned";
-  const displayedNote = note ? noteLabel(note) : "this note";
-  const otherSpecimenOwned =
-    entry &&
-    note != null &&
-    (node?.specimens ?? []).some(
-      (specimen) => specimen?.id !== note.id && specimen?.owned,
-    );
-  const specimenCount = entry ? (node?.specimens ?? []).length : 0;
-  const detail = owned
-    ? otherSpecimenOwned
-      ? "Another specimen still owns this entry."
-      : entry
-        ? "Keeps the note and its photos; this entry becomes seen."
-        : "Keeps the note and its photos."
-    : "Adds the check here and everywhere else this note appears.";
-
-  return (
-    <AnchoredPopover
-      align="end"
-      className="showcase-ownership-menu"
-      initialFocus={(panel) =>
-        panel.querySelector('[role="menuitem"]:not(:disabled)') ?? panel
-      }
-      onKeyDown={(event, panel) =>
-        handleMenuNavigation(event, panel, '[role="menuitem"]')
-      }
-      panelLabel={`Ownership options for ${cardLabel(node)}`}
-      role="menu"
-      renderTrigger={renderTrigger}
-    >
-      {({ close }) => (
-        <>
-          <div className="showcase-ownership-head">
-            <span className="showcase-ownership-identity">
-              {entry ? catalogEntryIdentity(node.entry) : cardLabel(node)}
-            </span>
-            <span
-              className={`showcase-ownership-state showcase-ownership-state--${state}`}
-            >
-              {owned ? "Owned" : "Seen"}
-            </span>
-          </div>
-          <button
-            className="showcase-ownership-item"
-            onClick={() => {
-              close({ returnFocus: true });
-              onToggleOwned?.(note, !owned, node.id);
-            }}
-            role="menuitem"
-            type="button"
-          >
-            <small>{displayedNote}</small>
-            <b>
-              {owned ? "Mark this note as not owned" : "Mark this note owned"}
-            </b>
-            <em>{detail}</em>
-          </button>
-          {entry && specimenCount > 0 ? (
-            <button
-              className="showcase-ownership-item"
-              onClick={() => {
-                close({ returnFocus: true });
-                onOpenManager?.(node);
-              }}
-              role="menuitem"
-              type="button"
-            >
-              <b>{`Notes on this entry (${specimenCount})…`}</b>
-              <em>Add another specimen, or choose the primary.</em>
-            </button>
-          ) : null}
-        </>
-      )}
-    </AnchoredPopover>
-  );
-}
-
 function ShowcaseCatalogCard({
   node,
   onOpenFinder,
-  onOpenManager,
   onOpenNote,
   onPresent,
   onToggleOwned,
@@ -215,7 +66,6 @@ function ShowcaseCatalogCard({
   const note = entry ? primarySpecimen(node) : node?.note;
   const image = firstAvailableNoteImage(note);
   const label = cardLabel(node);
-  const specimenCount = entry ? (node?.specimens ?? []).length : 0;
 
   if (state === "unseen") {
     return (
@@ -270,26 +120,10 @@ function ShowcaseCatalogCard({
         <span className="showcase-catalog-foot">
           <span aria-hidden="true" className="showcase-check-empty" />
           <span>Mark owned</span>
-          <ChevronIcon />
         </span>
       ) : null}
     </>
   );
-
-  const strip =
-    entry && specimenCount > 1 ? (
-      <button
-        aria-haspopup="dialog"
-        aria-label={`${specimenCount} notes on this entry. Choose the primary`}
-        className="showcase-catalog-strip"
-        data-showcase-focus="strip"
-        onClick={() => onOpenManager?.(node)}
-        type="button"
-      >
-        <StackIcon />
-        <span>{specimenSummary(node)}</span>
-      </button>
-    ) : null;
 
   const openBody = () => {
     if (entry) {
@@ -306,26 +140,16 @@ function ShowcaseCatalogCard({
         className="showcase-cell showcase-catalog-cell"
         data-showcase-node-id={node?.id}
       >
-        <OwnershipMenu
-          node={node}
-          note={note}
-          onOpenManager={onOpenManager}
-          onToggleOwned={onToggleOwned}
-          renderTrigger={({ triggerProps }) => (
-            <button
-              {...triggerProps}
-              aria-label={`${label} is seen. Open ownership options`}
-              className="showcase-card showcase-card--catalog showcase-card--seen"
-              data-showcase-focus="ownership"
-              data-showcase-node-id={node?.id}
-              type="button"
-            >
-              {body}
-            </button>
-          )}
-          state={state}
-        />
-        {strip}
+        <button
+          aria-label={`${label} is seen. Mark as owned`}
+          className="showcase-card showcase-card--catalog showcase-card--seen"
+          data-showcase-focus="ownership"
+          data-showcase-node-id={node?.id}
+          onClick={() => onToggleOwned?.(note, true, node.id)}
+          type="button"
+        >
+          {body}
+        </button>
       </div>
     );
   }
@@ -345,27 +169,17 @@ function ShowcaseCatalogCard({
         {body}
       </button>
       <span className="showcase-catalog-check">
-        <OwnershipMenu
-          node={node}
-          note={note}
-          onOpenManager={onOpenManager}
-          onToggleOwned={onToggleOwned}
-          renderTrigger={({ triggerProps }) => (
-            <button
-              {...triggerProps}
-              aria-label={`${label} is owned. Open ownership options`}
-              className="showcase-card-check"
-              data-showcase-focus="check"
-              title="Owned — open options"
-              type="button"
-            >
-              <CheckIcon />
-            </button>
-          )}
-          state={state}
-        />
+        <button
+          aria-label={`${label} is owned. Mark as not owned`}
+          className="showcase-card-check"
+          data-showcase-focus="check"
+          onClick={() => onToggleOwned?.(note, false, node.id)}
+          title="Owned — mark as not owned"
+          type="button"
+        >
+          <CheckIcon />
+        </button>
       </span>
-      {strip}
     </div>
   );
 }

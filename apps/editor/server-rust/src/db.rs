@@ -742,7 +742,41 @@ fn ensure_showcase_catalog_notes(conn: &Connection) -> Result<(), DbError> {
                SELECT 1 FROM showcase_catalog_notes
                WHERE node_id = OLD.node_id AND is_primary = 1
              );
-         END;",
+         END;
+
+         -- Catalog entries are shells now: one planned position that later
+         -- becomes a single note card. Collapse every legacy entry that still
+         -- holds specimens into a note node, keeping its primary (or first)
+         -- specimen in place and dropping the extra links. A shell with no
+         -- specimens stays a catalog_entry.
+         UPDATE showcase_nodes
+         SET node_type = 'note',
+             note_id = COALESCE(
+               (SELECT notes.note_id
+                FROM showcase_catalog_notes notes
+                WHERE notes.node_id = showcase_nodes.id AND notes.is_primary = 1
+                LIMIT 1),
+               (SELECT notes.note_id
+                FROM showcase_catalog_notes notes
+                WHERE notes.node_id = showcase_nodes.id
+                ORDER BY notes.position ASC, notes.note_id ASC
+                LIMIT 1)
+             ),
+             catalog_number = NULL,
+             denomination = NULL,
+             issue_date = NULL,
+             source = NULL,
+             updated_at = datetime('now')
+         WHERE node_type = 'catalog_entry'
+           AND EXISTS (
+             SELECT 1 FROM showcase_catalog_notes notes
+             WHERE notes.node_id = showcase_nodes.id
+           );
+
+         DELETE FROM showcase_catalog_notes
+         WHERE node_id IN (
+           SELECT id FROM showcase_nodes WHERE node_type <> 'catalog_entry'
+         );",
     )
     .map_err(classify)?;
     Ok(())

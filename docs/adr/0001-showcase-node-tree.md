@@ -14,6 +14,8 @@ A Showcase is stored as a single self-referential `showcase_nodes` table, where 
 - Archive export/import must renumber and remap four reference columns (`showcase_id`, `category_id`, `note_id`, `cover_note_id`) plus the self-referential `parent_node_id`.
 - Category labels are permanent: placements reference them with `ON DELETE RESTRICT`, and deleting a label is not an operation, so a label can never be orphaned by a delete.
 
-## Extension: catalog entries
+## Extension: catalog shells
 
-Supersedes the node type list above: `node_type` gains `catalog_entry`, a Showcase leaf carrying its own catalog metadata and holding zero or more specimens for one Catalog value. It is still one row in `showcase_nodes`, placed under a Category Placement or Grouping, ordered by its sibling `position`, and deleted with its subtree. Its specimens live in a separate join, `showcase_catalog_notes`, keyed by the entry node and the Note. The tree, its per-sibling ordering, and the cascade rules are unchanged: an extension, not a contradiction. Archive export/import remaps the specimen join as well.
+Supersedes the node type list above: `node_type` gains `catalog_entry`, a planned Showcase leaf carrying its own catalog metadata for one Catalog value. It is a shell, not a container: it holds no notes. Placing a shell is still one row in `showcase_nodes`, ordered by its sibling `position` and deleted with its subtree, so the tree and cascade rules are unchanged. When the collector picks a library note, the server rewrites that same row to `node_type = 'note'` with a `note_id`, preserving its parent and position; replacing a shell never disturbs the surrounding order.
+
+An older build stored zero-or-more specimens per entry in `showcase_catalog_notes`. Those rows are legacy: schema initialization collapses each entry with specimens into a note node using its primary (or first) specimen, then drops the extra links. Archive export/import still understands the join so old archives load, but the editor no longer authors or displays specimen sets.
