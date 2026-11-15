@@ -323,8 +323,6 @@ void main() {
     tester.view.physicalSize = const Size(400, 900);
     addTearDown(tester.view.reset);
 
-    // The test font (Ahem) is much wider than Inter; the suite loads the
-    // bundled face in setUpAll so the label-fit assertion reflects the app.
     final controller = DatasetController(repository: _FakeViewerRepository());
     await controller.load();
 
@@ -362,8 +360,6 @@ void main() {
     tester.view.physicalSize = const Size(1400, 900);
     addTearDown(tester.view.reset);
 
-    // Measure in the app's real face, loaded in setUpAll; the test font is
-    // much wider than Inter.
     final controller = DatasetController(repository: _FakeViewerRepository());
     await controller.load();
 
@@ -372,20 +368,73 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // Measure every option, not a named one: adding a longer scope must widen
+    // the select without a change here, which is the point of the feature.
+    final dropdown = tester.widget<DropdownButton<String>>(
+      find.byKey(const ValueKey('filterScope')),
+    );
+    final labels = [
+      for (final item in dropdown.items!)
+        // The items' rows are private widgets, but their label is public.
+        (item.child as dynamic).label as String,
+    ];
+    final longest = labels.reduce(
+      (left, right) =>
+          _scopeLabelWidth(left) >= _scopeLabelWidth(right) ? left : right,
+    );
+    final longestWidth = _scopeLabelWidth(longest);
+
     // Pick the longest label so the button paints it, then compare the
     // select's width to that label.
     await tester.tap(find.byKey(const ValueKey('filterScope')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Denomination').last);
+    await tester.tap(find.text(longest).last);
     await tester.pumpAndSettle();
 
     const chrome = 12 * 2 + 24 + 8;
     final scopeRect = tester.getRect(find.byKey(const ValueKey('filterScope')));
+    final label = tester.renderObject<RenderParagraph>(find.text(longest));
+    expect(label.didExceedMaxLines, isFalse);
+    expect(scopeRect.width, closeTo(longestWidth + chrome, 1));
+  });
+
+  testWidgets('a cramped, large-text bar ellipsizes the scope, not the bar', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(320, 640);
+    addTearDown(tester.view.reset);
+    tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    final controller = DatasetController(repository: _FakeViewerRepository());
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    final barWidth = tester
+        .getSize(find.byKey(const ValueKey('filterBar')))
+        .width;
+    final scope = find.byKey(const ValueKey('filterScope'));
+    // The field keeps its 120px minimum; the select gives back the rest, so
+    // the scope label ellipsizes instead of overflowing the bar.
+    expect(tester.getRect(scope).width, closeTo(barWidth - 1 - 120, 1));
+    expect(tester.getSize(find.byType(TextField)).width, 120);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(scope);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Denomination').last);
+    await tester.pumpAndSettle();
+
     final label = tester.renderObject<RenderParagraph>(
       find.text('Denomination'),
     );
-    expect(label.didExceedMaxLines, isFalse);
-    expect(scopeRect.width, closeTo(label.size.width + chrome, 1));
+    expect(label.didExceedMaxLines, isTrue);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('All notes opens on the Catalog filter scope', (tester) async {
@@ -522,6 +571,25 @@ Future<DatasetController> _pumpAllNotes(
 
 bool _filterFieldHasFocus(WidgetTester tester) {
   return tester.widget<TextField>(find.byType(TextField)).focusNode!.hasFocus;
+}
+
+/// One scope option's label at the select's own type, for the width assertion.
+double _scopeLabelWidth(String label) {
+  final painter = TextPainter(
+    text: TextSpan(
+      text: label,
+      style: const TextStyle(
+        fontFamily: 'Inter',
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+    maxLines: 1,
+    textDirection: TextDirection.ltr,
+  )..layout();
+  final width = painter.width;
+  painter.dispose();
+  return width;
 }
 
 Finder get _washFinder => find.byWidgetPredicate(

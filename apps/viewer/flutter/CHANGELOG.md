@@ -6,7 +6,7 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ### Changed
 
-- Table screen: the filter bar's scope select now hugs its longest option — the widest label at the select's own type and text scale plus its padding and arrow — instead of reserving a fixed 180–200px slot, so the freed width goes to the filter field. A new, longer scope label widens the select without a code change.
+- Table screen: the filter bar's scope select now hugs its longest option — the widest label at the select's own type and text scale plus its padding and arrow — instead of reserving a fixed 180–200px slot, so the freed width goes to the filter field. A new, longer scope label widens the select without a code change; where the bar is too narrow for both, the input keeps its 120px minimum and the scope label ellipsizes.
 
 ## [1.15.1] - 2026-11-14
 

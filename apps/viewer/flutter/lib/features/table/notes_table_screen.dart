@@ -95,10 +95,16 @@ const Color _kTagChipText = ViewerPalette.tagText;
 const double _kFilterBarHeight = 40;
 const double _kFilterBarMaxWidth = 560;
 
-/// What the scope select spends beside its longest label: the button's 12px
-/// padding on each side, its 24px arrow, and an 8px gap so the label never
-/// touches the arrow.
-const double _kFilterScopeChromeWidth = 12 * 2 + 24 + 8;
+/// The scope select's own padding and arrow, and the gap that keeps its label
+/// off the arrow while absorbing TextPainter/Text rounding.
+const double _kFilterScopePadding = 12;
+const double _kFilterScopeArrowSize = 24;
+const double _kFilterScopeLabelGap = 8;
+const double _kFilterScopeChromeWidth =
+    _kFilterScopePadding * 2 + _kFilterScopeArrowSize + _kFilterScopeLabelGap;
+
+/// The hairline between the scope select and the filter field.
+const double _kFilterDividerWidth = 1;
 
 /// The filter field keeps at least this much of the bar, so a very large text
 /// scale or a very narrow window ellipsizes the scope label instead of
@@ -275,35 +281,6 @@ const List<({String value, String label, String hint})> _kFilterScopes = [
   (value: 'serial', label: 'Serial', hint: 'Filter serial…'),
   (value: 'tags', label: 'Tags', hint: 'Filter tags…'),
 ];
-
-/// The filter bar's scope width: its longest option at the select's own text
-/// style and scale, plus the chrome around it.
-///
-/// Measured from [_kFilterScopes] instead of fixed, so a new scope with a
-/// longer label widens the select on its own; [maxWidth] is the bar's width,
-/// which the select never fills past.
-double _filterScopeWidth(BuildContext context, {required double maxWidth}) {
-  final painter = TextPainter(
-    textDirection: Directionality.of(context),
-    textScaler: MediaQuery.textScalerOf(context),
-    maxLines: 1,
-  );
-  var longestLabel = 0.0;
-  for (final scope in _kFilterScopes) {
-    painter.text = TextSpan(text: scope.label, style: _kFilterScopeTextStyle);
-    painter.layout();
-    longestLabel = math.max(longestLabel, painter.width);
-  }
-  painter.dispose();
-  final needed = longestLabel.ceilToDouble() + _kFilterScopeChromeWidth;
-  // Leave the divider and a usable filter field their width first; on a bar
-  // too narrow for both, the scope label ellipsizes.
-  final roomForScope = math.max(
-    _kFilterScopeChromeWidth,
-    maxWidth - 1 - _kFilterFieldMinWidth,
-  );
-  return math.min(needed, roomForScope);
-}
 
 /// The cursor shown while the columns are being panned. The Windows embedder
 /// has no open/closed-hand cursor: `grab`/`grabbing` are absent from its cursor
@@ -704,14 +681,48 @@ double _measureTextWidth(
   String text,
   TextStyle style, {
   TextScaler textScaler = TextScaler.noScaling,
+  TextDirection textDirection = TextDirection.ltr,
 }) {
   final painter = TextPainter(
     text: TextSpan(text: text, style: style),
     maxLines: 1,
-    textDirection: TextDirection.ltr,
+    textDirection: textDirection,
     textScaler: textScaler,
   )..layout();
-  return painter.width;
+  final width = painter.width;
+  painter.dispose();
+  return width;
+}
+
+/// The filter bar's scope width: its longest option at the select's own text
+/// style and scale, plus the chrome around it.
+///
+/// Measured from [_kFilterScopes] instead of fixed, so a new scope with a
+/// longer label widens the select on its own; [maxWidth] is the bar's width,
+/// which the select never fills past.
+double _filterScopeWidth(BuildContext context, {required double maxWidth}) {
+  final textScaler = MediaQuery.textScalerOf(context);
+  var longestLabel = 0.0;
+  for (final scope in _kFilterScopes) {
+    longestLabel = math.max(
+      longestLabel,
+      _measureTextWidth(
+        scope.label,
+        _kFilterScopeTextStyle,
+        textScaler: textScaler,
+        textDirection: Directionality.of(context),
+      ),
+    );
+  }
+  final needed = longestLabel + _kFilterScopeChromeWidth;
+  // Give the divider and a usable filter field their width first, then the
+  // select. Every window the shell opens is wider than the chrome this floor
+  // reserves, so a cramped bar only ellipsizes the label.
+  final roomForScope = math.max(
+    _kFilterScopeChromeWidth,
+    maxWidth - _kFilterDividerWidth - _kFilterFieldMinWidth,
+  );
+  return math.min(needed, roomForScope);
 }
 
 double _tagChipWidth(
@@ -2860,8 +2871,11 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                         BorderRadius.zero,
                                                     padding:
                                                         const EdgeInsets.symmetric(
-                                                          horizontal: 12,
+                                                          horizontal:
+                                                              _kFilterScopePadding,
                                                         ),
+                                                    iconSize:
+                                                        _kFilterScopeArrowSize,
                                                     style:
                                                         _kFilterScopeTextStyle,
                                                     // The button shows plain
@@ -2905,7 +2919,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                         ),
                                       ),
                                       Container(
-                                        width: 1,
+                                        width: _kFilterDividerWidth,
                                         // Full interior height: the divider
                                         // touches the bar's top and bottom
                                         // borders without painting over them.
