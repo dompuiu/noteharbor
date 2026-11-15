@@ -128,6 +128,7 @@ describe("the showcase category canvas", () => {
     expect(
       await screen.findByRole("heading", { name: "Summer" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("0 entries")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Create a category" }),
     ).toBeInTheDocument();
@@ -165,6 +166,56 @@ describe("the showcase category canvas", () => {
     expect(
       screen.queryByRole("button", { name: "Create a category" }),
     ).not.toBeInTheDocument();
+  });
+
+  test("view mode prints the direct entry and grouping counts under the title", async () => {
+    const note = {
+      id: 40,
+      node_type: "note",
+      name: null,
+      category_id: null,
+      parent_node_id: 10,
+      note_id: 100,
+      cover_note_id: null,
+      position: 1,
+      note: { id: 100, denomination: "1", issue_date: "2020" },
+      cover_note: null,
+      children: [],
+    };
+    const nestedNote = {
+      ...note,
+      id: 42,
+      parent_node_id: 41,
+      note_id: 101,
+      note: { id: 101, denomination: "2", issue_date: "2021" },
+    };
+    getShowcaseTree.mockResolvedValue({
+      showcase_id: 1,
+      nodes: [
+        {
+          ...SUMMER_NODE,
+          children: [
+            note,
+            {
+              id: 41,
+              node_type: "grouping",
+              name: "Proofs",
+              category_id: null,
+              parent_node_id: 10,
+              note_id: null,
+              cover_note_id: 101,
+              position: 2,
+              note: null,
+              cover_note: null,
+              children: [nestedNote],
+            },
+          ],
+        },
+      ],
+    });
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    expect(await screen.findByText("1 entry · 1 grouping")).toBeInTheDocument();
   });
 
   test("view mode hides an empty category", async () => {

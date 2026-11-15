@@ -26,6 +26,28 @@ function noteNodeLabel(node) {
   );
 }
 
+// The quiet line under a Category title: direct entries and groupings, the
+// same two numbers the prototype prints ("5 entries · 1 grouping"). Here an
+// "entry" means one card leaf (a presentation note or a Catalog entry), not
+// the Catalog entry node type. Nested notes inside a grouping stay out of the
+// count because the grouping card already stands for them.
+function countLabel(count, singular, plural) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function categoryMeta(children) {
+  const groupings = children.filter(
+    (node) => node.node_type === "grouping",
+  ).length;
+  const entries = children.length - groupings;
+  return [
+    countLabel(entries, "entry", "entries"),
+    groupings > 0 ? countLabel(groupings, "grouping", "groupings") : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 function ShowcaseCategorySection({
   category,
   catalogMode = false,
@@ -93,9 +115,16 @@ function ShowcaseCategorySection({
           onMoveDown={onMoveCategory ? () => onMoveCategory(category, 1) : undefined}
           canMoveUp={canMoveUp}
           canMoveDown={canMoveDown}
+          subtitle={categoryMeta(visibleChildren)}
         />
       ) : (
-        <h2 className="showcase-category-title">{category.name}</h2>
+        <div className="showcase-category-head">
+          <h2 className="showcase-category-title">{category.name}</h2>
+          <p className="showcase-category-meta">
+            {categoryMeta(visibleChildren)}
+          </p>
+          <span aria-hidden="true" className="showcase-category-rule" />
+        </div>
       )}
 
       {children.length > 0 ? (

@@ -21,6 +21,7 @@ function ShowcaseNodeEditor({
   onMoveDown,
   canMoveUp = false,
   canMoveDown = false,
+  subtitle,
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(node.name);
@@ -261,6 +262,10 @@ function ShowcaseNodeEditor({
           </>
         )}
       </div>
+
+      {subtitle ? (
+        <div className="showcase-node-subtitle">{subtitle}</div>
+      ) : null}
 
       {error ? (
         <p className="showcase-error" role="alert">

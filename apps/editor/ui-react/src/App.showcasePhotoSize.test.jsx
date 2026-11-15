@@ -167,4 +167,13 @@ describe("the showcase photo size control", () => {
     expect(photoSizeGroup().getByRole("radio", { name: "Small" })).toBeChecked();
     expect(gridMinWidth()).toBe("200px");
   });
+
+  test("prints each size as the S / M / L letter in the pill", async () => {
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    const group = await screen.findByRole("group", { name: "Photo size" });
+    expect(within(group).getByText("S")).toBeInTheDocument();
+    expect(within(group).getByText("M")).toBeInTheDocument();
+    expect(within(group).getByText("L")).toBeInTheDocument();
+  });
 });

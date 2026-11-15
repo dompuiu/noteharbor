@@ -1028,7 +1028,8 @@ input[type="radio"] {
 /* The three-way note photo size control (Small 200px / Medium 320px / Large
    480px). It sits in the showcase header's trailing cluster in both view and
    edit mode and only sets the grid's minimum card width. The options are
-   icons (one growing frame); the words survive as accessible names. */
+   letters in one pill; the chosen size is the white disc with its own ring,
+   and the words stay as the accessible names. */
 .showcase-photo-size {
   align-self: center;
   display: flex;
@@ -1045,12 +1046,15 @@ input[type="radio"] {
 }
 
 .showcase-photo-size-legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
   padding: 0;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 0.72rem;
-  font-weight: 700;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .showcase-photo-size-options {
@@ -1059,7 +1063,7 @@ input[type="radio"] {
   padding: 2px;
   border: 1px solid var(--border-control);
   border-radius: var(--radius-pill);
-  background: var(--surface);
+  background: var(--surface-2);
   min-height: 34px;
 }
 
@@ -1068,16 +1072,21 @@ input[type="radio"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 40px;
-  min-height: 28px;
-  padding: 4px 8px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border-radius: var(--radius-pill);
   color: var(--text-muted);
   cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
 }
 
-.showcase-photo-size-option svg {
+.showcase-photo-size-letter {
   display: block;
+  text-transform: uppercase;
 }
 
 .showcase-photo-size-option input {
@@ -1090,7 +1099,7 @@ input[type="radio"] {
 }
 
 /* The word stays in the accessibility tree (radio name + tooltip) while
-   sighted users get the icon only. */
+   sighted users get the letter only. */
 .showcase-photo-size-label {
   position: absolute;
   width: 1px;
@@ -1104,8 +1113,9 @@ input[type="radio"] {
 }
 
 .showcase-photo-size-option:has(input:checked) {
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border-control);
 }
 
 .showcase-photo-size-option:has(input:focus-visible) {
@@ -1161,6 +1171,14 @@ input[type="radio"] {
   margin-bottom: 16px;
 }
 
+.showcase-category-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+
 .showcase-category-title {
   margin: 0;
   font-size: 1.4rem;
@@ -1168,6 +1186,29 @@ input[type="radio"] {
   letter-spacing: -0.01em;
   text-align: center;
   text-transform: uppercase;
+}
+
+/* The quiet second line of the section header: direct card counts, then a
+   hairline that closes the title block and opens the grid. Edit mode hangs the
+   same line inside the category cell, above its own rule. */
+.showcase-category-meta,
+.showcase-node-subtitle {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.showcase-node-subtitle {
+  flex-basis: 100%;
+}
+
+.showcase-category-rule {
+  width: 100%;
+  height: 1px;
+  margin-top: 8px;
+  background: var(--border-soft);
 }
 
 .showcase-category-focus {

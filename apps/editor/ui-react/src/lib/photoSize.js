@@ -7,9 +7,9 @@ const SHOWCASE_PHOTO_SIZE_STORAGE_KEY = 'noteharbor.showcasePhotoSize';
 
 // Small is the default; the pixel values are the grid's minmax() minimum.
 const PHOTO_SIZE_OPTIONS = [
-  { value: 'small', label: 'Small', minWidth: 200 },
-  { value: 'medium', label: 'Medium', minWidth: 320 },
-  { value: 'large', label: 'Large', minWidth: 480 },
+  { value: 'small', label: 'Small', letter: 'S', minWidth: 200 },
+  { value: 'medium', label: 'Medium', letter: 'M', minWidth: 320 },
+  { value: 'large', label: 'Large', letter: 'L', minWidth: 480 },
 ];
 
 const DEFAULT_PHOTO_SIZE = 'small';
