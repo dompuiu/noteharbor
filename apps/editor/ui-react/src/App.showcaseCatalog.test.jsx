@@ -336,6 +336,21 @@ describe("the catalog checklist", () => {
     expect(container.querySelector(".showcase-catalog-foot")).toBeNull();
     expect(screen.queryByText("Mark owned")).not.toBeInTheDocument();
     expect(screen.queryByText(/Add notes/)).not.toBeInTheDocument();
+    // The identity lives in the cell's window bar, not under the photo, so a
+    // card never repeats its caption and the bar stays the drag surface.
+    expect(
+      [...container.querySelectorAll(".showcase-reorder-title")].map(
+        (title) => title.textContent,
+      ),
+    ).toEqual([
+      "1 leu · Pick 22a · 1917",
+      "5 lei · Pick 24c · 1920",
+      "10 lei · Pick 25d · 1921",
+      "2 lei · Pick 23b · 1919",
+    ]);
+    expect(
+      container.querySelector(".showcase-catalog-cell .showcase-card-caption"),
+    ).toBeNull();
     // Unseen: the neutral well and the whole card opening the finder.
     expect(
       screen.getByRole("button", {

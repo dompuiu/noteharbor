@@ -2722,13 +2722,13 @@ describe("slideshow overlay styles", () => {
     expect(panel[1]).toMatch(/overflow-y:\s*auto/);
   });
 
-  // The category header's focus wash must stay off while renaming: the rename
-  // field carries its own focus style, and painting the whole header row would
-  // read as one giant input box.
-  test("the category header wash stays off while renaming", () => {
+  // The always-editable canvas paints focus once, on the cell: the card inside
+  // is neutralised, so no card can ever stack a second ring or a second wash.
+  test("the showcase cell owns the only focus plane", () => {
     expect(styles).toMatch(
-      /\.showcase-cell--category:not\(:has\(\.showcase-node-rename-form\)\):has\(\s*:focus-visible\s*\)/,
+      /\.showcase-reorder-cell:has\(:focus-visible\)\s*\{[^}]*box-shadow:\s*inset 0 0 0 2px var\(--accent\)/,
     );
+    expect(styles).not.toMatch(/\.showcase-screen--edit \.showcase-card/);
   });
 
   // A full-screen overlay owns scrolling while open: the body's bar would

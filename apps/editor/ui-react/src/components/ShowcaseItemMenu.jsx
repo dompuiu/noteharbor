@@ -11,8 +11,9 @@ import { MenuIcon } from "./MenuIcon.jsx";
 // - note inside a grouping: make it the grouping's cover
 // - catalog shell: replace it with a library note, edit its details
 //
-// The trigger is a quiet `⋯` that sits beside the drag grip. The panel uses the
-// app's shared anchored popover (portal, Escape, outside press, focus return).
+// The trigger is a quiet `⋯` at the far end of the cell's title bar, opposite
+// the drag grip. The panel uses the app's shared anchored popover (portal,
+// Escape, outside press, focus return).
 function ShowcaseItemMenu({
   label,
   onAddNote,

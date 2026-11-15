@@ -1,8 +1,9 @@
 // The recessed "no specimen yet" well a catalog position shows before its first
-// note: the unseen eyebrow, a faint banknote glyph, and the catalog identity.
-// View mode's unseen card, the add-entry preview, and the edit-mode entry card
-// all paint the same well so a planned position reads the same everywhere.
-function ShowcaseCatalogWell({ identity }) {
+// note: the unseen eyebrow, a faint banknote glyph, and optionally the catalog
+// identity when the well is not already titled from elsewhere (the shell form's
+// preview). The card grid passes no identity because the cell's title bar
+// carries it.
+function ShowcaseCatalogWell({ identity = null }) {
   return (
     <span className="showcase-catalog-well">
       <span className="showcase-catalog-eyebrow">Unseen</span>
@@ -31,7 +32,9 @@ function ShowcaseCatalogWell({ identity }) {
           strokeLinecap="round"
         />
       </svg>
-      <span className="showcase-catalog-identity">{identity}</span>
+      {identity ? (
+        <span className="showcase-catalog-identity">{identity}</span>
+      ) : null}
     </span>
   );
 }

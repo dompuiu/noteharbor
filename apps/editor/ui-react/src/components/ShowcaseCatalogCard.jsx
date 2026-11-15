@@ -2,7 +2,6 @@ import { firstAvailableNoteImage } from "../lib/showcaseImages.js";
 import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 import {
   catalogEntryCaption,
-  catalogEntryIdentity,
   isCatalogEntry,
   nodeCatalogState,
   primarySpecimen,
@@ -22,9 +21,9 @@ function noteLabel(note) {
 }
 
 // A card's visible identity: the entry's own catalog metadata, never the
-// primary Note, because the position and the record are independent. The
-// caption reads like a note card's (denomination · catalog · date); the unseen
-// well keeps the shorter catalog value.
+// primary Note, because the position and the record are independent. The full
+// line (denomination · catalog · date) is the cell's title bar, so the card
+// body carries only the photo or the unseen well.
 function cardLabel(node) {
   return isCatalogEntry(node)
     ? catalogEntryCaption(node.entry)
@@ -101,12 +100,7 @@ function ShowcaseCatalogCard({
           onClick={() => onOpenFinder?.(node)}
           type="button"
         >
-          <ShowcaseCatalogWell
-            identity={entry ? catalogEntryIdentity(node.entry) : label}
-          />
-          <span className="showcase-card-caption-row">
-            <span className="showcase-card-caption">{label}</span>
-          </span>
+          <ShowcaseCatalogWell />
         </button>
       </div>
     );
@@ -146,9 +140,6 @@ function ShowcaseCatalogCard({
           ) : (
             <span className="showcase-card-no-image">No image</span>
           )}
-        </span>
-        <span className="showcase-card-caption-row">
-          <span className="showcase-card-caption">{label}</span>
         </span>
       </button>
     </div>

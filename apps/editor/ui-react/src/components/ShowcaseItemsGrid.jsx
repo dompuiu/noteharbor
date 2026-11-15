@@ -1,4 +1,5 @@
 import {
+  catalogEntryCaption,
   catalogEntryIdentity,
   isCatalogEntry,
   nodeCatalogState,
@@ -16,6 +17,12 @@ import { ShowcaseReorderableCell } from "./ShowcaseReorderableCell.jsx";
 
 function noteLabel(node) {
   return showcaseNoteDisplayParts(node.note).join(" ") || "note";
+}
+
+// The catalog card's visible identity, now carried by the cell's title bar
+// instead of a footer under the photo.
+function noteCaption(node) {
+  return showcaseNoteDisplayParts(node.note).join(" · ") || "Untitled note";
 }
 
 // One level's cards in the always-editable canvas. Every item is draggable and
@@ -141,6 +148,7 @@ function ShowcaseItemsGrid({
               menu={menuFor(node, { isShell: true })}
               nodeId={node.id}
               reorder={reorderEnabled ? reorder : null}
+              title={catalogEntryCaption(node.entry)}
             >
               <ShowcaseCatalogCard
                 node={node}
@@ -177,6 +185,7 @@ function ShowcaseItemsGrid({
               menu={menuFor(node)}
               nodeId={node.id}
               reorder={reorderEnabled ? reorder : null}
+              title={catalogMode ? noteCaption(node) : null}
             >
               {catalogMode ? (
                 <ShowcaseCatalogCard

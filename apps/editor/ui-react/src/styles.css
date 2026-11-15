@@ -1369,18 +1369,8 @@ input[type="radio"] {
     inset 0 0 0 1px var(--accent);
 }
 
-/* Edit mode selection lives on the outer reorder cell only: the inner card
-   never paints its own wash/ring, so a focused grouping cover, note card, or
-   action (Set as cover) all read as one accent-soft cell instead of three
-   stacked tones. */
-.showcase-screen--edit .showcase-card:focus-visible {
-  background: transparent;
-  box-shadow: none;
-}
-
-.showcase-screen--edit .showcase-card--grouping:focus-visible {
-  box-shadow: inset 3px 0 0 var(--accent);
-}
+/* A focused card can only be reached outside a reorder cell (the category
+   header); inside a cell the cell itself owns the focus ring. */
 
 .showcase-card--category {
   aspect-ratio: 2 / 1;
@@ -1549,102 +1539,115 @@ input[type="radio"] {
   gap: 8px;
 }
 
-/* Edit mode wraps each draggable card in a reorder cell. The cell is the
-   bordered card so the grip, the preview, and the Rename / Remove read as one
-   item; the grip floats over the card's top-left corner so it never shifts the
-   grid alignment. The hovered edge shows the line the drop will land on; the
-   dragged cell dims. */
+/* The always-editable canvas wraps each draggable card in a reorder cell. The
+   cell is the bordered card, so its bar, the photo, and its one frame read as
+   a single item. The bar is the item's window chrome: the grip on the left,
+   the actions menu on the right, and — when the card has no footer of its own
+   — the caption centred between them. A hairline closes the chrome from the
+   photo plate below. */
 .showcase-reorder-cell {
   position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
   height: 100%;
-  padding: 10px 10px 6px;
-  padding-top: 36px;
+  padding: 0 0 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
 }
 
+.showcase-reorder-bar {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: 34px;
+  padding: 0 5px;
+  border-bottom: 1px solid var(--border-soft);
+  cursor: grab;
+}
+
+/* The title is absolutely centred so its length never moves the grip or the
+   menu; a long catalog line ellipses and keeps the full string in `title`. */
+.showcase-reorder-title {
+  position: absolute;
+  top: 0;
+  right: 36px;
+  left: 36px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 34px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+}
+
 .showcase-reorder-cell > .showcase-cell {
-  gap: 8px;
+  gap: 0;
   border: 0;
   background: transparent;
 }
 
-/* The inner card fills its reorder cell so every cell in a stretched grid row
-   ends on the same uniform bottom pad. Without this, the tallest card sets
-   the row and shorter ones float: notes lack the grouping's 22px rename
-   button, so a note row always left a bigger gap under notes than groupings.
-   The leftover row height lands inside the card below its caption, where the
-   single-line caption and fixed 2/1 image well keep it invisible. */
-.showcase-reorder-cell > .showcase-cell > .showcase-card--note,
-.showcase-reorder-cell > .showcase-cell > .showcase-grouping-editcard,
-.showcase-reorder-cell > .showcase-cell > .showcase-catalog-editcard {
+.showcase-reorder-cell--draggable:hover {
+  border-color: var(--border-control);
+}
+
+/* One frame per item: the cell draws it, so the card inside never adds a
+   second border, a second surface, or a second focus wash. */
+.showcase-reorder-cell > .showcase-card,
+.showcase-reorder-cell > .showcase-cell > .showcase-card {
   flex: 1 1 auto;
-}
-
-/* An edit cell is the showcase's catalog row: while Tab sits on the card or
-   any of its controls, the cell paints the row wash with an inset 1px ring.
-   Inner controls keep their own outlines, mirroring `.table-row-link`. While
-   a Category is being renamed the wash stays off: the rename field carries
-   its own focus style, and painting the whole header row would read as one
-   giant input box. */
-.showcase-reorder-cell:has(:focus-visible),
-.showcase-category-section
-  > .showcase-cell--category:not(:has(.showcase-node-rename-form)):has(
-    :focus-visible
-  ) {
-  background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-
-/* A selected edit cell shows one wash tone: the inner grouping wrapper and
-   note card go transparent and borderless while selected, keeping only the
-   grouping spine. Without this the outer wash, the inner surface, and the
-   image well read as three backgrounds, and the outer ring plus the inner
-   border read as a double border — while a note (outer and inner both washed)
-   reads as one. */
-.showcase-screen--edit
-  .showcase-reorder-cell:has(:focus-visible)
-  > .showcase-cell
-  > .showcase-card--note {
   border-color: transparent;
+  background: transparent;
+}
+
+/* A catalog card carries its identity in the bar, so its photo gets even
+   padding; a note card keeps its caption row as the info trigger. */
+.showcase-reorder-cell > .showcase-cell > .showcase-card--catalog {
+  padding: 8px;
+}
+
+/* Focus paints the cell only, at 2px: no wash over the photo, and never a
+   second ring on the card inside it. */
+.showcase-reorder-cell:has(:focus-visible) {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.showcase-reorder-cell:has(:focus-visible) .showcase-card:focus-visible {
   background: transparent;
   box-shadow: none;
 }
 
-.showcase-screen--edit
-  .showcase-reorder-cell:has(:focus-visible)
-  .showcase-grouping-editcard {
-  border-color: transparent;
-  background: transparent;
+/* The grouping spine is identity, not focus, so it survives the cell ring. */
+.showcase-reorder-cell:has(:focus-visible)
+  .showcase-card--grouping:focus-visible {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
+/* The handle is a drag affordance: a quiet ghost control until hover. */
 .showcase-reorder-handle {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  border: 1px solid var(--border-control);
+  border: 0;
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--text-muted);
+  background: transparent;
+  color: var(--text-faint);
   cursor: grab;
 }
 
 .showcase-reorder-handle:hover,
 .showcase-reorder-handle:focus-visible {
-  border-color: var(--accent);
-  color: var(--accent-strong);
+  background: var(--surface-4);
+  color: var(--text);
 }
 
 .showcase-reorder-handle:active {
@@ -1652,7 +1655,9 @@ input[type="radio"] {
 }
 
 .showcase-reorder-grip {
-  line-height: 1;
+  display: block;
+  width: 12px;
+  height: 12px;
 }
 
 /* Prototype: grouping / note edit icons. The remove icon sits top-right on
@@ -2290,10 +2295,8 @@ input[type="radio"] {
     box-shadow 0.14s ease;
 }
 
-.showcase-card--catalog:hover {
-  border-color: var(--border-control);
-  box-shadow: 0 3px 10px rgba(37, 40, 43, 0.08);
-}
+/* The catalog card keeps the cell's single frame: hover lives on the cell, so
+   the inner card never reveals a border of its own. */
 
 /* The state label: Seen and Owned are one pill in the photo's corner, so the
    two states read as the same kind of thing. The label is the ownership
@@ -2621,18 +2624,18 @@ input[type="radio"] {
   }
 }
 
-/* The edit-mode contents of one node nest in the parent grid. The stacked
-   `+` actions fill one grid cell, so the pair reads as a single note-sized
-   tile whether it sits beside notes or wraps onto its own row. The minimum
-   tracks the note editor height at the grid minimum: half the column width
-   for the 2/1 image ((min - 44px of side chrome) / 2) plus ~89px of vertical
-   chrome (36px reorder top pad + 4px bottom pad + borders, 10px + 4px card
-   pads, 8px gap, ~19px caption), i.e. min / 2 + 67px, via the grid's own
-   `--showcase-card-min`. Keep it at or below the true note height: the tiles
-   stretch by design (flex children), so an underestimate only stretches the
-   tiles, while an overestimate stretches the whole row and leaves dead space
-   under the cards. Update this when any of those paddings change.
-   (No action-row allowance: edit controls are icons now, not a bottom row.) */
+/* The always-editable contents of one node nest in the parent grid. The
+   stacked `+` actions fill one grid cell, so the pair reads as a single
+   note-sized tile whether it sits beside notes or wraps onto its own row. The
+   minimum tracks the note cell at the grid minimum: half the column width for
+   the 2/1 image ((min - 18px of card chrome) / 2) plus ~58px of vertical
+   chrome (34px title bar + 6px bottom pad + borders and 8px card pads), i.e.
+   min / 2 + 49px, via the grid's own `--showcase-card-min`. Keep it at or
+   below the true note height: the tiles stretch by design (flex children), so
+   an underestimate only stretches the tiles, while an overestimate stretches
+   the whole row and leaves dead space under the cards. Update this when any of
+   those paddings change. (No action-row allowance: actions are icons now, not
+   a bottom row.) */
 .showcase-node-items {
   width: 100%;
   margin-top: 4px;
@@ -2644,7 +2647,7 @@ input[type="radio"] {
   gap: 8px;
   width: 100%;
   height: 100%;
-  min-height: calc(var(--showcase-card-min, 200px) / 2 + 67px);
+  min-height: calc(var(--showcase-card-min, 200px) / 2 + 49px);
 }
 
 /* The three add actions share one cell at the grid minimum, so each keeps a
@@ -9588,7 +9591,7 @@ td.table-col-collection {
 }
 
 .showcase-screen .showcase-reorder-cell {
-  padding-top: 40px;
+  padding-top: 0;
   transition:
     border-color 0.12s ease,
     box-shadow 0.12s ease,
@@ -9625,28 +9628,32 @@ td.table-col-collection {
 
 .showcase-item-menu-trigger {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 5px;
+  right: 5px;
   z-index: 3;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  border: 1px solid var(--border-control);
+  border: 0;
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--text-muted);
+  background: transparent;
+  color: var(--text-faint);
   cursor: pointer;
 }
 
 .showcase-item-menu-trigger:hover,
 .showcase-item-menu-trigger:focus-visible,
 .showcase-item-menu-trigger[aria-expanded="true"] {
-  border-color: var(--accent);
-  background: var(--surface);
+  background: var(--surface-4);
   color: var(--accent-strong);
+}
+
+.showcase-item-menu-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 /* The menu owns the top-right corner; the state label stays top-left, so the

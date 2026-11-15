@@ -1,10 +1,14 @@
 // One grid cell in the always-editable showcase canvas. The whole item is the
 // drag source (the grip is only an affordance), and the cell is also the drop
-// target. A `menu` node renders in the corner, so reorder and per-item actions
-// live on the same item without a separate edit mode.
+// target. The top bar is the item's window chrome: the grip on the left, the
+// actions menu on the right, and — when the card has no footer of its own —
+// the item's caption as the title in between. A `menu` node renders in the
+// corner, so reorder and per-item actions live on the same item without a
+// separate edit mode.
 function ShowcaseReorderableCell({
   nodeId,
   label,
+  title = null,
   reorder,
   menu = null,
   children,
@@ -37,18 +41,43 @@ function ShowcaseReorderableCell({
       }
       onDrop={enabled ? (event) => handleDrop(event, nodeId) : undefined}
     >
-      {enabled ? (
-        <span
-          aria-hidden="true"
-          className="showcase-reorder-handle"
-          title={`Drag ${label} to reorder`}
-        >
-          <span aria-hidden="true" className="showcase-reorder-grip">
-            ⠿
+      <div className="showcase-reorder-bar">
+        {enabled ? (
+          <span
+            aria-hidden="true"
+            className="showcase-reorder-handle"
+            title={`Drag ${label} to reorder`}
+          >
+            <svg
+              aria-hidden="true"
+              className="showcase-reorder-grip"
+              focusable="false"
+              height="12"
+              viewBox="0 0 12 12"
+              width="12"
+            >
+              <g fill="currentColor">
+                <circle cx="3.5" cy="2.5" r="1.1" />
+                <circle cx="8.5" cy="2.5" r="1.1" />
+                <circle cx="3.5" cy="6" r="1.1" />
+                <circle cx="8.5" cy="6" r="1.1" />
+                <circle cx="3.5" cy="9.5" r="1.1" />
+                <circle cx="8.5" cy="9.5" r="1.1" />
+              </g>
+            </svg>
           </span>
-        </span>
-      ) : null}
-      {menu}
+        ) : null}
+        {title ? (
+          <span
+            aria-hidden="true"
+            className="showcase-reorder-title"
+            title={title}
+          >
+            {title}
+          </span>
+        ) : null}
+        {menu}
+      </div>
       {children}
     </div>
   );
