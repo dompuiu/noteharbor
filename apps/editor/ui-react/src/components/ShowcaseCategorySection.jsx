@@ -24,6 +24,7 @@ function categoryMeta(children) {
 function ShowcaseCategorySection({
   category,
   catalogMode = false,
+  catalogLayout = "labels",
   photoSize,
   reorderEnabled = true,
   onReorder,
@@ -71,6 +72,7 @@ function ShowcaseCategorySection({
 
       <ShowcaseItemsGrid
         catalogMode={catalogMode}
+        catalogLayout={catalogLayout}
         items={children}
         onAdd={onAdd}
         onAddGroupingAfter={onAddGroupingAfter}

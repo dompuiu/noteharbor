@@ -5,6 +5,11 @@
 // the item's caption as the title in between. A `menu` node renders in the
 // corner, so reorder and per-item actions live on the same item without a
 // separate edit mode.
+//
+// Catalog cards bring their own rail, so `embedded` suppresses the generic bar
+// and hands the grip to the card. The menu stays here: it is a sibling of the
+// card button (a button cannot contain another button) and keeps its
+// top-right anchor inside whichever rail the card draws.
 function ShowcaseReorderableCell({
   nodeId,
   label,
@@ -12,6 +17,7 @@ function ShowcaseReorderableCell({
   reorder,
   menu = null,
   children,
+  embedded = false,
 }) {
   const enabled = reorder != null;
   const {
@@ -27,7 +33,34 @@ function ShowcaseReorderableCell({
     enabled && dropTarget?.nodeId === nodeId ? dropTarget.placement : null;
   const className = `showcase-reorder-cell${enabled ? " showcase-reorder-cell--draggable" : ""}${
     enabled && draggedId === nodeId ? " showcase-reorder-cell--dragging" : ""
-  }${placement ? ` showcase-reorder-cell--drop-${placement}` : ""}`;
+  }${placement ? ` showcase-reorder-cell--drop-${placement}` : ""}${
+    embedded ? " showcase-reorder-cell--embedded" : ""
+  }`;
+  const grip = enabled ? (
+    <span
+      aria-hidden="true"
+      className="showcase-reorder-handle"
+      title={`Drag ${label} to reorder`}
+    >
+      <svg
+        aria-hidden="true"
+        className="showcase-reorder-grip"
+        focusable="false"
+        height="12"
+        viewBox="0 0 12 12"
+        width="12"
+      >
+        <g fill="currentColor">
+          <circle cx="3.5" cy="2.5" r="1.1" />
+          <circle cx="8.5" cy="2.5" r="1.1" />
+          <circle cx="3.5" cy="6" r="1.1" />
+          <circle cx="8.5" cy="6" r="1.1" />
+          <circle cx="3.5" cy="9.5" r="1.1" />
+          <circle cx="8.5" cy="9.5" r="1.1" />
+        </g>
+      </svg>
+    </span>
+  ) : null;
 
   return (
     <div
@@ -41,44 +74,29 @@ function ShowcaseReorderableCell({
       }
       onDrop={enabled ? (event) => handleDrop(event, nodeId) : undefined}
     >
-      <div className="showcase-reorder-bar">
-        {enabled ? (
-          <span
-            aria-hidden="true"
-            className="showcase-reorder-handle"
-            title={`Drag ${label} to reorder`}
-          >
-            <svg
-              aria-hidden="true"
-              className="showcase-reorder-grip"
-              focusable="false"
-              height="12"
-              viewBox="0 0 12 12"
-              width="12"
-            >
-              <g fill="currentColor">
-                <circle cx="3.5" cy="2.5" r="1.1" />
-                <circle cx="8.5" cy="2.5" r="1.1" />
-                <circle cx="3.5" cy="6" r="1.1" />
-                <circle cx="8.5" cy="6" r="1.1" />
-                <circle cx="3.5" cy="9.5" r="1.1" />
-                <circle cx="8.5" cy="9.5" r="1.1" />
-              </g>
-            </svg>
-          </span>
-        ) : null}
-        {title ? (
-          <span
-            aria-hidden="true"
-            className="showcase-reorder-title"
-            title={title}
-          >
-            {title}
-          </span>
-        ) : null}
-        {menu}
-      </div>
-      {children}
+      {embedded ? (
+        <>
+          {typeof children === "function" ? children({ grip }) : children}
+          {menu}
+        </>
+      ) : (
+        <>
+          <div className="showcase-reorder-bar">
+            {grip}
+            {title ? (
+              <span
+                aria-hidden="true"
+                className="showcase-reorder-title"
+                title={title}
+              >
+                {title}
+              </span>
+            ) : null}
+            {menu}
+          </div>
+          {children}
+        </>
+      )}
     </div>
   );
 }

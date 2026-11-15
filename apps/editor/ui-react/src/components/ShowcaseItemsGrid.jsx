@@ -1,12 +1,10 @@
 import {
-  catalogEntryCaption,
   catalogEntryIdentity,
   isCatalogEntry,
   nodeCatalogState,
   primarySpecimen,
 } from "../lib/showcaseTree.js";
-import { normalizePhotoSize } from "../lib/photoSize.js";
-import { showcaseNoteDisplayParts, showcaseNoteTitleParts } from "../lib/showcaseNoteLabels.js";
+import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
 import { ShowcaseAddTiles } from "./ShowcaseAddTiles.jsx";
 import { ShowcaseCatalogCard } from "./ShowcaseCatalogCard.jsx";
@@ -20,15 +18,6 @@ function noteLabel(node) {
   return showcaseNoteDisplayParts(node.note).join(" ") || "note";
 }
 
-// The catalog card's visible identity, now carried by the cell's title bar
-// instead of a footer under the photo. It reads catalog · date · denomination,
-// the same order (and the same small-card `P17` form) as a catalog entry.
-function noteCaption(node, { compact = false } = {}) {
-  return (
-    showcaseNoteTitleParts(node.note, { compact }).join(" · ") || "Untitled note"
-  );
-}
-
 // One level's cards in the always-editable canvas. Every item is draggable and
 // carries the same actions menu; the card body keeps its own presentation
 // interaction (open, preview, ownership). A Category level renders this same
@@ -38,6 +27,7 @@ function ShowcaseItemsGrid({
   parent,
   items,
   catalogMode,
+  catalogLayout = "labels",
   photoSize,
   reorderEnabled = true,
   onReorder,
@@ -56,9 +46,6 @@ function ShowcaseItemsGrid({
   onSetCover,
   onClearCover,
 }) {
-  // The bar's title has room for `Pick 22a` at Medium and Large; a Small card
-  // has about 130px and takes the compact `P22a` instead.
-  const compactTitle = normalizePhotoSize(photoSize) === "small";
   const reorder = useShowcaseReorder({
     nodes: items,
     onReorder: (orderedIds) => onReorder(parent?.id ?? null, orderedIds),
@@ -145,24 +132,31 @@ function ShowcaseItemsGrid({
   }
 
   return (
-    <ShowcaseGrid size={photoSize}>
+    <ShowcaseGrid
+      catalogLayout={catalogMode ? catalogLayout : null}
+      size={photoSize}
+    >
       {items.map((node) => {
         if (isCatalogEntry(node)) {
           return (
             <ShowcaseReorderableCell
+              embedded
               key={node.id}
               label={catalogEntryIdentity(node.entry)}
               menu={menuFor(node, { isShell: true })}
               nodeId={node.id}
               reorder={reorderEnabled ? reorder : null}
-              title={catalogEntryCaption(node.entry, { compact: compactTitle })}
             >
-              <ShowcaseCatalogCard
-                node={node}
-                onOpenFinder={onOpenShell}
-                onPresent={onPresent}
-                onToggleOwned={onOwnershipToggle}
-              />
+              {({ grip }) => (
+                <ShowcaseCatalogCard
+                  grip={grip}
+                  layout={catalogLayout}
+                  node={node}
+                  onOpenFinder={onOpenShell}
+                  onPresent={onPresent}
+                  onToggleOwned={onOwnershipToggle}
+                />
+              )}
             </ShowcaseReorderableCell>
           );
         }
@@ -185,6 +179,30 @@ function ShowcaseItemsGrid({
         }
 
         if (node.node_type === "note") {
+          if (catalogMode) {
+            return (
+              <ShowcaseReorderableCell
+                embedded
+                key={node.id}
+                label={noteLabel(node)}
+                menu={menuFor(node)}
+                nodeId={node.id}
+                reorder={reorderEnabled ? reorder : null}
+              >
+                {({ grip }) => (
+                  <ShowcaseCatalogCard
+                    grip={grip}
+                    layout={catalogLayout}
+                    node={node}
+                    onOpenNote={onOpenNote}
+                    onPresent={onPresent}
+                    onToggleOwned={onOwnershipToggle}
+                  />
+                )}
+              </ShowcaseReorderableCell>
+            );
+          }
+
           return (
             <ShowcaseReorderableCell
               key={node.id}
@@ -192,23 +210,13 @@ function ShowcaseItemsGrid({
               menu={menuFor(node)}
               nodeId={node.id}
               reorder={reorderEnabled ? reorder : null}
-              title={catalogMode ? noteCaption(node, { compact: compactTitle }) : null}
             >
-              {catalogMode ? (
-                <ShowcaseCatalogCard
-                  node={node}
-                  onOpenNote={onOpenNote}
-                  onPresent={onPresent}
-                  onToggleOwned={onOwnershipToggle}
-                />
-              ) : (
-                <ShowcaseNoteCard
-                  mode="view"
-                  nodeId={node.id}
-                  note={node.note}
-                  onOpen={(kind) => onOpenNote(node, kind)}
-                />
-              )}
+              <ShowcaseNoteCard
+                mode="view"
+                nodeId={node.id}
+                note={node.note}
+                onOpen={(kind) => onOpenNote(node, kind)}
+              />
             </ShowcaseReorderableCell>
           );
         }

@@ -289,12 +289,124 @@ describe("a presentation-only showcase", () => {
       screen.queryByRole("group", { name: "Catalog filters" }),
     ).not.toBeInTheDocument();
     expect(
+      screen.queryByRole("group", { name: "Card layout" }),
+    ).not.toBeInTheDocument();
+    expect(
       screen.queryByRole("button", { name: "Slideshow" }),
     ).not.toBeInTheDocument();
     expect(screen.getByText("1 notes")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "1 leu, Pick 22a, 1917" }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("the catalog card layouts", () => {
+  function layoutGroup() {
+    return within(screen.getByRole("group", { name: "Card layout" }));
+  }
+
+  function grid() {
+    return screen.getAllByTestId("showcase-grid")[0];
+  }
+
+  test("offers Library label and Auction rail with Library label by default", async () => {
+    const { container } = await openShowcase();
+
+    const group = await screen.findByRole("group", { name: "Card layout" });
+    expect(within(group).getByRole("radio", { name: "Library label" })).toBeChecked();
+    expect(within(group).getByRole("radio", { name: "Auction rail" })).not.toBeChecked();
+    expect(grid()).toHaveAttribute("data-catalog-layout", "labels");
+    expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("200px");
+    expect(
+      container.querySelector(".showcase-catalog-cell .showcase-card--labels"),
+    ).not.toBeNull();
+    expect(
+      container.querySelector(".showcase-catalog-cell .showcase-card--rail"),
+    ).toBeNull();
+  });
+
+  test("switches layouts, floors the rail grid at 330px, and remembers the choice", async () => {
+    const user = userEvent.setup();
+    const view = await openShowcase();
+
+    await user.click(layoutGroup().getByRole("radio", { name: "Auction rail" }));
+
+    expect(grid()).toHaveAttribute("data-catalog-layout", "rail");
+    expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("330px");
+    expect(
+      view.container.querySelector(".showcase-catalog-cell .showcase-card--rail"),
+    ).not.toBeNull();
+    expect(window.localStorage.getItem("noteharbor.showcaseCatalogLayout")).toBe(
+      "rail",
+    );
+
+    // Photo size still resizes the track above the rail's floor.
+    await user.click(screen.getByRole("radio", { name: "Large" }));
+    expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("480px");
+
+    await user.click(layoutGroup().getByRole("radio", { name: "Library label" }));
+    expect(grid()).toHaveAttribute("data-catalog-layout", "labels");
+    expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("480px");
+
+    // Simulate a reload: remount against the same browser storage.
+    view.unmount();
+    const reloaded = renderAt(SHOWCASE_ROUTES.showcase(1));
+    await screen.findByRole("group", { name: "Card layout" });
+    expect(layoutGroup().getByRole("radio", { name: "Library label" })).toBeChecked();
+    expect(
+      reloaded.container.querySelector(
+        ".showcase-catalog-cell .showcase-card--labels",
+      ),
+    ).not.toBeNull();
+  });
+
+  test("an unknown remembered layout falls back to Library label", async () => {
+    window.localStorage.setItem("noteharbor.showcaseCatalogLayout", "gallery");
+    await openShowcase();
+
+    await screen.findByRole("group", { name: "Card layout" });
+    expect(layoutGroup().getByRole("radio", { name: "Library label" })).toBeChecked();
+    expect(grid()).toHaveAttribute("data-catalog-layout", "labels");
+  });
+
+  test("prints the specimen grade in both layouts", async () => {
+    const user = userEvent.setup();
+    const graded = note(106, {
+      catalog_number: "26e",
+      denomination: "50 lei",
+      issue_date: "1922",
+    });
+    graded.grade = "66";
+    graded.grading_company = "PMG";
+
+    const { container } = await openShowcase([
+      categoryNode([
+        entryNode(
+          30,
+          {
+            catalog_number: "26e",
+            denomination: "50 lei",
+            issue_date: "1922",
+            specimens: [graded],
+            primary: graded.id,
+          },
+          1,
+        ),
+      ]),
+    ]);
+
+    expect(container.querySelector(".showcase-catalog-grade b")).toHaveTextContent(
+      "66",
+    );
+    expect(
+      container.querySelector(".showcase-catalog-grade span"),
+    ).toHaveTextContent("PMG");
+
+    await user.click(layoutGroup().getByRole("radio", { name: "Auction rail" }));
+    expect(container.querySelector(".showcase-catalog-grade--rail b")).toHaveTextContent(
+      "66",
+    );
   });
 });
 
@@ -347,18 +459,24 @@ describe("the catalog checklist", () => {
     expect(container.querySelector(".showcase-catalog-foot")).toBeNull();
     expect(screen.queryByText("Mark owned")).not.toBeInTheDocument();
     expect(screen.queryByText(/Add notes/)).not.toBeInTheDocument();
-    // The identity lives in the cell's window bar, not under the photo, so a
-    // card never repeats its caption and the bar stays the drag surface. The
-    // default grid is Small, which takes the compact `P22a` catalog prefix.
+    // The identity lives on the card's rail, not in the cell's old window bar:
+    // the compact catalog code leads the photo and the metadata row carries
+    // date · denomination. The default grid is Small, which always uses the
+    // compact `P22a` catalog prefix.
     expect(
-      [...container.querySelectorAll(".showcase-reorder-title")].map(
-        (title) => title.textContent,
+      [...container.querySelectorAll(".showcase-catalog-code")].map(
+        (code) => code.textContent,
+      ),
+    ).toEqual(["P22a", "P24c", "P25d", "P23b"]);
+    expect(
+      [...container.querySelectorAll(".showcase-catalog-line")].map(
+        (line) => line.textContent,
       ),
     ).toEqual([
-      "P22a · 1917 · 1 leu",
-      "P24c · 1920 · 5 lei",
-      "P25d · 1921 · 10 lei",
-      "P23b · 1919 · 2 lei",
+      "1917 · 1 leu",
+      "1920 · 5 lei",
+      "1921 · 10 lei",
+      "1919 · 2 lei",
     ]);
     expect(
       container.querySelector(".showcase-catalog-cell .showcase-card-caption"),
@@ -371,18 +489,22 @@ describe("the catalog checklist", () => {
     ).toBeInTheDocument();
   });
 
-  test("the bar title compacts Pick to P at Small and keeps it at Medium and Large", async () => {
+  test("keeps the compact catalog code across photo sizes and moves the width", async () => {
     const user = userEvent.setup();
     const { container } = await openShowcase();
-    const firstTitle = () => container.querySelector(".showcase-reorder-title");
+    const firstCode = () => container.querySelector(".showcase-catalog-code");
+    const grid = () => container.querySelector("[data-testid='showcase-grid']");
 
-    expect(firstTitle()).toHaveTextContent("P22a · 1917 · 1 leu");
+    expect(firstCode()).toHaveTextContent("P22a");
+    expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("200px");
 
     await user.click(screen.getByRole("radio", { name: "Large" }));
-    expect(firstTitle()).toHaveTextContent("Pick 22a · 1917 · 1 leu");
+    expect(firstCode()).toHaveTextContent("P22a");
+    expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("480px");
 
     await user.click(screen.getByRole("radio", { name: "Medium" }));
-    expect(firstTitle()).toHaveTextContent("Pick 22a · 1917 · 1 leu");
+    expect(firstCode()).toHaveTextContent("P22a");
+    expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("320px");
   });
 
   test("the sidebar counts owned over total entries", async () => {
@@ -814,7 +936,7 @@ describe("catalog shells in the one view", () => {
 
   test("editing shell details writes immediately from its menu", async () => {
     const user = userEvent.setup();
-    await openShowcase([
+    const { container } = await openShowcase([
       categoryNode([
         entryNode(
           22,
@@ -858,7 +980,11 @@ describe("catalog shells in the one view", () => {
         source: "Pick catalog",
       }),
     );
-    expect(await screen.findByText("P25d · 1921 · 100 lei")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(container.querySelector(".showcase-catalog-line")).toHaveTextContent(
+        "1921 · 100 lei",
+      ),
+    );
   });
 
   test("removing a shell confirms and deletes immediately", async () => {

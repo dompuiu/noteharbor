@@ -18,6 +18,7 @@ import {
   useImagePreload,
 } from "../lib/imagePreload.js";
 import { usePhotoSize } from "../lib/photoSize.js";
+import { useCatalogLayout } from "../lib/catalogLayout.js";
 import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 import {
   DEFAULT_DESTINATION,
@@ -64,6 +65,7 @@ import { ShowcaseDialog } from "./ShowcaseDialog.jsx";
 import { ShowcaseItemsGrid } from "./ShowcaseItemsGrid.jsx";
 import { ShowcaseNameDialog } from "./ShowcaseNameDialog.jsx";
 import { ShowcaseNotePicker } from "./ShowcaseNotePicker.jsx";
+import { ShowcaseLayoutControl } from "./ShowcaseLayoutControl.jsx";
 import { ShowcasePhotoSizeControl } from "./ShowcasePhotoSizeControl.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { ImagePopover, Slideshow } from "./Slideshow.jsx";
@@ -150,6 +152,7 @@ function ShowcaseScreen() {
   const [announcement, setAnnouncement] = useState("");
   const [catalogFilter, setCatalogFilter] = useState("all");
   const [photoSize, setPhotoSize] = usePhotoSize();
+  const [catalogLayout, setCatalogLayout] = useCatalogLayout();
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 
   // The merged add dialog's insertion point. `parent` is the container whose
@@ -1440,6 +1443,7 @@ function ShowcaseScreen() {
   const reorderEnabled = !filterActive;
 
   const gridProps = {
+    catalogLayout,
     catalogMode,
     onAdd: (parent) => openAdd(parent, null, "notes"),
     onAddGroupingAfter: openAddAfter,
@@ -1652,6 +1656,11 @@ function ShowcaseScreen() {
               ) : null}
             </span>
             <div className="showcase-filter-actions">
+              <ShowcaseLayoutControl
+                onArrowDown={() => focusCardAt(0)}
+                onChange={setCatalogLayout}
+                value={catalogLayout}
+              />
               <ShowcasePhotoSizeControl
                 onArrowDown={() => focusCardAt(0)}
                 onChange={setPhotoSize}

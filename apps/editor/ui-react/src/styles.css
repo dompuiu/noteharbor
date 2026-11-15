@@ -1118,6 +1118,91 @@ input[type="radio"] {
   outline-offset: 2px;
 }
 
+/* The two-way catalog card layout control beside the photo-size pill. The
+   options are small card diagrams: caption-over-photo for the Library label,
+   photo-beside-rail for the Auction rail. The selected option is the white
+   disc, exactly like the S / M / L pill. */
+.showcase-layout-control {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.showcase-layout-legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.showcase-layout-options {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  min-height: 34px;
+}
+
+.showcase-layout-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.showcase-layout-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.showcase-layout-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.showcase-layout-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.showcase-layout-option:has(input:checked) {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border-control);
+}
+
+.showcase-layout-option:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* The shared presentation grid. The photo size (Small 200px / Medium 320px /
    Large 480px) is a custom property so view and edit mode use one grid rule.
    Edit mode stretches its cells so cards and `+` tiles share one row height;
@@ -2375,6 +2460,349 @@ input[type="radio"] {
   background: var(--success);
   color: #fff;
   box-shadow: 0 2px 6px rgba(21, 122, 58, 0.32);
+}
+
+/* ── Catalog card layouts ──────────────────────────────────────────────────
+   The cell is the card frame: the catalog card draws its own rail, so the
+   generic title bar is suppressed and the grip moves inside. Both layouts end
+   in the same ownership footer, which keeps Seen and Owned identical across
+   the two. */
+.showcase-reorder-cell--embedded {
+  padding: 0;
+}
+
+.showcase-reorder-cell--embedded > .showcase-cell {
+  flex: 1 1 auto;
+}
+
+.showcase-reorder-cell--embedded > .showcase-cell > .showcase-card--catalog {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.showcase-card--labels,
+.showcase-card--rail {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  align-items: stretch;
+  justify-content: flex-start;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* The rail above the photo: grip, compact catalog code, and the actions menu
+   anchored in the cell's top-right corner. */
+.showcase-catalog-topline {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 33px;
+  padding: 3px 32px 3px 7px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.showcase-catalog-code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The photo well is its own hairline plate, so the specimen reads as a
+   mounted object rather than a full-bleed image. */
+.showcase-card--labels .showcase-catalog-photo {
+  flex: none;
+  width: calc(100% - 20px);
+  margin: 10px 10px 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 2px;
+  background: var(--surface-2);
+}
+
+.showcase-catalog-meta {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+  padding: 2px 11px 6px;
+}
+
+.showcase-catalog-line {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.showcase-catalog-grade {
+  display: inline-flex;
+  flex: none;
+  align-items: baseline;
+  gap: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.showcase-catalog-grade b {
+  font-size: 0.875rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.showcase-catalog-grade span {
+  color: var(--text-faint);
+  font-size: 0.47rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+/* The ownership footer: one quiet action row, the same in both layouts. */
+.showcase-card-state--footer {
+  position: static;
+  top: auto;
+  left: auto;
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 28px;
+  padding: 5px 11px;
+  border: 0;
+  border-top: 1px solid var(--border-soft);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  box-shadow: none;
+}
+
+.showcase-card-state--footer:hover,
+.showcase-card-state--footer:focus-visible {
+  border-color: var(--border-soft);
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: none;
+}
+
+.showcase-card-state--owned.showcase-card-state--footer {
+  border-top-color: var(--border-soft);
+  color: var(--success);
+}
+
+.showcase-card-state--owned.showcase-card-state--footer:hover,
+.showcase-card-state--owned.showcase-card-state--footer:focus-visible {
+  border-top-color: var(--border-soft);
+  background: var(--surface-2);
+  color: var(--success);
+  box-shadow: none;
+}
+
+.showcase-card-state--footer .showcase-card-state-icon {
+  flex: none;
+}
+
+/* The Auction rail: photo on the left, fixed identity rail on the right. The
+   minimum grid width keeps this split readable at Small. */
+.showcase-catalog-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 148px;
+}
+
+.showcase-card--rail .showcase-catalog-body {
+  padding: 9px 0 9px 9px;
+}
+
+.showcase-card--rail .showcase-catalog-photo {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  height: auto;
+  aspect-ratio: auto;
+  border: 0;
+  background: transparent;
+}
+
+.showcase-catalog-rail {
+  display: flex;
+  flex: 0 0 132px;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0 9px 0 11px;
+}
+
+.showcase-catalog-railtop {
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-height: 20px;
+  padding-right: 30px;
+}
+
+.showcase-catalog-kicker {
+  margin-top: 5px;
+  color: var(--text-faint);
+  font-size: 0.47rem;
+  font-weight: 800;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.showcase-catalog-rail .showcase-catalog-code {
+  margin-top: 1px;
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+}
+
+.showcase-catalog-date {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+
+.showcase-catalog-denom {
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.showcase-catalog-grade--rail {
+  align-items: flex-start;
+  gap: 5px;
+  margin-top: auto;
+  padding-top: 8px;
+  padding-left: 0;
+  border-top: 1px solid var(--border-soft);
+  border-left: 0;
+}
+
+.showcase-catalog-grade--rail b {
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 0.92;
+}
+
+.showcase-catalog-grade--rail span {
+  max-width: 62px;
+  padding-top: 1px;
+  font-size: 0.47rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.showcase-catalog-empty {
+  margin-top: auto;
+  color: var(--text-faint);
+  font-size: 0.58rem;
+  line-height: 1.4;
+}
+
+/* Empty positions keep the same footer as an owned/seen card, but the footer
+   is not a second control: the whole card opens the finder. */
+.showcase-catalog-add {
+  display: flex;
+  flex: none;
+  align-items: center;
+  width: 100%;
+  min-height: 28px;
+  padding: 5px 11px;
+  border-top: 1px solid var(--border-soft);
+  color: var(--text-muted);
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.showcase-card--unseen:hover .showcase-catalog-add,
+.showcase-card--unseen:focus-visible .showcase-catalog-add {
+  color: var(--accent-strong);
+}
+
+.showcase-card--labels .showcase-catalog-add {
+  margin-top: auto;
+}
+
+.showcase-catalog-wellshot {
+  position: relative;
+  display: flex;
+  flex: none;
+  width: 100%;
+  min-width: 0;
+}
+
+.showcase-card--labels .showcase-catalog-wellshot {
+  width: calc(100% - 20px);
+  margin: 10px 10px 0;
+}
+
+.showcase-card--labels .showcase-catalog-wellshot .showcase-catalog-well {
+  border-radius: 2px;
+}
+
+.showcase-card--rail .showcase-catalog-wellshot {
+  flex: 1 1 auto;
+  margin: 0;
+  border-radius: 2px;
+}
+
+.showcase-card--rail .showcase-catalog-wellshot .showcase-catalog-well {
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 2px;
+}
+
+/* A small-screen fallback: the rail itself stays fixed, but the fixed grade
+   column's label wraps before the number. */
+@media (max-width: 560px) {
+  .showcase-catalog-rail {
+    flex-basis: 118px;
+    padding-right: 7px;
+    padding-left: 9px;
+  }
+
+  .showcase-catalog-grade--rail span {
+    max-width: 46px;
+  }
 }
 
 /* The ownership footer is the shell form's call to action; the card itself is
