@@ -353,6 +353,74 @@ describe("ImagePopover zoom", () => {
     );
   });
 
+  test("keeps the room and the plate at the fit size while zoomed", async () => {
+    render(popover());
+    await finishDecode(FRONT_1);
+
+    const image = fullImage();
+    measureImageBox(image, {
+      naturalWidth: 2000,
+      naturalHeight: 1000,
+      fitWidth: 500,
+      fitHeight: 250,
+    });
+    measurePopoverWrap({ width: 800, height: 600 });
+
+    expect(imageWrap().style.height).toBe("");
+
+    fireEvent.click(zoomButton("Zoom in"));
+
+    // 1:1 and the ladder crop inside the well the reader already sees: the
+    // well keeps the fit height instead of stretching to the room.
+    expect(imageWrap().style.height).toBe("250px");
+    expect(imageWrap()).toHaveClass("image-popover-image-wrap--zoomed");
+    expect(image.style.position).toBe("absolute");
+    expect(image.style.maxWidth).toBe("none");
+    expect(image.style.maxHeight).toBe("none");
+
+    fireEvent.click(screen.getByRole("button", { name: "Fit" }));
+
+    expect(imageWrap().style.height).toBe("");
+    expect(imageWrap()).not.toHaveClass("image-popover-image-wrap--zoomed");
+    expect(image.style.position).toBe("");
+  });
+
+  test("measures a zoomed fit without repainting the well", async () => {
+    render(popover());
+    await finishDecode(FRONT_1);
+
+    const image = fullImage();
+    measureImageBox(image, {
+      naturalWidth: 2000,
+      naturalHeight: 1000,
+      fitWidth: 500,
+      fitHeight: 250,
+    });
+    measurePopoverWrap({ width: 800, height: 600 });
+
+    fireEvent.click(zoomButton("Zoom in"));
+
+    // A later load (the face switch, or a resize) measures the fit while the
+    // plate is lifted. The read drops the inline plate for a moment; the
+    // well's class stays React's to change, so a measurement that lands after
+    // the reader has left the zoom cannot leave the well lifted.
+    let classDuringRead = null;
+    let styleDuringRead = null;
+    image.getBoundingClientRect = () => {
+      classDuringRead = imageWrap().className;
+      styleDuringRead = image.getAttribute("style");
+      return box({ width: 500, height: 250 });
+    };
+
+    fireEvent.load(image);
+
+    expect(classDuringRead).toBe(
+      "image-popover-image-wrap image-popover-image-wrap--zoomed",
+    );
+    expect(styleDuringRead).toBeNull();
+    expect(image.getAttribute("style")).toContain("width: 625px");
+  });
+
   test("re-measures the next face's fit before stepping the ladder", async () => {
     const { rerender } = render(popover());
     await finishDecode(FRONT_1);

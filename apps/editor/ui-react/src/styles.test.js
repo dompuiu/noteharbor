@@ -2209,6 +2209,26 @@ describe("slideshow overlay styles", () => {
     expect(overlay[1]).toMatch(/overflow:\s*auto/);
   });
 
+  test("the image popover keeps one room size across Fit and zoom", () => {
+    // The panel's height follows the plate. A viewport-tall room for the zoom
+    // view grew the panel on 1:1, and the fast wheel back to Fit could leave
+    // the well collapsed around a crop of the lifted plate.
+    expect(styles).not.toMatch(/\.image-popover-content--zoomed\s*\{/);
+
+    const well = styles.match(
+      /\.image-popover-image-wrap--zoomed\s*\{([^}]*)\}/,
+    );
+    expect(well).not.toBeNull();
+    expect(well[1]).toMatch(/overflow:\s*hidden/);
+    // The well takes its height from the component's fit measurement, so it
+    // must never stretch to the panel and collapse the row to the arrows.
+    expect(well[1]).not.toMatch(/height:\s*\d*%/);
+
+    // The lifted plate is placed and sized from state, so no rule can re-lift
+    // it after React has returned to Fit.
+    expect(styles).not.toMatch(/\.image-popover-image-wrap--zoomed img\s*\{/);
+  });
+
   test("the image popover content fits a narrow window", () => {
     const content = styles.match(/\.image-popover-content\s*\{([^}]*)\}/);
     expect(content).not.toBeNull();

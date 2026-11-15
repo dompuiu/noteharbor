@@ -529,6 +529,7 @@ function ImagePopover({
   const dragRef = useRef(null);
   const zoomAnchorRef = useRef(null);
   const offsetRef = useRef({ x: 0, y: 0 });
+  const zoomScaleRef = useRef(0);
   const requestSeqRef = useRef(0);
   const shownSeqRef = useRef(0);
   const keyHeldRef = useRef(false);
@@ -542,10 +543,17 @@ function ImagePopover({
   const [zoomScale, setZoomScale] = useState(0);
   // Panning updates the offset on every pointer move; the key handler reads
   // it through a ref so its window listener is not torn down and re-added for
-  // each of those renders.
+  // each of those renders. The zoom scale is mirrored for the same reason: a
+  // measurement can be delivered after the reader has already left the zoom,
+  // and it must read the scale in hand rather than the one it was scheduled
+  // with.
   useLayoutEffect(() => {
     offsetRef.current = offset;
   }, [offset]);
+
+  useLayoutEffect(() => {
+    zoomScaleRef.current = zoomScale;
+  }, [zoomScale]);
   const hasSource = Boolean(src);
   const fullLoaded = hasSource && displayedSrc === src;
   // A scan whose row exists but whose file has gone renders the browser's
@@ -613,37 +621,25 @@ function ImagePopover({
   }
 
   // The fitted box is what the plate occupies in the fit view. While the
-  // popover is zoomed, the inline scaled size and the zoomed wrap's rules hide
-  // it, so lift both for one synchronous read. Without this, switching from
-  // one face to the other would keep the old face's fit, and with it a wrong
-  // zoom ladder and 1:1 stop.
+  // popover is zoomed the image is lifted out of the flow and sized inline, so
+  // lifting that inline size for one synchronous read measures the fit again.
+  // Without this, switching from one face to the other would keep the old
+  // face's fit, and with it a wrong zoom ladder and 1:1 stop. Only the image is
+  // touched, so a measurement that arrives after the reader has left the zoom
+  // cannot leave the well itself in the zoomed layout.
   function measureFitBox(image, natural) {
-    const wrap = imageWrapRef.current;
-
-    // Without the wrap there is no way to restore the zoomed layout, and the
-    // rect would be the scaled plate, not the fit.
-    if (zoomed && !wrap) {
-      return;
-    }
-
-    const inlineWidth = image.style.width;
-    const inlineHeight = image.style.height;
+    const zoomedNow = zoomScaleRef.current > 0;
+    const inlineStyle = image.getAttribute("style") || "";
 
     let imageRect;
 
-    if (zoomed) {
-      // Lift the zoomed wrap rules and the inline scaled size for one
-      // synchronous read, then put both back exactly as React left them.
-      image.style.width = "";
-      image.style.height = "";
+    if (zoomedNow) {
+      image.removeAttribute("style");
 
       try {
-        wrap.classList.remove("image-popover-image-wrap--zoomed");
         imageRect = image.getBoundingClientRect();
       } finally {
-        wrap.classList.add("image-popover-image-wrap--zoomed");
-        image.style.width = inlineWidth;
-        image.style.height = inlineHeight;
+        image.setAttribute("style", inlineStyle);
       }
     } else {
       imageRect = image.getBoundingClientRect();
@@ -663,9 +659,9 @@ function ImagePopover({
         natural.width > 0 ? fitted.width / natural.width : 0;
 
       if (
-        zoomed &&
+        zoomedNow &&
         faceFitScale > 0 &&
-        zoomScale < faceFitScale - ZOOM_EPSILON
+        zoomScaleRef.current < faceFitScale - ZOOM_EPSILON
       ) {
         setZoomScale(faceFitScale);
       }
@@ -1262,10 +1258,25 @@ function ImagePopover({
   ]
     .filter(Boolean)
     .join(" ");
+  // The zoomed plate keeps the well at the fit box the reader already sees, so
+  // choosing 1:1 or stepping the ladder crops inside the same frame instead of
+  // resizing the room. The height is the only edge the well does not own: it
+  // takes the stage's width either way, and the fit height is what this face
+  // occupies below the topbar.
+  const imageWrapStyle =
+    zoomed && fitSize.height ? { height: `${fitSize.height}px` } : undefined;
+  // The lifted plate is sized and placed from state rather than from a class,
+  // so the fit measurement can drop the lift for one read and React restores
+  // it on the next render even if a measurement never returns.
   const imageStyle =
     zoomed && scaledSize.width && scaledSize.height
       ? {
           height: `${scaledSize.height}px`,
+          left: 0,
+          maxHeight: "none",
+          maxWidth: "none",
+          position: "absolute",
+          top: 0,
           transform: `translate(${offset.x}px, ${offset.y}px)`,
           width: `${scaledSize.width}px`,
         }
@@ -1316,7 +1327,7 @@ function ImagePopover({
         {announcement}
       </span>
       <div
-        className={`image-popover-content${zoomed ? " image-popover-content--zoomed" : ""}`}
+        className="image-popover-content"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="image-popover-topbar">
@@ -1459,7 +1470,11 @@ function ImagePopover({
             <span aria-hidden="true">&larr;</span>
           </button>
 
-          <div className={imageWrapClassName} ref={imageWrapRef}>
+          <div
+            className={imageWrapClassName}
+            ref={imageWrapRef}
+            style={imageWrapStyle}
+          >
             {hasImage ? (
               <>
                 {displayedSrc ? (
