@@ -369,14 +369,26 @@ describe("ImagePopover zoom", () => {
     expect(imageWrap().style.height).toBe("");
 
     fireEvent.click(zoomButton("Zoom in"));
+    // Once the well is pinned, the room it gives the plate is the fit box.
+    measurePopoverWrap({ width: 800, height: 250 });
 
-    // 1:1 and the ladder crop inside the well the reader already sees: the
-    // well keeps the fit height instead of stretching to the room.
+    // The ladder crops inside the well the reader already sees: the well keeps
+    // the fit height instead of stretching to the room.
     expect(imageWrap().style.height).toBe("250px");
     expect(imageWrap()).toHaveClass("image-popover-image-wrap--zoomed");
     expect(image.style.position).toBe("absolute");
     expect(image.style.maxWidth).toBe("none");
     expect(image.style.maxHeight).toBe("none");
+
+    fireEvent.click(screen.getByRole("button", { name: "1:1" }));
+    measurePopoverWrap({ width: 800, height: 250 });
+
+    // The reported bug: pressing 1:1 grew the panel. It now paints the scan at
+    // its own pixels inside the same well.
+    expect(imageWrap().style.height).toBe("250px");
+    expect(image.style.width).toBe("2000px");
+    expect(image.style.height).toBe("1000px");
+    expect(zoomLevel()).toHaveTextContent("100%");
 
     fireEvent.click(screen.getByRole("button", { name: "Fit" }));
 
@@ -399,11 +411,11 @@ describe("ImagePopover zoom", () => {
     measurePopoverWrap({ width: 800, height: 600 });
 
     fireEvent.click(zoomButton("Zoom in"));
+    measurePopoverWrap({ width: 800, height: 250 });
 
     // A later load (the face switch, or a resize) measures the fit while the
-    // plate is lifted. The read drops the inline plate for a moment; the
-    // well's class stays React's to change, so a measurement that lands after
-    // the reader has left the zoom cannot leave the well lifted.
+    // plate is lifted. The read drops the inline plate for a moment; the well's
+    // class stays React's to change.
     let classDuringRead = null;
     let styleDuringRead = null;
     image.getBoundingClientRect = () => {
@@ -415,11 +427,17 @@ describe("ImagePopover zoom", () => {
     fireEvent.load(image);
 
     expect(classDuringRead).toContain("image-popover-image-wrap--zoomed");
-    expect(classDuringRead).not.toContain(
-      "image-popover-image-wrap--pannable",
-    );
     expect(styleDuringRead).toBeNull();
     expect(image.getAttribute("style")).toContain("width: 625px");
+
+    // The failure behind the reported collapse: a measurement landing after the
+    // reader has left the zoom used to lift the well again and squeeze the
+    // panel. It must leave the well exactly as React rendered it.
+    fireEvent.click(screen.getByRole("button", { name: "Fit" }));
+    fireEvent.load(image);
+
+    expect(imageWrap()).not.toHaveClass("image-popover-image-wrap--zoomed");
+    expect(imageWrap().style.height).toBe("");
   });
 
   test("re-measures the next face's fit before stepping the ladder", async () => {

@@ -1086,7 +1086,9 @@ function ImagePopover({
 
   // Measuring is only needed for zoom and the level readout, so let the new
   // plate paint first. A layout effect here forced a rect read and a second
-  // synchronous render before every page could appear.
+  // synchronous render before every page could appear. The overlay is watched
+  // beside the well: zooming pins the well's height, so a window that only
+  // loses height would otherwise leave the fit stale and the panel too tall.
   useEffect(() => {
     if (!displayedSrc) {
       return undefined;
@@ -1112,7 +1114,24 @@ function ImagePopover({
     const resizeObserver = new ResizeObserver(measure);
     resizeObserver.observe(imageWrap);
 
+    const overlay = overlayRef.current;
+
+    if (overlay) {
+      resizeObserver.observe(overlay);
+    }
+
     return () => resizeObserver.disconnect();
+  }, [displayedSrc]);
+
+  // A zoom step moves the plate inside the well without moving its edges, so
+  // only the viewport is re-read: the fit does not need another measurement and
+  // the plate is not pushed through a synchronous layout on every notch.
+  useEffect(() => {
+    if (!displayedSrc) {
+      return;
+    }
+
+    measureViewport();
   }, [displayedSrc, zoomScale]);
 
   useEffect(() => {
@@ -1259,13 +1278,13 @@ function ImagePopover({
     .join(" ");
   // The zoomed plate keeps the well at the fit box the reader already sees, so
   // choosing 1:1 or stepping the ladder crops inside the same frame instead of
-  // resizing the room. The height is the only edge the well does not own: it
-  // takes the stage's width either way, and the fit height is what this face
-  // occupies below the topbar.
+  // resizing the room. The well sets only that height; the stage keeps supplying
+  // its width.
   const imageWrapStyle =
     zoomed && fitSize.height ? { height: `${fitSize.height}px` } : undefined;
-  // The lifted plate is sized and placed from state, so the fit measurement
-  // can drop the lift for one read and React puts it back on the next render.
+  // The lifted plate is sized and placed from state, so the fit measurement can
+  // strip the lift for one read and put the same attribute back before it
+  // returns.
   const imageStyle =
     zoomed && scaledSize.width && scaledSize.height
       ? {
