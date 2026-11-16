@@ -2712,8 +2712,11 @@ input[type="radio"] {
   flex: none;
 }
 
-/* The Auction rail: photo on the left, fixed identity rail on the right. The
-   minimum grid width keeps this split readable at Small. */
+/* The Auction rail: photo on the left, fixed identity rail on the right. Its
+   photo keeps the Library label's 2/1 well and sets the card's height from
+   its own width; centring instead of stretching lets that ratio win, so a
+   larger card gives the plate more vertical room too. The body's minimum
+   height keeps an unseen shell readable. */
 .showcase-catalog-body {
   display: flex;
   flex: 1 1 auto;
@@ -2727,10 +2730,11 @@ input[type="radio"] {
 
 .showcase-card--rail .showcase-catalog-photo {
   flex: 1 1 auto;
+  align-self: center;
   width: auto;
   min-width: 0;
   height: auto;
-  aspect-ratio: auto;
+  aspect-ratio: 2 / 1;
   border: 0;
   background: transparent;
 }

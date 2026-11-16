@@ -13,6 +13,7 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ### Changed
 
+- Showcase: the Auction rail's photo now sets the card's height from its width like the Library label, so **Large** cards give the plate more room instead of leaving it floating in a short card.
 - Showcase cards: each card is titled once, in a window bar at the top with the drag grip and the actions menu on either side, instead of a caption under the photo. The title reads catalog · date · denomination, and shows a short **P17** on Small cards and **Pick 17** on Medium and Large, so a narrow card keeps the whole line.
 - Note editor: an **I own this note** toggle on both create and edit saves the note's library-wide ownership flag with the rest of the note; it applies to every Showcase the note appears in.
 - Note editor: new notes start unowned, including notes restored from a database or archive that predates ownership; tick **I own this note** when the note is in hand.

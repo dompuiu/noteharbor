@@ -92,6 +92,18 @@ describe("showcase photo size styles", () => {
     );
   });
 
+  // The photo well sets the card's height from its width, exactly like the
+  // Library label, so a wider rail card also gives the plate more room.
+  test("the rail photo sets the card height from its own width", () => {
+    const rule = styles.match(
+      /\.showcase-card--rail \.showcase-catalog-photo\s*\{([^}]*)\}/,
+    );
+    expect(rule).not.toBeNull();
+    expect(rule[1]).toMatch(/align-self:\s*center/);
+    expect(rule[1]).toMatch(/aspect-ratio:\s*2\s*\/\s*1/);
+    expect(rule[1]).toMatch(/height:\s*auto/);
+  });
+
   test("the rail's column queries measure the canvas, not the viewport", () => {
     const body = styles.match(
       /\.screen-stack\.showcase-screen > \.screen-body\s*\{([^}]*)\}/,
