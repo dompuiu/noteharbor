@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import {
-  CATALOG_LAYOUT_RAIL_MIN_WIDTH,
   DEFAULT_CATALOG_LAYOUT,
   minWidthForCatalogLayout,
   normalizeCatalogLayout,
@@ -20,10 +19,13 @@ describe("the catalog layout preference", () => {
     expect(minWidthForCatalogLayout("labels", "large")).toBe(480);
   });
 
-  test("floors the Auction rail at its fixed identity column", () => {
-    expect(CATALOG_LAYOUT_RAIL_MIN_WIDTH).toBe(330);
+  test("gives the Auction rail a distinct width for every photo size", () => {
     expect(minWidthForCatalogLayout("rail", "small")).toBe(330);
-    expect(minWidthForCatalogLayout("rail", "medium")).toBe(330);
+    expect(minWidthForCatalogLayout("rail", "medium")).toBe(405);
     expect(minWidthForCatalogLayout("rail", "large")).toBe(480);
+  });
+
+  test("falls back to the Small rail track for an unknown size", () => {
+    expect(minWidthForCatalogLayout("rail", "gigantic")).toBe(330);
   });
 });

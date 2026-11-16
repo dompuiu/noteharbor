@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { minWidthForPhotoSize } from './photoSize.js';
+import {
+  minWidthForPhotoSize,
+  normalizePhotoSize,
+} from './photoSize.js';
 
 // The per-browser catalog card layout. It is a display preference only: the
 // two layouts are the Library label (identity above the photo, grade in a
@@ -14,9 +17,15 @@ const CATALOG_LAYOUT_OPTIONS = [
 
 const DEFAULT_CATALOG_LAYOUT = 'labels';
 
-// The rail needs enough width for its fixed identity column. Below this the
-// photo is squeezed into a strip, so a Small grid still gets a readable rail.
-const CATALOG_LAYOUT_RAIL_MIN_WIDTH = 330;
+// The rail's own three-track scale, spaced in even 75px steps. Its fixed
+// identity column costs the photo the Small-to-Medium step, so a floored
+// Medium would render at exactly the Small width; the rail spaces its tracks
+// across the range it can use instead. Large keeps the photo-size Large track.
+const CATALOG_LAYOUT_RAIL_WIDTHS = {
+  small: 330,
+  medium: 405,
+  large: 480,
+};
 
 const catalogLayoutValues = new Set(
   CATALOG_LAYOUT_OPTIONS.map((option) => option.value),
@@ -48,13 +57,14 @@ function writeStoredCatalogLayout(catalogLayout) {
 }
 
 // The grid's minimum card width for the chosen layout: the photo size drives
-// it, except the rail needs a floor of its own.
+// it, except the rail uses its own scale so every size stays distinct.
 function minWidthForCatalogLayout(catalogLayout, photoSize) {
-  const photoMinWidth = minWidthForPhotoSize(photoSize);
+  const normalizedPhotoSize = normalizePhotoSize(photoSize);
 
   return normalizeCatalogLayout(catalogLayout) === 'rail'
-    ? Math.max(photoMinWidth, CATALOG_LAYOUT_RAIL_MIN_WIDTH)
-    : photoMinWidth;
+    ? CATALOG_LAYOUT_RAIL_WIDTHS[normalizedPhotoSize] ??
+        CATALOG_LAYOUT_RAIL_WIDTHS.small
+    : minWidthForPhotoSize(photoSize);
 }
 
 function getDesktopCatalogLayoutBridge() {
@@ -140,7 +150,6 @@ function useCatalogLayout() {
 
 export {
   CATALOG_LAYOUT_OPTIONS,
-  CATALOG_LAYOUT_RAIL_MIN_WIDTH,
   DEFAULT_CATALOG_LAYOUT,
   SHOWCASE_CATALOG_LAYOUT_STORAGE_KEY,
   getDesktopCatalogLayoutBridge,

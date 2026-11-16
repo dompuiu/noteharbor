@@ -326,7 +326,7 @@ describe("the catalog card layouts", () => {
     ).toBeNull();
   });
 
-  test("switches layouts, floors the rail grid at 330px, and remembers the choice", async () => {
+  test("switches layouts, gives the rail its own width scale, and remembers the choice", async () => {
     const user = userEvent.setup();
     const view = await openShowcase();
 
@@ -341,13 +341,20 @@ describe("the catalog card layouts", () => {
       "rail",
     );
 
-    // Photo size still resizes the track above the rail's floor.
+    // Every photo size keeps its own track in the rail's scale.
+    await user.click(screen.getByRole("radio", { name: "Medium" }));
+    expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("405px");
+
     await user.click(screen.getByRole("radio", { name: "Large" }));
     expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("480px");
 
+    // Stepping back down restores each rail track on the way.
+    await user.click(screen.getByRole("radio", { name: "Small" }));
+    expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("330px");
+
     await user.click(layoutGroup().getByRole("radio", { name: "Library label" }));
     expect(grid()).toHaveAttribute("data-catalog-layout", "labels");
-    expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("480px");
+    expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("200px");
 
     // Simulate a reload: remount against the same browser storage.
     view.unmount();
