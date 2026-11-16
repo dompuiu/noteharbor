@@ -9398,19 +9398,22 @@ button.tag {
   white-space: nowrap;
 }
 
-/* One report for the last scrape, pinned to the URL field's label row. The
-   count names what changed and the undo restores every field the scrape
-   wrote. Sharing the label row keeps the report from adding a content row,
-   so the field paired with URL is never stretched to match it. */
+/* One report for the last scrape, pinned to the URL field's label row. It
+   wears the ordinary inline-message geometry and is sized to the label row,
+   so it adds no height: the field paired with URL is never stretched to
+   match it. A long report ellipsises rather than wrapping into a second row. */
 .scrape-result {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
+  flex: 0 1 auto;
+  height: 24px;
   min-width: 0;
+  max-width: 100%;
   margin-left: 4px;
-  padding: 2px 10px;
-  border-radius: var(--radius-pill);
+  padding: 0 8px 0 10px;
+  border-left: 3px solid var(--success);
+  border-radius: var(--radius-sm);
   background: var(--success-bg);
   color: var(--success);
   font-size: 0.78rem;
@@ -9424,6 +9427,7 @@ button.tag {
   height: 1px;
   padding: 0;
   margin: -1px;
+  border: 0;
   overflow: hidden;
   background: transparent;
   clip-path: inset(50%);
@@ -9432,6 +9436,10 @@ button.tag {
 
 .scrape-result-message {
   margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .scrape-result-undo {
@@ -9461,12 +9469,6 @@ button.tag {
   align-items: center;
   gap: 8px;
   min-width: 0;
-}
-
-/* The URL label carries the scrape report beside it; on a narrow column the
-   chip drops under the label instead of pushing past the field's edge. */
-.url-label-row {
-  flex-wrap: wrap;
 }
 
 .field-source-badge {

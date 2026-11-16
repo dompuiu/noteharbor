@@ -414,6 +414,32 @@ describe("Note editor Autopopulate browser handling", () => {
     expect(screen.getAllByText("New image ready").length).toBeGreaterThan(0);
   });
 
+  test("keeps the scrape report inside the URL field's label row", async () => {
+    const user = userEvent.setup();
+    getNote.mockResolvedValue({
+      note: { ...notePayload(), grade: "" },
+    });
+    scrapePreview.mockResolvedValue({
+      scraped_data: { grade: "65 EPQ" },
+      images: [],
+    });
+    const button = await renderForm();
+
+    await waitFor(() => expect(bridge.getScrapeBrowserStatus).toHaveBeenCalled());
+    await user.click(button);
+
+    await findScrapeStatus("Filled 1 field from PMG.");
+
+    const urlBlock = screen.getByLabelText("URL").closest(".field-block");
+    const labelRow = within(urlBlock).getByText("URL").closest(".field-label-row");
+    // The report shares the label row instead of adding a row under the URL
+    // input, so the paired cell beside it is never stretched.
+    expect(labelRow).toContainElement(scrapeReport());
+    expect(
+      within(labelRow).getByRole("button", { name: "Undo" }),
+    ).toBeInTheDocument();
+  });
+
   test("a field edited after the scrape drops its scraped mark", async () => {
     const user = userEvent.setup();
     getNote.mockResolvedValue({

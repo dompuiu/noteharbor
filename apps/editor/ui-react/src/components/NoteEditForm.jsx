@@ -210,7 +210,7 @@ function formatScrapeSummary({ count, reason, source }) {
     : `No fields changed; the note already matches ${source}.`;
 }
 
-function FieldLabel({ htmlFor, label, scrapedFrom, sourceId }) {
+function FieldLabel({ children, htmlFor, label, scrapedFrom, sourceId }) {
   return (
     <div className="field-label-row">
       <label htmlFor={htmlFor}>{label}</label>
@@ -226,6 +226,7 @@ function FieldLabel({ htmlFor, label, scrapedFrom, sourceId }) {
           </span>
         </span>
       ) : null}
+      {children}
     </div>
   );
 }
@@ -1499,6 +1500,13 @@ function NoteEditForm({
   const ownedInputId = fieldInputId("owned");
   const ownedHintId = `${ownedInputId}-hint`;
   const scrapedCount = Object.keys(scrapeUndo ?? {}).length;
+  const scrapeSummaryText = scrapeSummary
+    ? formatScrapeSummary({
+        ...scrapeSummary,
+        count: scrapedCount,
+        source: scrapeProgress.source,
+      })
+    : "";
   // Create mode titles the screen with the mode's own wording; edit mode
   // titles it with the note's denomination, falling back the same way the
   // slideshow does when the note has none.
@@ -1862,7 +1870,33 @@ function NoteEditForm({
           })}
 
           <div className="field-block">
-            <label htmlFor={fieldInputId("url")}>URL</label>
+            <FieldLabel htmlFor={fieldInputId("url")} label="URL">
+              {/* The report is an inline message sized to the label row, so it
+                  adds no height and never stretches the field paired with URL.
+                  Mounted even while empty so the live region exists before a
+                  scrape puts its report into it. */}
+              <div
+                className={`scrape-result${scrapeSummary ? "" : " scrape-result--idle"}`}
+              >
+                <p
+                  aria-atomic="true"
+                  aria-live="polite"
+                  className="scrape-result-message"
+                >
+                  {scrapeSummaryText}
+                </p>
+                {scrapeSummary && scrapeUndo ? (
+                  <button
+                    className="scrape-result-undo"
+                    onClick={handleUndoScrape}
+                    title="Restore the fields this scrape changed"
+                    type="button"
+                  >
+                    Undo
+                  </button>
+                ) : null}
+              </div>
+            </FieldLabel>
             <div className="url-field-row">
               <input
                 autoComplete="off"
@@ -1891,35 +1925,6 @@ function NoteEditForm({
                 )}
                 <span>{scraping ? "Scraping…" : "Scrape page"}</span>
               </button>
-            </div>
-            {/* Mounted even while empty so the live region exists before a
-                scrape puts its report into it. */}
-            <div
-              className={`scrape-result${scrapeSummary ? "" : " scrape-result--idle"}`}
-            >
-              <p
-                aria-atomic="true"
-                aria-live="polite"
-                className="scrape-result-message"
-              >
-                {scrapeSummary
-                  ? formatScrapeSummary({
-                      ...scrapeSummary,
-                      count: scrapedCount,
-                      source: scrapeProgress.source,
-                    })
-                  : ""}
-              </p>
-              {scrapeSummary && scrapeUndo ? (
-                <button
-                  className="scrape-result-undo"
-                  onClick={handleUndoScrape}
-                  title="Restore the fields this scrape changed"
-                  type="button"
-                >
-                  Undo
-                </button>
-              ) : null}
             </div>
           </div>
 
