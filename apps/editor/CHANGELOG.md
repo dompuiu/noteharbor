@@ -4,6 +4,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.14.0] - 2026-11-16
+
 ### Fixed
 
 - Showcase: an unseen placeholder in the Auction rail now stands as tall as the note cards around it; its well keeps the photo's 2/1 shape instead of collapsing to the body's 148px floor.
