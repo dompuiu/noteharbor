@@ -195,74 +195,28 @@ describe("showcase note-card flip control", () => {
   });
 });
 
-describe("showcase focus: register marks", () => {
-  test("keyboard focus draws four corner marks instead of a frame ring", () => {
+describe("showcase focus: proof frame", () => {
+  test("keyboard focus rules the item instead of drawing a frame ring", () => {
     expect(styles).not.toMatch(
       /\.showcase-reorder-cell:has\(:focus-visible\)\s*\{[^}]*box-shadow:\s*inset 0 0 0 2px var\(--accent\)/,
     );
+    expect(styles).not.toMatch(/\.showcase-cell-marks/);
 
-    const marks = styles.match(
-      /\.showcase-reorder-cell:has\(\.showcase-card:focus-visible\) \.showcase-cell-mark\s*\{([^}]*)\}/,
-    );
-    expect(marks).not.toBeNull();
-    expect(marks[1]).toMatch(/opacity:\s*1/);
+    const top = styles.match(/\n\.showcase-reorder-cell::before\s*\{([^}]*)\}/);
+    const bottom = styles.match(/\n\.showcase-reorder-cell::after\s*\{([^}]*)\}/);
+    expect(top).not.toBeNull();
+    expect(bottom).not.toBeNull();
+    expect(top[1]).toMatch(/border-top:\s*2px solid var\(--accent\)/);
+    expect(bottom[1]).toMatch(/border-bottom:\s*2px solid var\(--accent\)/);
   });
 
-  test("the marks belong to the card body, not the cell's other controls", () => {
-    expect(styles).not.toMatch(
-      /\.showcase-reorder-cell:has\(:focus-visible\) \.showcase-cell-mark/,
-    );
-  });
-
-  test("the marks overlay stays decoration for pointer and assistive tech", () => {
-    const overlay = styles.match(/\n\.showcase-cell-marks\s*\{([^}]*)\}/);
-    expect(overlay).not.toBeNull();
-    expect(overlay[1]).toMatch(/position:\s*absolute/);
-    expect(overlay[1]).toMatch(/pointer-events:\s*none/);
-  });
-
-  test("each mark is an 18px pair of accent rules that scale in", () => {
-    const mark = styles.match(/\n\.showcase-cell-mark\s*\{([^}]*)\}/);
-    const arms = styles.match(
-      /\n\.showcase-cell-mark::before,\s*\n?\.showcase-cell-mark::after\s*\{([^}]*)\}/,
-    );
-    expect(mark).not.toBeNull();
-    expect(arms).not.toBeNull();
-    expect(mark[1]).toMatch(/width:\s*18px/);
-    expect(mark[1]).toMatch(/height:\s*18px/);
-    expect(mark[1]).toMatch(/opacity:\s*0/);
-    expect(arms[1]).toMatch(/background:\s*var\(--accent\)/);
-    expect(arms[1]).toMatch(/transform:\s*scale\(0\)/);
-  });
-
-  test("the marks draw 30ms apart, corner by corner", () => {
-    const stagger = (corner) =>
-      styles.match(
-        new RegExp(
-          `\\.showcase-reorder-cell:has\\(\\.showcase-card:focus-visible\\)\\s+\\.showcase-cell-mark:nth-child\\(${corner}\\)::before,[\\s\\S]*?` +
-            `nth-child\\(${corner}\\)::after\\s*\\{([^}]*)\\}`,
-        ),
-      );
-
-    for (const [corner, delay] of [
-      [2, "30ms"],
-      [3, "60ms"],
-      [4, "90ms"],
-    ]) {
-      const block = stagger(corner);
-      expect(block).not.toBeNull();
-      expect(block[1]).toContain(`transition-delay: ${delay}`);
-    }
-  });
-
-  test("the hover rule follows the cell's rounded corners", () => {
+  test("the top rule follows the cell's rounded corners", () => {
     const rule = styles.match(/\n\.showcase-reorder-cell::before\s*\{([^}]*)\}/);
     const hover = styles.match(
       /\.showcase-reorder-cell:hover::before\s*\{([^}]*)\}/,
     );
     expect(rule).not.toBeNull();
     expect(hover).not.toBeNull();
-    expect(rule[1]).toMatch(/border-top:\s*2px solid var\(--accent\)/);
     expect(rule[1]).toMatch(
       /border-radius:\s*var\(--radius-md\) var\(--radius-md\) 0 0/,
     );
@@ -270,12 +224,26 @@ describe("showcase focus: register marks", () => {
     expect(hover[1]).toMatch(/clip-path:\s*inset\(0 0 0 0\)/);
   });
 
-  test("focus yields the line to the marks", () => {
-    const rule = styles.match(
-      /\.showcase-reorder-cell:has\(\.showcase-card:focus-visible\)::before\s*\{([^}]*)\}/,
+  test("the bottom rule mirrors the corner radius and sweeps the other way", () => {
+    const bottom = styles.match(/\n\.showcase-reorder-cell::after\s*\{([^}]*)\}/);
+    expect(bottom).not.toBeNull();
+    expect(bottom[1]).toMatch(/bottom:\s*0/);
+    expect(bottom[1]).toMatch(
+      /border-radius:\s*0 0 var\(--radius-md\) var\(--radius-md\)/,
     );
-    expect(rule).not.toBeNull();
-    expect(rule[1]).toMatch(/clip-path:\s*inset\(0 100% 0 0\)/);
+    expect(bottom[1]).toMatch(/clip-path:\s*inset\(0 0 0 100%\)/);
+  });
+
+  test("card focus holds the top rule and completes the bottom rule", () => {
+    const frame = styles.match(
+      /\.showcase-reorder-cell:has\(\.showcase-card:focus-visible\)::before,\s*\n?\.showcase-reorder-cell:has\(\.showcase-card:focus-visible\)::after\s*\{([^}]*)\}/,
+    );
+    expect(frame).not.toBeNull();
+    expect(frame[1]).toMatch(/clip-path:\s*inset\(0 0 0 0\)/);
+  });
+
+  test("the frame belongs to the card body, not the cell's other controls", () => {
+    expect(styles).not.toMatch(/\.showcase-reorder-cell:has\(:focus-visible\)::/);
   });
 
   test("the catalog code turns accent while the card holds focus", () => {
@@ -341,13 +309,13 @@ describe("showcase note-card motion", () => {
     );
   });
 
-  test("reduced motion lands the focus marks without the sweep or stagger", () => {
+  test("reduced motion lands the proof frame without the sweep", () => {
     const block = styles.match(
       /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/,
     );
     expect(block).not.toBeNull();
     expect(block[1]).toMatch(/\.showcase-reorder-cell::before/);
-    expect(block[1]).toMatch(/\.showcase-cell-mark::before/);
+    expect(block[1]).toMatch(/\.showcase-reorder-cell::after/);
     expect(block[1]).toMatch(/transition:\s*none/);
   });
 });

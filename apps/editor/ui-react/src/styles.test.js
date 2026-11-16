@@ -2724,11 +2724,11 @@ describe("slideshow overlay styles", () => {
 
   // The always-editable canvas marks focus on the card body: the card inside
   // is neutralised so it cannot stack a second ring or wash, and the cell cue
-  // is four register marks. Moving to the menu or the ownership footer clears
-  // them there, so only one focus plane shows at a time.
+  // is the proof frame's top and bottom rules. Moving to the menu or the
+  // ownership footer clears them there, so only one focus plane shows.
   test("the showcase cell owns the only focus cue", () => {
     expect(styles).toMatch(
-      /\.showcase-reorder-cell:has\(\.showcase-card:focus-visible\) \.showcase-cell-mark\s*\{[^}]*opacity:\s*1/,
+      /\.showcase-reorder-cell:has\(\.showcase-card:focus-visible\)::after\s*\{[^}]*clip-path:\s*inset\(0 0 0 0\)/,
     );
     expect(styles).not.toMatch(
       /\.showcase-reorder-cell:has\(:focus-visible\)\s*\{[^}]*box-shadow:\s*inset 0 0 0 2px var\(--accent\)/,

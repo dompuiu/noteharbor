@@ -1786,143 +1786,30 @@ input[type="radio"] {
   }
 }
 
-/* On focus the rule yields to the register marks. */
-.showcase-reorder-cell:has(.showcase-card:focus-visible)::before {
-  clip-path: inset(0 100% 0 0);
-}
-
-/* Focus marks the card body at its corners: four 18px register rules draw in
-   while the card itself holds focus, and its catalog code turns accent. Moving
-   to the menu or the ownership footer clears the marks and lets that control
-   mark itself, so the item never shows two focus planes at once. The frame
-   stays bare so the specimen still reads as paper. The marks are the cell's
-   last child, above the card and the footer but under the menu. */
-.showcase-cell-marks {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.showcase-cell-mark {
-  position: absolute;
-  display: block;
-  width: 18px;
-  height: 18px;
-  opacity: 0;
-  transition: opacity 0.12s ease;
-}
-
-.showcase-cell-mark::before,
-.showcase-cell-mark::after {
+/* On card focus the line completes into a proof frame: the top rule holds and
+   a second rule draws along the bottom edge from the right, so the ticket reads
+   as trimmed and mounted. Both rules are scoped to the card body: moving to the
+   menu or the ownership footer clears the frame and lets that control mark
+   itself, so only one focus plane shows at a time. The cell frame stays bare so
+   the specimen still reads as paper. */
+.showcase-reorder-cell::after {
   content: "";
   position: absolute;
-  border-radius: 1px;
-  background: var(--accent);
-  transform: scale(0);
-  transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.showcase-cell-mark::before {
-  width: 18px;
-  height: 2px;
-  transform-origin: left center;
-}
-
-.showcase-cell-mark::after {
-  width: 2px;
-  height: 18px;
-  transform-origin: center top;
-}
-
-.showcase-cell-mark:nth-child(1) {
-  top: 5px;
-  left: 5px;
-}
-
-.showcase-cell-mark:nth-child(2) {
-  top: 5px;
-  right: 5px;
-}
-
-.showcase-cell-mark:nth-child(2)::before {
-  right: 0;
-  left: auto;
-  transform-origin: right center;
-}
-
-.showcase-cell-mark:nth-child(2)::after {
-  right: 0;
-  transform-origin: right top;
-}
-
-.showcase-cell-mark:nth-child(3) {
-  bottom: 5px;
-  left: 5px;
-}
-
-.showcase-cell-mark:nth-child(3)::before {
-  top: auto;
-  bottom: 0;
-  transform-origin: left bottom;
-}
-
-.showcase-cell-mark:nth-child(3)::after {
-  top: auto;
-  bottom: 0;
-  transform-origin: left bottom;
-}
-
-.showcase-cell-mark:nth-child(4) {
-  right: 5px;
-  bottom: 5px;
-}
-
-.showcase-cell-mark:nth-child(4)::before {
-  top: auto;
+  z-index: 4;
   right: 0;
   bottom: 0;
-  left: auto;
-  transform-origin: right bottom;
+  left: 0;
+  height: 6px;
+  border-bottom: 2px solid var(--accent);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  clip-path: inset(0 0 0 100%);
+  pointer-events: none;
+  transition: clip-path 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.showcase-cell-mark:nth-child(4)::after {
-  top: auto;
-  right: 0;
-  bottom: 0;
-  transform-origin: right bottom;
-}
-
-.showcase-reorder-cell:has(.showcase-card:focus-visible) .showcase-cell-mark {
-  opacity: 1;
-}
-
-.showcase-reorder-cell:has(.showcase-card:focus-visible) .showcase-cell-mark::before,
-.showcase-reorder-cell:has(.showcase-card:focus-visible) .showcase-cell-mark::after {
-  transform: scale(1);
-}
-
-/* The marks draw corner by corner, 30ms apart, so focus reads as marked for
-   trim rather than as a frame switching on. */
-.showcase-reorder-cell:has(.showcase-card:focus-visible)
-  .showcase-cell-mark:nth-child(2)::before,
-.showcase-reorder-cell:has(.showcase-card:focus-visible)
-  .showcase-cell-mark:nth-child(2)::after {
-  transition-delay: 30ms;
-}
-
-.showcase-reorder-cell:has(.showcase-card:focus-visible)
-  .showcase-cell-mark:nth-child(3)::before,
-.showcase-reorder-cell:has(.showcase-card:focus-visible)
-  .showcase-cell-mark:nth-child(3)::after {
-  transition-delay: 60ms;
-}
-
-.showcase-reorder-cell:has(.showcase-card:focus-visible)
-  .showcase-cell-mark:nth-child(4)::before,
-.showcase-reorder-cell:has(.showcase-card:focus-visible)
-  .showcase-cell-mark:nth-child(4)::after {
-  transition-delay: 90ms;
+.showcase-reorder-cell:has(.showcase-card:focus-visible)::before,
+.showcase-reorder-cell:has(.showcase-card:focus-visible)::after {
+  clip-path: inset(0 0 0 0);
 }
 
 .showcase-reorder-cell:has(.showcase-card:focus-visible) .showcase-catalog-code {
@@ -1941,8 +1828,8 @@ input[type="radio"] {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-/* Forced colours drop the drawn cue to system ink so keyboard focus keeps an
-   enclosing edge without the register marks' own colour. */
+/* Forced colours drop the drawn frame to system ink so keyboard focus keeps an
+   enclosing edge without the accent rules' own colour. */
 @media (forced-colors: active) {
   .showcase-reorder-cell:has(.showcase-card:focus-visible) {
     outline: 2px solid CanvasText;
@@ -3901,12 +3788,9 @@ input[type="radio"] {
     transition: none;
   }
 
-  /* The hover rule and the focus marks land in one frame; the stagger is
-     decoration, so it goes with the interpolation. */
+  /* The hover rule and the proof frame land in one frame. */
   .showcase-reorder-cell::before,
-  .showcase-cell-mark,
-  .showcase-cell-mark::before,
-  .showcase-cell-mark::after {
+  .showcase-reorder-cell::after {
     transition: none;
   }
 
