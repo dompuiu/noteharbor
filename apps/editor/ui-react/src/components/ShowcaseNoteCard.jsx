@@ -31,6 +31,10 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
   const [infoPinned, setInfoPinned] = useState(false);
   const [flipped, setFlipped] = useState(false);
   const cardRef = useRef(null);
+  // The card button a pointer click on the flip control parked focus on; on
+  // pointer leave we blur only that button, so the chip disappears with the
+  // pointer instead of lingering under the card's focus.
+  const pointerFocusRef = useRef(null);
   const tooltipId = useId();
   // Leaving the icon starts a short close delay instead of hiding at once,
   // so the cursor can travel onto the tooltip itself without a flicker.
@@ -108,6 +112,7 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
 
     setFlipped((current) => !current);
     cardRef.current?.focus();
+    pointerFocusRef.current = cardRef.current;
   }
 
   function handleMouseEnter() {
@@ -122,6 +127,12 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
       // Moving the pointer out returns to the front, however the back was
       // reached — same as leaving focus below.
       setFlipped(false);
+
+      const pointerFocused = pointerFocusRef.current;
+      if (pointerFocused && pointerFocused === document.activeElement) {
+        pointerFocused.blur();
+      }
+      pointerFocusRef.current = null;
     }
   }
 
@@ -138,6 +149,7 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
       setFlipped(false);
     }
 
+    pointerFocusRef.current = null;
     setInfoPinned(false);
   }
 

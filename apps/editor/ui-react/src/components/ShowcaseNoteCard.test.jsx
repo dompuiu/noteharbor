@@ -199,6 +199,8 @@ describe("ShowcaseNoteCard", () => {
 
     fireEvent.mouseLeave(card);
     expect(card).toHaveAttribute("aria-pressed", "false");
+    expect(card.querySelector(".showcase-card-flip")).toBeNull();
+    expect(card).not.toHaveFocus();
     expect(screen.getByRole("img")).toHaveAttribute(
       "src",
       "/api/images/notes/1/front-thumb.jpg?v=rev-1",

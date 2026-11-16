@@ -189,6 +189,8 @@ describe("ShowcaseCatalogCard face flip", () => {
 
     fireEvent.mouseLeave(card.closest(".showcase-cell"));
     expect(card).toHaveAttribute("aria-pressed", "false");
+    expect(card.querySelector(".showcase-card-flip")).toBeNull();
+    expect(card).not.toHaveFocus();
     expect(visibleImage(card)).toHaveAttribute(
       "src",
       "/api/images/notes/101/front.jpg?v=rev-101",

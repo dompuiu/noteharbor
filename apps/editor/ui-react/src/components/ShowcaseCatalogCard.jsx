@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   firstAvailableNoteImage,
   pickBackImage,
@@ -242,6 +242,10 @@ function ShowcaseCatalogCard({
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const [flipped, setFlipped] = useState(false);
+  // The card button a pointer click on the flip control parked focus on. On
+  // pointer leave we blur only that button, so a mouse click never leaves the
+  // chip behind, while a keyboard-focused card keeps it.
+  const pointerFocusRef = useRef(null);
   const entry = isCatalogEntry(node);
   const state = nodeCatalogState(node);
   const note = entry ? primarySpecimen(node) : node?.note;
@@ -268,6 +272,12 @@ function ShowcaseCatalogCard({
     setHovered(false);
     // Leaving the card returns to the front, however the back was reached.
     setFlipped(false);
+
+    const pointerFocused = pointerFocusRef.current;
+    if (pointerFocused && pointerFocused === document.activeElement) {
+      pointerFocused.blur();
+    }
+    pointerFocusRef.current = null;
   }
 
   function handleFocus() {
@@ -281,13 +291,14 @@ function ShowcaseCatalogCard({
       return;
     }
 
+    pointerFocusRef.current = null;
     setFocused(false);
     setFlipped(false);
   }
 
   // The flip control is a plain span (the card body is the button), so it stops
   // the click before the card's activation runs and parks focus on the card so
-  // the back stays until focus leaves.
+  // the back stays until the pointer or focus leaves.
   function handleFlipClick(event) {
     event.preventDefault();
     event.stopPropagation();
@@ -297,7 +308,9 @@ function ShowcaseCatalogCard({
     }
 
     setFlipped((current) => !current);
-    event.currentTarget.closest("button")?.focus();
+    const cardButton = event.currentTarget.closest("button");
+    cardButton?.focus();
+    pointerFocusRef.current = cardButton;
   }
 
   // Shift/Ctrl + ←/→ flips the focused card; the chord stops here so the
