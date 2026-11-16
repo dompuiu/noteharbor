@@ -14,6 +14,9 @@ import { ShowcaseCatalogWell } from "./ShowcaseCatalogWell.jsx";
 // One card in a catalog Showcase. A note leaf is owned or seen; a catalog shell
 // is always unseen. The card body is one button that opens the note (or the
 // shell's finder), so keyboard navigation still sees one card per grid cell.
+// The actions menu sits after the card body in the DOM and before the ownership
+// footer, so Tab walks card → dots → ownership; the menu never nests inside a
+// button.
 //
 // Two layouts share one state language:
 //
@@ -143,6 +146,7 @@ function ShowcaseCatalogCard({
   node,
   grip = null,
   layout = "labels",
+  menu = null,
   onOpenFinder,
   onOpenNote,
   onPresent,
@@ -195,6 +199,7 @@ function ShowcaseCatalogCard({
             </span>
             <span className="showcase-catalog-add">Add first note →</span>
           </CatalogCardFrame>
+          {menu}
         </div>
       );
     }
@@ -223,6 +228,7 @@ function ShowcaseCatalogCard({
           </span>
           <span className="showcase-catalog-add">Add first note →</span>
         </CatalogCardFrame>
+        {menu}
       </div>
     );
   }
@@ -264,6 +270,7 @@ function ShowcaseCatalogCard({
             </span>
           </span>
         </CatalogCardFrame>
+        {menu}
         <StateLabel
           label={label}
           node={node}
@@ -297,6 +304,7 @@ function ShowcaseCatalogCard({
           <CatalogGrade grade={grade} layout="labels" />
         </span>
       </CatalogCardFrame>
+      {menu}
       <StateLabel
         label={label}
         node={node}

@@ -173,7 +173,7 @@ describe("showcase note-card flip control", () => {
 });
 
 describe("showcase focus: one plane", () => {
-  test("the cell paints the only focus ring, with no wash", () => {
+  test("the cell paints the only frame ring while focus stays inside it", () => {
     const rule = styles.match(
       /\.showcase-reorder-cell:has\(:focus-visible\)\s*\{([^}]*)\}/,
     );
@@ -196,6 +196,28 @@ describe("showcase focus: one plane", () => {
     expect(styles).toMatch(
       /\.showcase-reorder-cell:has\(:focus-visible\)[\s\S]*?\.showcase-card--grouping:focus-visible\s*\{[^}]*box-shadow:\s*inset 3px 0 0 var\(--accent\)/,
     );
+  });
+
+  test("the ownership footer marks its row instead of tracing a second edge", () => {
+    const rule = styles.match(
+      /\n\.showcase-card-state--footer:focus-visible\s*\{([^}]*)\}/,
+    );
+    expect(rule).not.toBeNull();
+    expect(rule[1]).toMatch(/box-shadow:\s*inset 0 2px 0 var\(--accent\)/);
+    expect(rule[1]).toMatch(/background:\s*var\(--accent-soft\)/);
+    expect(rule[1]).toMatch(/outline:\s*none/);
+    // No semantic fill: focus is a red marker, never a button ground.
+    expect(rule[1]).not.toMatch(/background:\s*var\(--(success|accent-strong)\)/);
+  });
+
+  test("the owned footer keeps its state colour while focused", () => {
+    const rule = styles.match(
+      /\n\.showcase-card-state--owned\.showcase-card-state--footer:focus-visible\s*\{([^}]*)\}/,
+    );
+    expect(rule).not.toBeNull();
+    expect(rule[1]).toMatch(/color:\s*var\(--success\)/);
+    expect(rule[1]).toMatch(/box-shadow:\s*inset 0 2px 0 var\(--accent\)/);
+    expect(rule[1]).not.toMatch(/background:\s*var\(--success\)/);
   });
 });
 

@@ -410,6 +410,95 @@ describe("the catalog card layouts", () => {
   });
 });
 
+describe("the keyboard path through a catalog card", () => {
+  // Tab walks the card body first (the slideshow opener), then the dots, then
+  // the ownership footer; arrow keys already move the card focus, so the
+  // picture is never a dead end. Focus never lands on the drag grip.
+  test("the card body leads, then the actions menu, then the ownership label", async () => {
+    const user = userEvent.setup();
+    const { container } = await openShowcase();
+
+    const cell = container.querySelector(
+      '.showcase-reorder-cell:has(.showcase-catalog-cell[data-showcase-node-id="20"])',
+    );
+    const card = within(cell).getByRole("button", {
+      name: "Slideshow from Pick 22a · 1917 · 1 leu",
+    });
+    const trigger = within(cell).getByRole("button", {
+      name: "Actions for Pick 22a",
+    });
+    const ownership = within(cell).getByRole("button", {
+      name: "Pick 22a · 1917 · 1 leu is owned. Mark as not owned",
+    });
+
+    card.focus();
+    expect(card).toHaveFocus();
+    await user.tab();
+    expect(trigger).toHaveFocus();
+    await user.tab();
+    expect(ownership).toHaveFocus();
+    await user.tab();
+    const nextCard = within(
+      container.querySelector(
+        '.showcase-reorder-cell:has(.showcase-catalog-cell[data-showcase-node-id="21"])',
+      ),
+    ).getByRole("button", { name: /^Slideshow from Pick 24c/ });
+    expect(nextCard).toHaveFocus();
+  });
+
+  test("the rail layout walks the same path", async () => {
+    const user = userEvent.setup();
+    const { container } = await openShowcase();
+
+    await user.click(
+      within(screen.getByRole("group", { name: "Card layout" })).getByRole(
+        "radio",
+        { name: "Auction rail" },
+      ),
+    );
+
+    const cell = container.querySelector(
+      '.showcase-reorder-cell:has(.showcase-catalog-cell[data-showcase-node-id="20"])',
+    );
+    const card = within(cell).getByRole("button", {
+      name: "Slideshow from Pick 22a · 1917 · 1 leu",
+    });
+    const trigger = within(cell).getByRole("button", {
+      name: "Actions for Pick 22a",
+    });
+    const ownership = within(cell).getByRole("button", {
+      name: "Pick 22a · 1917 · 1 leu is owned. Mark as not owned",
+    });
+
+    card.focus();
+    expect(card).toHaveFocus();
+    await user.tab();
+    expect(trigger).toHaveFocus();
+    await user.tab();
+    expect(ownership).toHaveFocus();
+  });
+
+  test("an unseen shell walks its body, then its dots", async () => {
+    const user = userEvent.setup();
+    const { container } = await openShowcase();
+
+    const cell = container.querySelector(
+      '.showcase-reorder-cell:has(.showcase-catalog-cell[data-showcase-node-id="22"])',
+    );
+    const card = within(cell).getByRole("button", {
+      name: /Pick 25d .* is unseen/,
+    });
+    const trigger = within(cell).getByRole("button", {
+      name: "Actions for Pick 25d",
+    });
+
+    card.focus();
+    expect(card).toHaveFocus();
+    await user.tab();
+    expect(trigger).toHaveFocus();
+  });
+});
+
 describe("the catalog checklist", () => {
   test("paints the three card states and the header counts", async () => {
     const { container } = await openShowcase();

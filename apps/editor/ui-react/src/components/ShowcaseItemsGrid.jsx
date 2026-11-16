@@ -147,10 +147,11 @@ function ShowcaseItemsGrid({
               nodeId={node.id}
               reorder={reorderEnabled ? reorder : null}
             >
-              {({ grip }) => (
+              {({ grip, menu }) => (
                 <ShowcaseCatalogCard
                   grip={grip}
                   layout={catalogLayout}
+                  menu={menu}
                   node={node}
                   onOpenFinder={onOpenShell}
                   onPresent={onPresent}
@@ -189,10 +190,11 @@ function ShowcaseItemsGrid({
                 nodeId={node.id}
                 reorder={reorderEnabled ? reorder : null}
               >
-                {({ grip }) => (
+                {({ grip, menu }) => (
                   <ShowcaseCatalogCard
                     grip={grip}
                     layout={catalogLayout}
+                    menu={menu}
                     node={node}
                     onOpenNote={onOpenNote}
                     onPresent={onPresent}

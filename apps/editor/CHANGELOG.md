@@ -4,6 +4,10 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+### Fixed
+
+- Showcase: Tab now walks a catalog card's body, then its actions menu (the dots), then its ownership footer, and the next Tab selects the next card. Focusing the footer marks its row with a red rule and a soft tint instead of stacking a second border on the card's frame; the frame keeps its ring while focus stays anywhere inside the card.
+
 ### Changed
 
 - Showcase cards: each card is titled once, in a window bar at the top with the drag grip and the actions menu on either side, instead of a caption under the photo. The title reads catalog · date · denomination, and shows a short **P17** on Small cards and **Pick 17** on Medium and Large, so a narrow card keeps the whole line.

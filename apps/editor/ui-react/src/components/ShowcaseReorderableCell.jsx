@@ -7,9 +7,10 @@
 // separate edit mode.
 //
 // Catalog cards bring their own rail, so `embedded` suppresses the generic bar
-// and hands the grip to the card. The menu stays here: it is a sibling of the
-// card button (a button cannot contain another button) and keeps its
-// top-right anchor inside whichever rail the card draws.
+// and hands the grip to the card. The menu stays a sibling of the card button
+// (a button cannot contain another button), but the render function also
+// receives it, so the card can place it between the card and its ownership
+// footer: Tab walks the card body, then the dots, then the ownership label.
 function ShowcaseReorderableCell({
   nodeId,
   label,
@@ -75,10 +76,9 @@ function ShowcaseReorderableCell({
       onDrop={enabled ? (event) => handleDrop(event, nodeId) : undefined}
     >
       {embedded ? (
-        <>
-          {typeof children === "function" ? children({ grip }) : children}
-          {menu}
-        </>
+        // An embedded card draws its own frame, so it places the menu itself:
+        // the render function receives it and decides where it sits.
+        children({ grip, menu })
       ) : (
         <>
           <div className="showcase-reorder-bar">

@@ -2722,8 +2722,9 @@ describe("slideshow overlay styles", () => {
     expect(panel[1]).toMatch(/overflow-y:\s*auto/);
   });
 
-  // The always-editable canvas paints focus once, on the cell: the card inside
-  // is neutralised, so no card can ever stack a second ring or a second wash.
+  // The always-editable canvas paints focus once, on the cell, for as long as
+  // focus stays anywhere inside the item: the card inside is neutralised, so
+  // no card can ever stack a second ring or a second wash.
   test("the showcase cell owns the only focus plane", () => {
     expect(styles).toMatch(
       /\.showcase-reorder-cell:has\(:focus-visible\)\s*\{[^}]*box-shadow:\s*inset 0 0 0 2px var\(--accent\)/,
