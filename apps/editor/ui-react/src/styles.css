@@ -1217,6 +1217,16 @@ input[type="radio"] {
   align-items: stretch;
 }
 
+/* The Auction rail's fixed identity column leaves so little difference
+   between the Medium and Large card widths that a stretched track can render
+   both at the same width. The rail grid gives each card its measured width
+   instead, packing the shelf from the left and leaving the trailing space
+   open, so every size stays visibly distinct. */
+.showcase-grid[data-catalog-layout="rail"] {
+  grid-template-columns: repeat(auto-fill, var(--showcase-card-min, 330px));
+  justify-content: start;
+}
+
 /* View mode keeps natural card heights; edit mode stretches so each bordered
    cell and each dashed tile fills its row. */
 .showcase-screen:not(.showcase-screen--edit) .showcase-grid {

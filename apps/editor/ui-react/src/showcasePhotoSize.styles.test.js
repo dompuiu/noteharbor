@@ -18,6 +18,20 @@ describe("showcase photo size styles", () => {
     expect(rule[1]).toMatch(/gap:\s*16px/);
   });
 
+  // A stretched minmax() track can render two rail sizes at the same width
+  // once they land in the same column count, so the rail grid keeps each card
+  // at the width its size names.
+  test("the Auction rail grid keeps each card at its measured width", () => {
+    const rule = styles.match(
+      /\.showcase-grid\[data-catalog-layout="rail"\]\s*\{([^}]*)\}/,
+    );
+    expect(rule).not.toBeNull();
+    expect(rule[1]).toMatch(
+      /grid-template-columns:\s*repeat\(auto-fill,\s*var\(--showcase-card-min,\s*330px\)\)/,
+    );
+    expect(rule[1]).toMatch(/justify-content:\s*start/);
+  });
+
   test("marks the chosen size with the surface disc and its own ring", () => {
     const rule = styles.match(
       /\.showcase-photo-size-option:has\(input:checked\)\s*\{([^}]*)\}/,
