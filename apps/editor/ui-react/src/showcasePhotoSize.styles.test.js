@@ -93,15 +93,38 @@ describe("showcase photo size styles", () => {
   });
 
   // The photo well sets the card's height from its width, exactly like the
-  // Library label, so a wider rail card also gives the plate more room.
+  // Library label, so a wider rail card also gives the plate more room. The
+  // centring is shared with the placeholder's plate.
   test("the rail photo sets the card height from its own width", () => {
+    const plates = styles.match(
+      /\.showcase-card--rail \.showcase-catalog-photo,\s*\.showcase-card--rail \.showcase-catalog-wellshot\s*\{([^}]*)\}/,
+    );
     const rule = styles.match(
       /\.showcase-card--rail \.showcase-catalog-photo\s*\{([^}]*)\}/,
     );
+    expect(plates).not.toBeNull();
     expect(rule).not.toBeNull();
-    expect(rule[1]).toMatch(/align-self:\s*center/);
+    expect(plates[1]).toMatch(/align-self:\s*center/);
     expect(rule[1]).toMatch(/aspect-ratio:\s*2\s*\/\s*1/);
     expect(rule[1]).toMatch(/height:\s*auto/);
+  });
+
+  // An unseen placeholder has no photo to size the card, so its well takes the
+  // photo's 2/1 plate instead of filling the body's 148px floor. In the rail it
+  // then stands exactly as tall as the note cards.
+  test("the rail placeholder well keeps the photo's shape", () => {
+    const plates = styles.match(
+      /\.showcase-card--rail \.showcase-catalog-photo,\s*\.showcase-card--rail \.showcase-catalog-wellshot\s*\{([^}]*)\}/,
+    );
+    const well = styles.match(
+      /\.showcase-card--rail \.showcase-catalog-wellshot \.showcase-catalog-well\s*\{([^}]*)\}/,
+    );
+    expect(plates).not.toBeNull();
+    expect(well).not.toBeNull();
+    expect(plates[1]).toMatch(/align-self:\s*center/);
+    expect(plates[1]).toMatch(/width:\s*auto/);
+    expect(well[1]).toMatch(/aspect-ratio:\s*2\s*\/\s*1/);
+    expect(well[1]).not.toMatch(/height:\s*100%/);
   });
 
   test("the rail's column queries measure the canvas, not the viewport", () => {

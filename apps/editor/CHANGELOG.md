@@ -6,6 +6,9 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ### Fixed
 
+- Showcase: an unseen placeholder in the Auction rail now stands as tall as the note cards around it; its well keeps the photo's 2/1 shape instead of collapsing to the body's 148px floor.
+- Showcase: the canvas no longer cuts the last card's bottom edge — the scroller leaves a 24px frame under the final row, so its border, rounded corners and focus ring stay whole.
+- Showcase: the page's scrollbar is no longer clipped in half by the screen's edge; the scrolling body and the screen now share the same 8px focus-ring band as the collection screens.
 - Showcase: the front/back flip chip now disappears when the pointer leaves a note or catalog card, even after clicking it parked focus on the card. A card focused from the keyboard still keeps the chip visible.
 - Showcase: catalog note cards with a distinct back reveal the two-arrow flip control on hover or focus again, in both the Library-label and Auction-rail layouts. Clicking it (or Shift/Ctrl + ←/→ on the focused card) shows the back without opening the slideshow; the pointer or focus leaving returns to the front, and activating a note leaf opens its image preview at the face the collector can see.
 - Showcase: choosing **Medium** in the Auction rail layout now widens the cards; the rail's fixed identity column used to floor Small and Medium to the same minimum, so the middle size changed nothing. The rail grid now gives each size its own column count, so the rows fill the canvas evenly like the Library label and each size reads differently.

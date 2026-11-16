@@ -2805,14 +2805,34 @@ describe("catalog header", () => {
   // The rename control overhangs the content edge by 4px and every focus ring
   // is painted 3px outside the box. The screen clips at the content edge, so
   // the ring was cut off on the left. The screen and its wrappers hand that
-  // band back instead, which keeps the layout where it was.
+  // band back instead, which keeps the layout where it was. A showcase's
+  // screen is its own stack, so it must take the band too: otherwise the
+  // scrolling body outgrew the screen it clips at and the native scrollbar
+  // lost its outer half.
   test("the page head leaves room for the title's focus ring", () => {
     const clip = styles.match(
-      /\.collection-screen,\s*\.collection-screen > \.screen-stack,\s*\.collection-screen \.screen-body,\s*\.showcase-screen \.screen-body\s*\{([^}]*)\}/,
+      /\.collection-screen,\s*\.collection-screen > \.screen-stack,\s*\.collection-screen \.screen-body,\s*\.showcase-screen,\s*\.showcase-screen \.screen-body\s*\{([^}]*)\}/,
     );
     expect(clip).not.toBeNull();
+    expect(clip[0]).toMatch(/\.showcase-screen,/);
     expect(clip[1]).toMatch(/padding-inline:\s*8px/);
     expect(clip[1]).toMatch(/margin-inline:\s*-8px/);
+  });
+});
+
+// The showcase canvas is the one scrolling body a showcase has. It scrolls
+// everything above the grids too, so its end edge is where the last row must
+// stay whole.
+describe("showcase canvas", () => {
+  // The canvas used to end flush at the scrollport's bottom edge, so the last
+  // card's bottom border, rounded corners and focus ring were clipped when the
+  // page was scrolled to the end.
+  test("the scroller leaves a frame under the last row", () => {
+    const panel = styles.match(
+      /\.screen-stack\.showcase-screen > \.screen-body\s*\{([^}]*)\}/,
+    );
+    expect(panel).not.toBeNull();
+    expect(panel[1]).toMatch(/padding-block-end:\s*24px/);
   });
 });
 

@@ -2844,11 +2844,19 @@ input[type="radio"] {
   padding: 9px 0 9px 9px;
 }
 
-.showcase-card--rail .showcase-catalog-photo {
+/* The rail's two plates — a note's photo and an unseen position's well — share
+   one centred 2/1 slot, so both cards take their height from the card's
+   width. The well carries the ratio on its own child below, because that is
+   the box that fills the slot. */
+.showcase-card--rail .showcase-catalog-photo,
+.showcase-card--rail .showcase-catalog-wellshot {
   flex: 1 1 auto;
   align-self: center;
   width: auto;
   min-width: 0;
+}
+
+.showcase-card--rail .showcase-catalog-photo {
   height: auto;
   aspect-ratio: 2 / 1;
   border: 0;
@@ -2985,14 +2993,16 @@ input[type="radio"] {
 }
 
 .showcase-card--rail .showcase-catalog-wellshot {
-  flex: 1 1 auto;
   margin: 0;
   border-radius: 2px;
 }
 
+/* The placeholder well keeps the photo's 2/1 plate, so an unseen card in the
+   Auction rail grows to the same height as the note cards around it instead
+   of collapsing to the body's 148px floor. */
 .showcase-card--rail .showcase-catalog-wellshot .showcase-catalog-well {
-  height: 100%;
-  aspect-ratio: auto;
+  height: auto;
+  aspect-ratio: 2 / 1;
   border-radius: 2px;
 }
 
@@ -4142,6 +4152,10 @@ input[type="radio"] {
 .screen-stack.showcase-screen > .screen-body {
   overflow-y: auto;
   overflow-x: hidden;
+  /* The last row ends a frame short of the scrollport's edge, so the add tile
+     (or the last note) keeps its bottom border, rounded corners and focus
+     ring whole when the canvas is scrolled to the end. */
+  padding-block-end: 24px;
   /* Query container for the catalog grids: the rail picks its column counts
      from the canvas width, so a pinned sidebar narrows the cards with the
      page instead of keeping a viewport-sized shelf. Inline-size containment
@@ -4312,10 +4326,14 @@ input[type="radio"] {
    box, 3px further out. The page head sits on the clipped edge of the screen,
    so both the overhang and the ring were cropped there. The screen, its stack
    and its body each hand that band back to the page: the content box does not
-   move, only the edge the three of them clip at. */
+   move, only the edge the three of them clip at.
+   The showcase's screen is its own stack, so it needs the same band: without
+   it the scrolling body outgrew the clipping screen by 8px and the right half
+   of the native scrollbar was cut off. */
 .collection-screen,
 .collection-screen > .screen-stack,
 .collection-screen .screen-body,
+.showcase-screen,
 .showcase-screen .screen-body {
   padding-inline: 8px;
   margin-inline: -8px;
