@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   firstAvailableNoteImage,
+  pickBackImage,
   pickNoteImage,
   versionedImagePath,
 } from "./showcaseImages.js";
@@ -77,5 +78,26 @@ describe("firstAvailableNoteImage", () => {
 
   test("returns null when the note has no images", () => {
     expect(firstAvailableNoteImage({ images: [] })).toBeNull();
+  });
+});
+
+describe("pickBackImage", () => {
+  test("prefers the back thumbnail and falls back to full", () => {
+    const withBack = {
+      updated_at: "rev-2",
+      images: [
+        { type: "back", variant: "full", localPath: "/api/images/notes/1/back.jpg" },
+        {
+          type: "back",
+          variant: "thumbnail",
+          localPath: "/api/images/notes/1/back-thumb.jpg",
+        },
+      ],
+    };
+
+    expect(pickBackImage(withBack)).toBe(
+      "/api/images/notes/1/back-thumb.jpg?v=rev-2",
+    );
+    expect(pickBackImage(note)).toBe("");
   });
 });

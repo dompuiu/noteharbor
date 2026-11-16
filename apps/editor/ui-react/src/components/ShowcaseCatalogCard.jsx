@@ -1,4 +1,8 @@
-import { firstAvailableNoteImage } from "../lib/showcaseImages.js";
+import { useState } from "react";
+import {
+  firstAvailableNoteImage,
+  pickBackImage,
+} from "../lib/showcaseImages.js";
 import {
   formatShowcaseCatalogNumber,
   showcaseNoteTitleParts,
@@ -14,6 +18,11 @@ import { ShowcaseCatalogWell } from "./ShowcaseCatalogWell.jsx";
 // One card in a catalog Showcase. A note leaf is owned or seen; a catalog shell
 // is always unseen. The card body is one button that opens the note (or the
 // shell's finder), so keyboard navigation still sees one card per grid cell.
+// A note with a distinct back reveals a two-arrow flip control in the photo's
+// bottom-right on hover or focus; clicking it (or Shift/Ctrl + ←/→ on the
+// focused card) shows the back until the pointer or focus leaves. Activating a
+// note leaf keeps the visible face, so the image preview opens at the back when
+// the back is showing.
 // The actions menu sits after the card body in the DOM and before the ownership
 // footer, so Tab walks card → dots → ownership; the menu never nests inside a
 // button.
@@ -116,25 +125,103 @@ function CatalogGrade({ grade, layout }) {
   );
 }
 
-function CardPhoto({ image, label }) {
+function CardPhoto({
+  backPath,
+  image,
+  label,
+  onFlipClick,
+  showFlip,
+  swapped,
+}) {
+  const frontPath = image?.type === "front" ? image.path : null;
+  const soleBack = image?.type === "back";
+  const frontVisible = Boolean(frontPath) && !swapped;
+  const backVisible = Boolean(backPath) && (swapped || soleBack);
+  const backLabel = `${label} (back)`;
+
   return (
     <span className="showcase-card-image showcase-catalog-photo">
-      {image ? (
-        <img alt={label} src={image.path} />
-      ) : (
+      {frontPath ? (
+        <img
+          alt={frontVisible ? label : ""}
+          aria-hidden={frontVisible ? undefined : "true"}
+          className={`showcase-card-face${frontVisible ? " showcase-card-face--visible" : ""}`}
+          src={frontPath}
+        />
+      ) : null}
+      {backPath ? (
+        <img
+          alt={backVisible ? (swapped ? backLabel : label) : ""}
+          aria-hidden={backVisible ? undefined : "true"}
+          className={`showcase-card-face${backVisible ? " showcase-card-face--visible" : ""}`}
+          src={backPath}
+        />
+      ) : null}
+      {!image ? (
         <span className="showcase-card-no-image">No image</span>
-      )}
+      ) : null}
+      {showFlip ? (
+        <span
+          aria-hidden="true"
+          className="showcase-card-flip"
+          onClick={onFlipClick}
+          title={swapped ? "Show front" : "Show back"}
+        >
+          <svg
+            aria-hidden="true"
+            className="showcase-card-flip-icon"
+            focusable="false"
+            height="14"
+            viewBox="0 0 24 24"
+            width="14"
+          >
+            <path
+              d="M7 8h10l-3-3"
+              fill="none"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+            />
+            <path
+              d="M17 16H7l3 3"
+              fill="none"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+            />
+          </svg>
+        </span>
+      ) : null}
     </span>
   );
 }
 
-function CatalogCardFrame({ children, label, onClick, node, state, variant }) {
+function CatalogCardFrame({
+  children,
+  label,
+  onClick,
+  onKeyDown,
+  node,
+  pressed = false,
+  state,
+  toggleable = false,
+  variant,
+}) {
   return (
     <button
       aria-label={label}
-      className={`showcase-card showcase-card--catalog showcase-card--${variant} showcase-card--${state}`}
+      // Only a card with a distinct back is a face toggle; a card that can
+      // only open the viewer must not announce a pressed state it cannot
+      // change.
+      aria-pressed={
+        state === "unseen" || !toggleable ? undefined : pressed
+      }
+      className={`showcase-card showcase-card--catalog showcase-card--${variant} showcase-card--${state}${pressed ? " showcase-card--back" : ""}`}
       data-showcase-node-id={node?.id}
       onClick={onClick}
+      onKeyDown={onKeyDown}
       type="button"
     >
       {children}
@@ -152,10 +239,19 @@ function ShowcaseCatalogCard({
   onPresent,
   onToggleOwned,
 }) {
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [flipped, setFlipped] = useState(false);
   const entry = isCatalogEntry(node);
   const state = nodeCatalogState(node);
   const note = entry ? primarySpecimen(node) : node?.note;
   const image = firstAvailableNoteImage(note);
+  const backPath = pickBackImage(note);
+  // A distinct back is a front primary with a back beside it. A back-only note
+  // shows its sole image and never flips.
+  const hasDistinctBack = image?.type === "front" && Boolean(backPath);
+  const swapped = hasDistinctBack && flipped;
+  const flipVisible = hasDistinctBack && (hovered || focused || flipped);
   const label = cardLabel(node);
   const source = entry ? node.entry : note;
   const code = noteLabel(source);
@@ -163,6 +259,65 @@ function ShowcaseCatalogCard({
   const denomination = text(source?.denomination);
   const metaLine = [date, denomination].filter(Boolean).join(" · ");
   const grade = gradeOf(note);
+
+  function handleMouseEnter() {
+    setHovered(true);
+  }
+
+  function handleMouseLeave() {
+    setHovered(false);
+    // Leaving the card returns to the front, however the back was reached.
+    setFlipped(false);
+  }
+
+  function handleFocus() {
+    setFocused(true);
+  }
+
+  function handleBlur(event) {
+    // Focus moving between the card, the dots and the ownership footer is
+    // still "inside the card"; only leaving the cell returns to the front.
+    if (event.currentTarget.contains(event.relatedTarget)) {
+      return;
+    }
+
+    setFocused(false);
+    setFlipped(false);
+  }
+
+  // The flip control is a plain span (the card body is the button), so it stops
+  // the click before the card's activation runs and parks focus on the card so
+  // the back stays until focus leaves.
+  function handleFlipClick(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!hasDistinctBack) {
+      return;
+    }
+
+    setFlipped((current) => !current);
+    event.currentTarget.closest("button")?.focus();
+  }
+
+  // Shift/Ctrl + ←/→ flips the focused card; the chord stops here so the
+  // screen-level handler does not also move card focus. Plain arrows keep
+  // moving focus as before.
+  function handleKeyDown(event) {
+    const chord =
+      (event.key === "ArrowLeft" || event.key === "ArrowRight") &&
+      (event.shiftKey || event.ctrlKey) &&
+      !event.metaKey &&
+      !event.altKey;
+
+    if (!chord || !hasDistinctBack) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    setFlipped((current) => !current);
+  }
 
   if (state === "unseen") {
     const openFinder = () => onOpenFinder?.(node);
@@ -239,7 +394,7 @@ function ShowcaseCatalogCard({
       return;
     }
 
-    onOpenNote?.(node, "front");
+    onOpenNote?.(node, swapped ? "back" : "front");
   };
   const activationLabel = entry ? `Slideshow from ${label}` : label;
 
@@ -248,16 +403,30 @@ function ShowcaseCatalogCard({
       <div
         className="showcase-cell showcase-catalog-cell"
         data-showcase-node-id={node?.id}
+        onBlur={handleBlur}
+        onFocus={handleFocus}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
         <CatalogCardFrame
           label={activationLabel}
           node={node}
           onClick={openBody}
+          onKeyDown={handleKeyDown}
+          pressed={swapped}
           state={state}
+          toggleable={hasDistinctBack}
           variant="rail"
         >
           <span className="showcase-catalog-body">
-            <CardPhoto image={image} label={label} />
+            <CardPhoto
+              backPath={backPath}
+              image={image}
+              label={label}
+              onFlipClick={handleFlipClick}
+              showFlip={flipVisible}
+              swapped={swapped}
+            />
             <span className="showcase-catalog-rail">
               <span className="showcase-catalog-railtop">{grip}</span>
               <span className="showcase-catalog-kicker">Catalog</span>
@@ -286,19 +455,33 @@ function ShowcaseCatalogCard({
     <div
       className="showcase-cell showcase-catalog-cell"
       data-showcase-node-id={node?.id}
+      onBlur={handleBlur}
+      onFocus={handleFocus}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       <CatalogCardFrame
         label={activationLabel}
         node={node}
         onClick={openBody}
+        onKeyDown={handleKeyDown}
+        pressed={swapped}
         state={state}
+        toggleable={hasDistinctBack}
         variant="labels"
       >
         <span className="showcase-catalog-topline">
           {grip}
           {code ? <span className="showcase-catalog-code">{code}</span> : null}
         </span>
-        <CardPhoto image={image} label={label} />
+        <CardPhoto
+          backPath={backPath}
+          image={image}
+          label={label}
+          onFlipClick={handleFlipClick}
+          showFlip={flipVisible}
+          swapped={swapped}
+        />
         <span className="showcase-catalog-meta">
           <span className="showcase-catalog-line">{metaLine}</span>
           <CatalogGrade grade={grade} layout="labels" />

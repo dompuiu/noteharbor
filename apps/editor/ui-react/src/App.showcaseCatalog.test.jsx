@@ -1,5 +1,5 @@
 import { MemoryRouter } from "react-router-dom";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -75,14 +75,20 @@ const FRONT = (id) => ({
   localPath: `/api/images/notes/${id}/front.jpg`,
 });
 
-function note(id, { owned = true, denomination, catalog_number, issue_date }) {
+const BACK = (id) => ({
+  type: "back",
+  variant: "thumbnail",
+  localPath: `/api/images/notes/${id}/back.jpg`,
+});
+
+function note(id, { owned = true, denomination, catalog_number, issue_date, images }) {
   return {
     collection_id: 1,
     id,
     catalog_number,
     denomination,
     issue_date,
-    images: [FRONT(id)],
+    images: images ?? [FRONT(id)],
     owned,
     tags: [],
     updated_at: `rev-${id}`,
@@ -587,6 +593,108 @@ describe("the catalog checklist", () => {
         name: "Pick 25d · 1921 · 10 lei is unseen. Add notes",
       }),
     ).toBeInTheDocument();
+  });
+
+  test("a catalog entry card with a back flips in place", async () => {
+    const user = userEvent.setup();
+    const flippable = note(106, {
+      catalog_number: "26a",
+      denomination: "2 lei",
+      issue_date: "1922",
+      images: [FRONT(106), BACK(106)],
+    });
+    await openShowcase([
+      categoryNode([
+        entryNode(
+          400,
+          {
+            catalog_number: "26a",
+            denomination: "2 lei",
+            issue_date: "1922",
+            specimens: [flippable],
+            primary: flippable.id,
+          },
+          1,
+        ),
+      ]),
+    ]);
+
+    const card = await screen.findByRole("button", {
+      name: "Slideshow from Pick 26a · 1922 · 2 lei",
+    });
+    expect(card.querySelector(".showcase-card-flip")).toBeNull();
+
+    fireEvent.mouseEnter(card.closest(".showcase-cell"));
+    await user.click(card.querySelector(".showcase-card-flip"));
+
+    expect(card).toHaveAttribute("aria-pressed", "true");
+    expect(within(card).getByRole("img")).toHaveAttribute(
+      "src",
+      "/api/images/notes/106/back.jpg?v=rev-106",
+    );
+
+    await user.unhover(card);
+    expect(card).toHaveAttribute("aria-pressed", "false");
+    expect(within(card).getByRole("img")).toHaveAttribute(
+      "src",
+      "/api/images/notes/106/front.jpg?v=rev-106",
+    );
+  });
+
+  test("the flip chord flips without moving card focus", async () => {
+    const first = note(106, {
+      catalog_number: "26a",
+      denomination: "2 lei",
+      issue_date: "1922",
+      images: [FRONT(106), BACK(106)],
+    });
+    const second = note(107, {
+      catalog_number: "27a",
+      denomination: "3 lei",
+      issue_date: "1923",
+      images: [FRONT(107), BACK(107)],
+    });
+    await openShowcase([
+      categoryNode([
+        entryNode(
+          400,
+          {
+            catalog_number: "26a",
+            denomination: "2 lei",
+            issue_date: "1922",
+            specimens: [first],
+            primary: first.id,
+          },
+          1,
+        ),
+        entryNode(
+          401,
+          {
+            catalog_number: "27a",
+            denomination: "3 lei",
+            issue_date: "1923",
+            specimens: [second],
+            primary: second.id,
+          },
+          2,
+        ),
+      ]),
+    ]);
+
+    const card = await screen.findByRole("button", {
+      name: "Slideshow from Pick 26a · 1922 · 2 lei",
+    });
+    act(() => card.focus());
+
+    fireEvent.keyDown(card, { key: "ArrowRight", shiftKey: true });
+
+    expect(card).toHaveAttribute("aria-pressed", "true");
+    expect(card).toHaveFocus();
+    expect(
+      screen.getByRole("button", {
+        name: "Slideshow from Pick 27a · 1923 · 3 lei",
+      }),
+    ).not.toHaveFocus();
   });
 
   test("keeps the compact catalog code across photo sizes and moves the width", async () => {

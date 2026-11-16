@@ -6,6 +6,7 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ### Fixed
 
+- Showcase: catalog note cards with a distinct back reveal the two-arrow flip control on hover or focus again, in both the Library-label and Auction-rail layouts. Clicking it (or Shift/Ctrl + ←/→ on the focused card) shows the back without opening the slideshow; the pointer or focus leaving returns to the front, and activating a note leaf opens its image preview at the face the collector can see.
 - Showcase: choosing **Medium** in the Auction rail layout now widens the cards; the rail's fixed identity column used to floor Small and Medium to the same minimum, so the middle size changed nothing. The rail grid now gives each size its own column count, so the rows fill the canvas evenly like the Library label and each size reads differently.
 - Showcase: Tab now walks a catalog card's body, then its actions menu (the dots), then its ownership footer, and the next Tab selects the next card. Focusing the footer marks its row with a red rule and a soft tint instead of stacking a second border on the card's frame; the frame keeps its ring while focus stays anywhere inside the card.
 

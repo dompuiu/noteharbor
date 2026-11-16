@@ -1,5 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { firstAvailableNoteImage, pickNoteImage } from "../lib/showcaseImages.js";
+import {
+  firstAvailableNoteImage,
+  pickBackImage,
+} from "../lib/showcaseImages.js";
 import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 
 // The read-only Note card (presentation spec §3, §8). The front image is the
@@ -13,13 +16,6 @@ import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 // itself, but not on the flip or info controls) opens the showcase-wide image
 // preview at the currently visible face; a note without images has no preview
 // and activation is a no-op for the preview.
-function pickBackImage(note) {
-  return (
-    pickNoteImage(note, "back", "thumbnail") ||
-    pickNoteImage(note, "back", "full")
-  );
-}
-
 function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen }) {
   const editMode = mode === "edit";
   const [hovered, setHovered] = useState(false);
