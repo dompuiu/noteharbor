@@ -1509,7 +1509,7 @@ input[type="radio"] {
 }
 
 /* A focused card can only be reached outside a reorder cell (the category
-   header); inside a cell the cell itself owns the focus ring. */
+   header); inside a cell the cell itself owns the focus cue. */
 
 .showcase-card--category {
   aspect-ratio: 2 / 1;
@@ -1760,24 +1760,194 @@ input[type="radio"] {
   padding: 8px;
 }
 
-/* Focus paints the cell only, at 2px: no wash over the photo, and never a
-   second ring on the card inside it. The frame marks the focused item for as
-   long as focus stays anywhere inside it; the card's own controls mark
-   themselves without painting over the frame's edge. */
-.showcase-reorder-cell:has(:focus-visible) {
-  border-color: transparent;
-  box-shadow: inset 0 0 0 2px var(--accent);
+/* Hover draws the top rule from the card prototype. It is a 2px border on a
+   6px-tall rounded sliver, so the line follows the cell's corner radius
+   instead of stopping square at the rounding; clip-path sweeps it in from the
+   left without touching the cell's geometry. Guarded to hover-capable
+   pointers so a tap never leaves the line latched. */
+.showcase-reorder-cell::before {
+  content: "";
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 6px;
+  border-top: 2px solid var(--accent);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  clip-path: inset(0 100% 0 0);
+  pointer-events: none;
+  transition: clip-path 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.showcase-reorder-cell:has(:focus-visible) .showcase-card:focus-visible {
+@media (hover: hover) {
+  .showcase-reorder-cell:hover::before {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* On focus the rule yields to the register marks. */
+.showcase-reorder-cell:has(:focus-visible)::before {
+  clip-path: inset(0 100% 0 0);
+}
+
+/* Focus marks the item at its corners: four 18px register rules draw in while
+   focus stays anywhere inside the cell, and the catalog code turns accent. The
+   card's own controls (menu, ownership footer) still mark themselves, but the
+   registers stay put so the item never loses its cue mid-tab. The frame stays
+   bare so the specimen still reads as paper. The marks are the cell's last
+   child, above the card and the footer but under the menu. */
+.showcase-cell-marks {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.showcase-cell-mark {
+  position: absolute;
+  display: block;
+  width: 18px;
+  height: 18px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.showcase-cell-mark::before,
+.showcase-cell-mark::after {
+  content: "";
+  position: absolute;
+  border-radius: 1px;
+  background: var(--accent);
+  transform: scale(0);
+  transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.showcase-cell-mark::before {
+  width: 18px;
+  height: 2px;
+  transform-origin: left center;
+}
+
+.showcase-cell-mark::after {
+  width: 2px;
+  height: 18px;
+  transform-origin: center top;
+}
+
+.showcase-cell-mark:nth-child(1) {
+  top: 5px;
+  left: 5px;
+}
+
+.showcase-cell-mark:nth-child(2) {
+  top: 5px;
+  right: 5px;
+}
+
+.showcase-cell-mark:nth-child(2)::before {
+  right: 0;
+  left: auto;
+  transform-origin: right center;
+}
+
+.showcase-cell-mark:nth-child(2)::after {
+  right: 0;
+  transform-origin: right top;
+}
+
+.showcase-cell-mark:nth-child(3) {
+  bottom: 5px;
+  left: 5px;
+}
+
+.showcase-cell-mark:nth-child(3)::before {
+  top: auto;
+  bottom: 0;
+  transform-origin: left bottom;
+}
+
+.showcase-cell-mark:nth-child(3)::after {
+  top: auto;
+  bottom: 0;
+  transform-origin: left bottom;
+}
+
+.showcase-cell-mark:nth-child(4) {
+  right: 5px;
+  bottom: 5px;
+}
+
+.showcase-cell-mark:nth-child(4)::before {
+  top: auto;
+  right: 0;
+  bottom: 0;
+  left: auto;
+  transform-origin: right bottom;
+}
+
+.showcase-cell-mark:nth-child(4)::after {
+  top: auto;
+  right: 0;
+  bottom: 0;
+  transform-origin: right bottom;
+}
+
+.showcase-reorder-cell:has(:focus-visible) .showcase-cell-mark {
+  opacity: 1;
+}
+
+.showcase-reorder-cell:has(:focus-visible) .showcase-cell-mark::before,
+.showcase-reorder-cell:has(:focus-visible) .showcase-cell-mark::after {
+  transform: scale(1);
+}
+
+/* The marks draw corner by corner, 30ms apart, so focus reads as marked for
+   trim rather than as a frame switching on. */
+.showcase-reorder-cell:has(:focus-visible)
+  .showcase-cell-mark:nth-child(2)::before,
+.showcase-reorder-cell:has(:focus-visible)
+  .showcase-cell-mark:nth-child(2)::after {
+  transition-delay: 30ms;
+}
+
+.showcase-reorder-cell:has(:focus-visible)
+  .showcase-cell-mark:nth-child(3)::before,
+.showcase-reorder-cell:has(:focus-visible)
+  .showcase-cell-mark:nth-child(3)::after {
+  transition-delay: 60ms;
+}
+
+.showcase-reorder-cell:has(:focus-visible)
+  .showcase-cell-mark:nth-child(4)::before,
+.showcase-reorder-cell:has(:focus-visible)
+  .showcase-cell-mark:nth-child(4)::after {
+  transition-delay: 90ms;
+}
+
+.showcase-reorder-cell:has(:focus-visible) .showcase-catalog-code {
+  color: var(--accent-strong);
+}
+
+/* The card never stacks a second ring or wash on top of the cell cue; the
+   cell's menu and footer mark only themselves. */
+.showcase-reorder-cell .showcase-card:focus-visible {
   background: transparent;
   box-shadow: none;
 }
 
-/* The grouping spine is identity, not focus, so it survives the cell ring. */
-.showcase-reorder-cell:has(:focus-visible)
-  .showcase-card--grouping:focus-visible {
+/* The grouping spine is identity, not focus, so it survives the cell cue. */
+.showcase-reorder-cell .showcase-card--grouping:focus-visible {
   box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* Forced colours drop the drawn cue to system ink so keyboard focus keeps an
+   enclosing edge without the register marks' own colour. */
+@media (forced-colors: active) {
+  .showcase-reorder-cell:has(:focus-visible) {
+    outline: 2px solid CanvasText;
+    outline-offset: -2px;
+  }
 }
 
 /* The handle is a drag affordance: a quiet ghost control until hover. */
@@ -2637,6 +2807,7 @@ input[type="radio"] {
   line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 0.14s ease;
 }
 
 /* The photo well is its own hairline plate, so the specimen reads as a
@@ -3725,7 +3896,17 @@ input[type="radio"] {
   .showcase-progress-fill,
   .showcase-card-state,
   .showcase-catalog-well::after,
-  .showcase-catalog-arrow {
+  .showcase-catalog-arrow,
+  .showcase-catalog-code {
+    transition: none;
+  }
+
+  /* The hover rule and the focus marks land in one frame; the stagger is
+     decoration, so it goes with the interpolation. */
+  .showcase-reorder-cell::before,
+  .showcase-cell-mark,
+  .showcase-cell-mark::before,
+  .showcase-cell-mark::after {
     transition: none;
   }
 
