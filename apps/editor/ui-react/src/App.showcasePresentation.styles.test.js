@@ -238,3 +238,11 @@ describe("showcase note-card motion", () => {
     );
   });
 });
+
+describe("showcase drill breadcrumb", () => {
+  test("the trail keeps a gap from the filter bar's rule", () => {
+    const breadcrumb = styles.match(/\n\.showcase-breadcrumb\s*\{([^}]*)\}/);
+    expect(breadcrumb).not.toBeNull();
+    expect(breadcrumb[1]).toMatch(/margin:\s*12px\s+0\s+16px/);
+  });
+});

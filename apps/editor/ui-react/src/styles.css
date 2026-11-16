@@ -1578,12 +1578,13 @@ input[type="radio"] {
 }
 
 /* The drill navigation: a breadcrumb back through the ancestors. One
-   level shows at a time, so this is the only way up. */
+   level shows at a time, so this is the only way up. The top margin holds the
+   trail off the filter bar's rule; without it the trail sat on the line. */
 .showcase-breadcrumb {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  margin: 12px 0 16px;
   flex-wrap: wrap;
 }
 
