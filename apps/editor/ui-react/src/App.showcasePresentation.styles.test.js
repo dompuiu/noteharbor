@@ -25,20 +25,45 @@ describe("showcase empty-state styles", () => {
     expect(box[1]).toMatch(/gap:\s*\d/);
   });
 
-  test("the create tiles use a dashed border with the accent label", () => {
-    const tile = styles.match(/\n\.showcase-tile\s*\{([^}]*)\}/);
-    expect(tile).not.toBeNull();
-    expect(tile[1]).toMatch(/border:\s*2px\s+dashed/);
-    expect(tile[1]).toMatch(/color:\s*var\(--accent-strong\)/);
+  test("the add affordances are flat ghost surfaces, not dashed placeholders", () => {
+    const ghost = styles.match(/\n\.showcase-ghost-add\s*\{([^}]*)\}/);
+    expect(ghost).not.toBeNull();
+    expect(ghost[1]).toMatch(/border:\s*1px solid var\(--border-soft\)/);
+    expect(ghost[1]).toMatch(/background:\s*var\(--surface\)/);
+    expect(ghost[1]).toMatch(/flex-direction:\s*column/);
+    expect(ghost[1]).not.toMatch(/dashed/);
   });
 
-  test("the centered tile matches the prototype button width", () => {
-    const centered = styles.match(
-      /\n\.showcase-tile--centered\s*\{([^}]*)\}/,
+  test("the ghost plus sits in a circle and fills red on hover", () => {
+    const plus = styles.match(/\n\.showcase-ghost-add-plus\s*\{([^}]*)\}/);
+    expect(plus).not.toBeNull();
+    expect(plus[1]).toMatch(/width:\s*34px/);
+    expect(plus[1]).toMatch(/height:\s*34px/);
+    expect(plus[1]).toMatch(/border-radius:\s*50%/);
+    expect(styles).toMatch(
+      /\.showcase-ghost-add:hover \.showcase-ghost-add-plus\s*\{[^}]*background:\s*var\(--accent-strong\)/,
     );
-    expect(centered).not.toBeNull();
+  });
+
+  test("the root and empty-state variants read as one-line bars", () => {
+    const bars = styles.match(
+      /\.showcase-ghost-add--bar,\s*\n\.showcase-ghost-add--centered\s*\{([^}]*)\}/,
+    );
+    expect(bars).not.toBeNull();
+    expect(bars[1]).toMatch(/flex-direction:\s*row/);
+    expect(bars[1]).toMatch(/min-height:\s*56px/);
+    expect(bars[1]).toMatch(/text-align:\s*left/);
+  });
+
+  test("the centered ghost bar matches the empty-state button width", () => {
+    const centered = [
+      ...styles.matchAll(/\n\.showcase-ghost-add--centered\s*\{([^}]*)\}/g),
+    ].at(-1);
+    expect(centered).toBeDefined();
     expect(centered[1]).toMatch(/max-width:\s*320px/);
     expect(centered[1]).toMatch(/margin:\s*0\s+auto/);
+    expect(centered[1]).toMatch(/justify-content:\s*center/);
+    expect(centered[1]).toMatch(/text-align:\s*center/);
   });
 });
 
@@ -90,17 +115,15 @@ describe("showcase note/grouping card heights", () => {
     expect(fill[1]).toMatch(/background:\s*transparent/);
   });
 
-  test("add tiles never drive the edit row taller than a note", () => {
-    // The tiles stretch by design (flex children), so their minimum must sit
-    // at or below the true note height (min / 2 + ~49px of chrome: the 34px
-    // title bar, the 6px cell pad, borders, and the 8px card pads). Anything
-    // above stretches the whole grid row and leaves dead space under cards,
-    // which reads as extra gap on photo sizes whose columns sit near the min.
-    const tiles = styles.match(/\n\.showcase-add-tiles\s*\{([^}]*)\}/);
-    expect(tiles).not.toBeNull();
-    expect(tiles[1]).toMatch(
-      /min-height:\s*calc\(var\(--showcase-card-min,\s*200px\)\s*\/\s*2\s*\+\s*49px\)/,
-    );
+  test("the ghost card keeps a 120px floor while the grid stretches it", () => {
+    // The grid stretches the card to the row like a note; the floor only
+    // keeps an otherwise empty level from collapsing. No calc here, so it
+    // can never push the row taller than the notes.
+    const card = styles.match(/\n\.showcase-add-card\s*\{([^}]*)\}/);
+    expect(card).not.toBeNull();
+    expect(card[1]).toMatch(/height:\s*100%/);
+    expect(card[1]).toMatch(/min-height:\s*120px/);
+    expect(card[1]).not.toMatch(/calc/);
   });
 
   test("grouping footer shares the caption's line metrics", () => {

@@ -162,7 +162,7 @@ describe("Showcase view", () => {
       await screen.findByText("This showcase is empty."),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Create a category" }),
+      screen.getByRole("button", { name: "New category" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Rename showcase: Summer" }),

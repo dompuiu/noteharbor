@@ -1,13 +1,13 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { HighlightMatch, rankTagSuggestions } from "./TagsField.jsx";
+import { ShowcaseGhostAdd } from "./ShowcaseGhostAdd.jsx";
 
-// Shared edit-only `+ create a …` tile. Clicking it reveals a name field; a
-// Category tile also offers the shared label pool as combobox suggestions while
-// a Grouping tile takes a name only. `noun` drives the rendered labels
-// ("Create a category" / "create a category") and the error wording.
-// `closedLabel` overrides both the closed button's accessible name and its
-// visible text (the grouping tile reads `+ Add grouping`).
+// Shared `+ add …` control. Clicking it reveals a name field; a Category tile
+// also offers the shared label pool as combobox suggestions while a Grouping
+// tile takes a name only. `noun` drives the closed label and the error wording
+// (`New category`); `closedLabel` overrides both the closed button's accessible
+// name and its visible text (the grouping tile reads `+ Add grouping`).
 //
 // The category field is a single-value combobox in the TagsField's visual and
 // interaction language: the list stays shut until ArrowUp/Down, typing, or
@@ -20,6 +20,7 @@ function ShowcaseCreateTile({
   inputLabel,
   addLabel,
   closedLabel = null,
+  hint = null,
   suggestions = [],
   combobox = false,
   centered = false,
@@ -96,21 +97,17 @@ function ShowcaseCreateTile({
 
   if (!open) {
     return (
-      <button
-        aria-label={closedLabel ?? `Create a ${noun}`}
-        className={`showcase-tile showcase-tile--create${centered ? " showcase-tile--centered" : ""}`}
+      <ShowcaseGhostAdd
+        ariaLabel={closedLabel ?? `New ${noun}`}
+        hint={hint}
+        label={closedLabel ?? `New ${noun}`}
         onClick={() => {
           setOpen(true);
           setIsOpen(false);
           setHighlighted(-1);
         }}
-        type="button"
-      >
-        <span aria-hidden="true" className="showcase-tile-plus">
-          +
-        </span>
-        {closedLabel ?? `New ${noun}`}
-      </button>
+        variant={centered ? "centered" : "bar"}
+      />
     );
   }
 

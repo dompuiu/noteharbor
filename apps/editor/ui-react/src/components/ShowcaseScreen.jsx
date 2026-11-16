@@ -92,6 +92,11 @@ function focusShowcaseControl(sectionRef, selector) {
   });
 }
 
+// One selector for the canvas's focusable card stops: real cards plus the
+// ghost add cards at each level. Keeping it in one place stops the keyboard
+// walk and the click target from drifting apart.
+const SHOWCASE_CARD_SELECTOR = ".showcase-card, .showcase-ghost-add";
+
 const CATALOG_FILTERS = [
   { value: "all", label: "All" },
   {
@@ -1177,9 +1182,7 @@ function ShowcaseScreen() {
       return [];
     }
 
-    return Array.from(
-      root.querySelectorAll(".showcase-card, .showcase-tile"),
-    );
+    return Array.from(root.querySelectorAll(SHOWCASE_CARD_SELECTOR));
   }
 
   function focusedShowcaseCard() {
@@ -1190,10 +1193,10 @@ function ShowcaseScreen() {
     }
 
     return (
-      active.closest(".showcase-card, .showcase-tile") ??
+      active.closest(SHOWCASE_CARD_SELECTOR) ??
       active
         .closest(".showcase-reorder-cell, .showcase-cell")
-        ?.querySelector(".showcase-card, .showcase-tile") ??
+        ?.querySelector(".showcase-card") ??
       null
     );
   }

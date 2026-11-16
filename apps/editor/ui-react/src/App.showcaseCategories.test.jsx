@@ -131,7 +131,7 @@ describe("the showcase category canvas", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("0 entries")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Create a category" }),
+      screen.getByRole("button", { name: "New category" }),
     ).toBeInTheDocument();
   });
 
@@ -165,7 +165,7 @@ describe("the showcase category canvas", () => {
       await screen.findByRole("heading", { name: "Summer" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Create a category" }),
+      screen.getByRole("button", { name: "New category" }),
     ).toBeInTheDocument();
   });
 
@@ -243,7 +243,7 @@ describe("the showcase category canvas", () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
     await user.click(
-      await screen.findByRole("button", { name: "Create a category" }),
+      await screen.findByRole("button", { name: "New category" }),
     );
     await user.type(screen.getByLabelText("Category name"), "Winter");
     await user.click(screen.getByRole("button", { name: "Add category" }));
@@ -265,7 +265,7 @@ describe("the showcase category canvas", () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     await user.click(
-      await screen.findByRole("button", { name: "Create a category" }),
+      await screen.findByRole("button", { name: "New category" }),
     );
     const input = screen.getByLabelText("Category name");
     await user.type(input, "v");
@@ -284,7 +284,7 @@ describe("the showcase category canvas", () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     await user.click(
-      await screen.findByRole("button", { name: "Create a category" }),
+      await screen.findByRole("button", { name: "New category" }),
     );
 
     // Like the tags field: the list opens on demand, not with the field.
@@ -302,7 +302,7 @@ describe("the showcase category canvas", () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     await user.click(
-      await screen.findByRole("button", { name: "Create a category" }),
+      await screen.findByRole("button", { name: "New category" }),
     );
     await user.keyboard("{ArrowDown}");
 
@@ -318,7 +318,7 @@ describe("the showcase category canvas", () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     await user.click(
-      await screen.findByRole("button", { name: "Create a category" }),
+      await screen.findByRole("button", { name: "New category" }),
     );
     // The list is open; Esc skips dismissing just the list and closes
     // the whole tile instead.
@@ -333,7 +333,7 @@ describe("the showcase category canvas", () => {
       screen.queryByLabelText("Category name"),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Create a category" }),
+      screen.getByRole("button", { name: "New category" }),
     ).toBeInTheDocument();
   });
   test("renaming a category writes immediately from its menu", async () => {

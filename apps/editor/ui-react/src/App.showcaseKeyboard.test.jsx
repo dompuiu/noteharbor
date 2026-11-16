@@ -277,7 +277,7 @@ describe("moving card focus", () => {
     const { note } = await firstContentCards();
 
     fireEvent.keyDown(document.body, { key: "End" });
-    expect(screen.getByRole("button", { name: "Create a category" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "New category" })).toHaveFocus();
 
     fireEvent.keyDown(document.body, { key: "Home" });
     expect(note).toHaveFocus();
@@ -292,7 +292,9 @@ describe("moving card focus", () => {
 
     await screen.findAllByRole("button", { name: /^1 leu, 1917 #/ });
     const cards = Array.from(
-      document.querySelectorAll(".showcase-screen .showcase-card, .showcase-screen .showcase-tile"),
+      document.querySelectorAll(
+        ".showcase-screen .showcase-card, .showcase-screen .showcase-ghost-add",
+      ),
     );
     stubGridRects(cards, 3, { height: 100 });
     Object.defineProperty(window, "innerHeight", {

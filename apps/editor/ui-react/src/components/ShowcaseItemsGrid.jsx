@@ -6,7 +6,7 @@ import {
 } from "../lib/showcaseTree.js";
 import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
-import { ShowcaseAddTiles } from "./ShowcaseAddTiles.jsx";
+import { ShowcaseAddCard } from "./ShowcaseAddCard.jsx";
 import { ShowcaseCatalogCard } from "./ShowcaseCatalogCard.jsx";
 import { ShowcaseGrid } from "./ShowcaseGrid.jsx";
 import { ShowcaseGroupingCard } from "./ShowcaseGroupingCard.jsx";
@@ -225,7 +225,7 @@ function ShowcaseItemsGrid({
 
         return null;
       })}
-      <ShowcaseAddTiles onClick={() => onAdd(parent)} />
+      <ShowcaseAddCard onAdd={() => onAdd(parent)} />
     </ShowcaseGrid>
   );
 }
