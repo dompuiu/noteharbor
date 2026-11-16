@@ -98,8 +98,9 @@ function ShowcaseReorderableCell({
         </>
       )}
       {/* The focus registers: four corner marks the stylesheet draws around
-          the item while focus stays inside it. They live outside the card so a
-          card can never clip them, and they are decoration, never a target. */}
+          the item while the card body holds focus. They live outside the card
+          so a card can never clip them, and they are decoration, never a
+          target. */}
       <span aria-hidden="true" className="showcase-cell-marks">
         <span className="showcase-cell-mark" />
         <span className="showcase-cell-mark" />

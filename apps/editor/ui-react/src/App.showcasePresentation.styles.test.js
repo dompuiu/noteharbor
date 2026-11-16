@@ -202,10 +202,16 @@ describe("showcase focus: register marks", () => {
     );
 
     const marks = styles.match(
-      /\.showcase-reorder-cell:has\(:focus-visible\) \.showcase-cell-mark\s*\{([^}]*)\}/,
+      /\.showcase-reorder-cell:has\(\.showcase-card:focus-visible\) \.showcase-cell-mark\s*\{([^}]*)\}/,
     );
     expect(marks).not.toBeNull();
     expect(marks[1]).toMatch(/opacity:\s*1/);
+  });
+
+  test("the marks belong to the card body, not the cell's other controls", () => {
+    expect(styles).not.toMatch(
+      /\.showcase-reorder-cell:has\(:focus-visible\) \.showcase-cell-mark/,
+    );
   });
 
   test("the marks overlay stays decoration for pointer and assistive tech", () => {
@@ -233,7 +239,7 @@ describe("showcase focus: register marks", () => {
     const stagger = (corner) =>
       styles.match(
         new RegExp(
-          `\\.showcase-reorder-cell:has\\(:focus-visible\\)\\s+\\.showcase-cell-mark:nth-child\\(${corner}\\)::before,[\\s\\S]*?` +
+          `\\.showcase-reorder-cell:has\\(\\.showcase-card:focus-visible\\)\\s+\\.showcase-cell-mark:nth-child\\(${corner}\\)::before,[\\s\\S]*?` +
             `nth-child\\(${corner}\\)::after\\s*\\{([^}]*)\\}`,
         ),
       );
@@ -266,15 +272,15 @@ describe("showcase focus: register marks", () => {
 
   test("focus yields the line to the marks", () => {
     const rule = styles.match(
-      /\.showcase-reorder-cell:has\(:focus-visible\)::before\s*\{([^}]*)\}/,
+      /\.showcase-reorder-cell:has\(\.showcase-card:focus-visible\)::before\s*\{([^}]*)\}/,
     );
     expect(rule).not.toBeNull();
     expect(rule[1]).toMatch(/clip-path:\s*inset\(0 100% 0 0\)/);
   });
 
-  test("the catalog code turns accent while focus stays in the cell", () => {
+  test("the catalog code turns accent while the card holds focus", () => {
     const code = styles.match(
-      /\.showcase-reorder-cell:has\(:focus-visible\) \.showcase-catalog-code\s*\{([^}]*)\}/,
+      /\.showcase-reorder-cell:has\(\.showcase-card:focus-visible\) \.showcase-catalog-code\s*\{([^}]*)\}/,
     );
     expect(code).not.toBeNull();
     expect(code[1]).toMatch(/color:\s*var\(--accent-strong\)/);

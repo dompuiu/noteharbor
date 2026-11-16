@@ -2722,13 +2722,13 @@ describe("slideshow overlay styles", () => {
     expect(panel[1]).toMatch(/overflow-y:\s*auto/);
   });
 
-  // The always-editable canvas marks focus once, on the cell, for as long as
-  // focus stays anywhere inside the item: the card inside is neutralised so it
-  // cannot stack a second ring or wash, and the cell's cue is four register
-  // marks that survive a move to the menu or the ownership footer.
+  // The always-editable canvas marks focus on the card body: the card inside
+  // is neutralised so it cannot stack a second ring or wash, and the cell cue
+  // is four register marks. Moving to the menu or the ownership footer clears
+  // them there, so only one focus plane shows at a time.
   test("the showcase cell owns the only focus cue", () => {
     expect(styles).toMatch(
-      /\.showcase-reorder-cell:has\(:focus-visible\) \.showcase-cell-mark\s*\{[^}]*opacity:\s*1/,
+      /\.showcase-reorder-cell:has\(\.showcase-card:focus-visible\) \.showcase-cell-mark\s*\{[^}]*opacity:\s*1/,
     );
     expect(styles).not.toMatch(
       /\.showcase-reorder-cell:has\(:focus-visible\)\s*\{[^}]*box-shadow:\s*inset 0 0 0 2px var\(--accent\)/,
