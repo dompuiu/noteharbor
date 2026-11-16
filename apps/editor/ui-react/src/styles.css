@@ -1217,14 +1217,58 @@ input[type="radio"] {
   align-items: stretch;
 }
 
-/* The Auction rail's fixed identity column leaves so little difference
-   between the Medium and Large card widths that a stretched track can render
-   both at the same width. The rail grid gives each card its measured width
-   instead, packing the shelf from the left and leaving the trailing space
-   open, so every size stays visibly distinct. */
-.showcase-grid[data-catalog-layout="rail"] {
-  grid-template-columns: repeat(auto-fill, var(--showcase-card-min, 330px));
-  justify-content: start;
+/* The Auction rail fills its row exactly like the Library label, but its
+   fixed identity column leaves too little room between the photo-size
+   minimums for three stretched auto-fill tracks to stay distinct. Each rail
+   size therefore names a column count: every card in a row shares a width,
+   the row still fills, and the three sizes always read differently. Narrower
+   canvases step the counts down so the identity column never swallows the
+   photo. */
+.showcase-grid[data-catalog-layout="rail"][data-photo-size="small"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.showcase-grid[data-catalog-layout="rail"][data-photo-size="medium"],
+.showcase-grid[data-catalog-layout="rail"][data-photo-size="large"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@container showcase-shell (min-width: 960px) {
+  .showcase-grid[data-catalog-layout="rail"][data-photo-size="small"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .showcase-grid[data-catalog-layout="rail"][data-photo-size="medium"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container showcase-shell (min-width: 1320px) {
+  .showcase-grid[data-catalog-layout="rail"][data-photo-size="small"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .showcase-grid[data-catalog-layout="rail"][data-photo-size="medium"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .showcase-grid[data-catalog-layout="rail"][data-photo-size="large"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container showcase-shell (min-width: 1720px) {
+  .showcase-grid[data-catalog-layout="rail"][data-photo-size="small"] {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .showcase-grid[data-catalog-layout="rail"][data-photo-size="medium"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .showcase-grid[data-catalog-layout="rail"][data-photo-size="large"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 /* View mode keeps natural card heights; edit mode stretches so each bordered
@@ -4023,6 +4067,12 @@ input[type="radio"] {
 .screen-stack.showcase-screen > .screen-body {
   overflow-y: auto;
   overflow-x: hidden;
+  /* Query container for the catalog grids: the rail picks its column counts
+     from the canvas width, so a pinned sidebar narrows the cards with the
+     page instead of keeping a viewport-sized shelf. Inline-size containment
+     leaves the vertical scroll and flex stretching alone. */
+  container-type: inline-size;
+  container-name: showcase-shell;
 }
 
 /* ── Connection notice ──────────────────────────────────────────────
@@ -9348,19 +9398,22 @@ button.tag {
   white-space: nowrap;
 }
 
-/* One report for the last scrape, beside the action that ran it. The count
-   names what changed and the undo restores every field the scrape wrote. */
+/* One report for the last scrape, pinned to the URL field's label row. The
+   count names what changed and the undo restores every field the scrape
+   wrote. Sharing the label row keeps the report from adding a content row,
+   so the field paired with URL is never stretched to match it. */
 .scrape-result {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
-  padding: 8px 12px;
-  border-left: 3px solid var(--success);
-  border-radius: var(--radius-sm);
+  gap: 6px;
+  min-width: 0;
+  margin-left: 4px;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
   background: var(--success-bg);
   color: var(--success);
-  font-size: 0.86rem;
+  font-size: 0.78rem;
   font-weight: 600;
 }
 
@@ -9408,6 +9461,12 @@ button.tag {
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+/* The URL label carries the scrape report beside it; on a narrow column the
+   chip drops under the label instead of pushing past the field's edge. */
+.url-label-row {
+  flex-wrap: wrap;
 }
 
 .field-source-badge {

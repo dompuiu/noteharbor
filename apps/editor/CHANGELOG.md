@@ -6,7 +6,7 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ### Fixed
 
-- Showcase: choosing **Medium** in the Auction rail layout now widens the cards; the rail's fixed identity column used to floor Small and Medium to the same track, so the middle size changed nothing. The rail grid now keeps every card at the width its size names instead of stretching a shared track, so all three sizes stay visibly distinct.
+- Showcase: choosing **Medium** in the Auction rail layout now widens the cards; the rail's fixed identity column used to floor Small and Medium to the same minimum, so the middle size changed nothing. The rail grid now gives each size its own column count, so the rows fill the canvas evenly like the Library label and each size reads differently.
 - Showcase: Tab now walks a catalog card's body, then its actions menu (the dots), then its ownership footer, and the next Tab selects the next card. Focusing the footer marks its row with a red rule and a soft tint instead of stacking a second border on the card's frame; the frame keeps its ring while focus stays anywhere inside the card.
 
 ### Changed

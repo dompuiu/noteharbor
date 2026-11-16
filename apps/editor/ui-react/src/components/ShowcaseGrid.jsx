@@ -1,7 +1,4 @@
-import {
-  minWidthForCatalogLayout,
-  normalizeCatalogLayout,
-} from "../lib/catalogLayout.js";
+import { normalizeCatalogLayout } from "../lib/catalogLayout.js";
 import { minWidthForPhotoSize, normalizePhotoSize } from "../lib/photoSize.js";
 
 // The shared card grid for a Showcase. It is presentation only: the photo size
@@ -11,11 +8,10 @@ import { minWidthForPhotoSize, normalizePhotoSize } from "../lib/photoSize.js";
 // size is also exposed as `data-photo-size`, so a narrow card can tighten its
 // own chrome without JavaScript reading the size again.
 //
-// A catalog Showcase also passes `catalogLayout`. It changes the minimum width
-// (the Auction rail needs its fixed identity column) and is exposed as
-// `data-catalog-layout`, so the card chrome can respond without reading the
-// preference again. Presentation-only showcases leave it null and keep the
-// plain photo-size grid.
+// A catalog Showcase also passes `catalogLayout`. It is exposed as
+// `data-catalog-layout`, so the card chrome and the rail's column counts can
+// respond without reading the preference again. Presentation-only showcases
+// leave it null and keep the plain photo-size grid.
 function ShowcaseGrid({
   catalogLayout = null,
   children,
@@ -23,9 +19,7 @@ function ShowcaseGrid({
   size = "small",
 }) {
   const layout = catalogLayout ? normalizeCatalogLayout(catalogLayout) : null;
-  const minWidth = layout
-    ? minWidthForCatalogLayout(layout, size)
-    : minWidthForPhotoSize(size);
+  const minWidth = minWidthForPhotoSize(size);
 
   return (
     <div

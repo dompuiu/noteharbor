@@ -7,6 +7,33 @@ import { describe, expect, test } from "vitest";
 // reads its minimum card width from the custom property the control sets.
 const styles = readFileSync(join(process.cwd(), "src", "styles.css"), "utf8");
 
+// Returns the whole at-rule body (nested rules included) that starts at
+// `header`, so the rail's container query contents can be asserted without
+// trusting where the file happens to end them.
+function atRule(source, header) {
+  const start = source.indexOf(header);
+
+  if (start < 0) {
+    return null;
+  }
+
+  let depth = 0;
+
+  for (let index = source.indexOf("{", start); index < source.length; index += 1) {
+    if (source[index] === "{") {
+      depth += 1;
+    } else if (source[index] === "}") {
+      depth -= 1;
+
+      if (depth === 0) {
+        return source.slice(start, index + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
 describe("showcase photo size styles", () => {
   test("the grid auto-fills from the photo-size custom property with a 16px gap", () => {
     const rule = styles.match(/\n\.showcase-grid\s*\{([^}]*)\}/);
@@ -18,18 +45,60 @@ describe("showcase photo size styles", () => {
     expect(rule[1]).toMatch(/gap:\s*16px/);
   });
 
-  // A stretched minmax() track can render two rail sizes at the same width
-  // once they land in the same column count, so the rail grid keeps each card
-  // at the width its size names.
-  test("the Auction rail grid keeps each card at its measured width", () => {
-    const rule = styles.match(
-      /\.showcase-grid\[data-catalog-layout="rail"\]\s*\{([^}]*)\}/,
+  // Auto-fill picks the same column count for two rail minimums at many
+  // widths, so the rail names a count per size: the row fills, and each size
+  // keeps a width of its own.
+  test("the Auction rail fills its row with a column count per size", () => {
+    const small = styles.match(
+      /\.showcase-grid\[data-catalog-layout="rail"\]\[data-photo-size="small"\]\s*\{([^}]*)\}/,
     );
-    expect(rule).not.toBeNull();
-    expect(rule[1]).toMatch(
-      /grid-template-columns:\s*repeat\(auto-fill,\s*var\(--showcase-card-min,\s*330px\)\)/,
+    expect(small).not.toBeNull();
+    expect(small[1]).toMatch(
+      /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
     );
-    expect(rule[1]).toMatch(/justify-content:\s*start/);
+
+    const singleColumn = styles.match(
+      /\.showcase-grid\[data-catalog-layout="rail"\]\[data-photo-size="medium"\],\s*\.showcase-grid\[data-catalog-layout="rail"\]\[data-photo-size="large"\]\s*\{([^}]*)\}/,
+    );
+    expect(singleColumn).not.toBeNull();
+    expect(singleColumn[1]).toMatch(
+      /grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    );
+  });
+
+  test("the rail's column counts step up with the canvas width", () => {
+    const wide = atRule(styles, "@container showcase-shell (min-width: 1320px)");
+    expect(wide).not.toBeNull();
+    expect(wide).toMatch(
+      /\[data-photo-size="small"\]\s*\{[^}]*repeat\(4,\s*minmax\(0,\s*1fr\)\)/,
+    );
+    expect(wide).toMatch(
+      /\[data-photo-size="medium"\]\s*\{[^}]*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+    );
+    expect(wide).toMatch(
+      /\[data-photo-size="large"\]\s*\{[^}]*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
+    );
+
+    const widest = atRule(styles, "@container showcase-shell (min-width: 1720px)");
+    expect(widest).not.toBeNull();
+    expect(widest).toMatch(
+      /\[data-photo-size="small"\]\s*\{[^}]*repeat\(5,\s*minmax\(0,\s*1fr\)\)/,
+    );
+    expect(widest).toMatch(
+      /\[data-photo-size="medium"\]\s*\{[^}]*repeat\(4,\s*minmax\(0,\s*1fr\)\)/,
+    );
+    expect(widest).toMatch(
+      /\[data-photo-size="large"\]\s*\{[^}]*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+    );
+  });
+
+  test("the rail's column queries measure the canvas, not the viewport", () => {
+    const body = styles.match(
+      /\.screen-stack\.showcase-screen > \.screen-body\s*\{([^}]*)\}/,
+    );
+    expect(body).not.toBeNull();
+    expect(body[1]).toMatch(/container-type:\s*inline-size/);
+    expect(body[1]).toMatch(/container-name:\s*showcase-shell/);
   });
 
   test("marks the chosen size with the surface disc and its own ring", () => {

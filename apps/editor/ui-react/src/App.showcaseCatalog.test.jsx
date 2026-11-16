@@ -326,14 +326,17 @@ describe("the catalog card layouts", () => {
     ).toBeNull();
   });
 
-  test("switches layouts, gives the rail its own width scale, and remembers the choice", async () => {
+  test("switches layouts, keeps the photo size, and remembers the choice", async () => {
     const user = userEvent.setup();
     const view = await openShowcase();
 
     await user.click(layoutGroup().getByRole("radio", { name: "Auction rail" }));
 
     expect(grid()).toHaveAttribute("data-catalog-layout", "rail");
-    expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("330px");
+    // The rail sizes its cards by column count; the photo size still feeds
+    // the labels grid and the grid's data attribute.
+    expect(grid()).toHaveAttribute("data-photo-size", "small");
+    expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("200px");
     expect(
       view.container.querySelector(".showcase-catalog-cell .showcase-card--rail"),
     ).not.toBeNull();
@@ -341,16 +344,17 @@ describe("the catalog card layouts", () => {
       "rail",
     );
 
-    // Every photo size keeps its own track in the rail's scale.
     await user.click(screen.getByRole("radio", { name: "Medium" }));
-    expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("405px");
+    expect(grid()).toHaveAttribute("data-photo-size", "medium");
+    expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("320px");
 
     await user.click(screen.getByRole("radio", { name: "Large" }));
+    expect(grid()).toHaveAttribute("data-photo-size", "large");
     expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("480px");
 
-    // Stepping back down restores each rail track on the way.
     await user.click(screen.getByRole("radio", { name: "Small" }));
-    expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("330px");
+    expect(grid()).toHaveAttribute("data-photo-size", "small");
+    expect(grid().style.getPropertyValue("--showcase-card-min")).toBe("200px");
 
     await user.click(layoutGroup().getByRole("radio", { name: "Library label" }));
     expect(grid()).toHaveAttribute("data-catalog-layout", "labels");
