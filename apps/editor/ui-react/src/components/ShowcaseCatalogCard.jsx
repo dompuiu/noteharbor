@@ -342,7 +342,7 @@ function ShowcaseCatalogCard({
           data-showcase-node-id={node?.id}
         >
           <CatalogCardFrame
-            label={`${label} is unseen. Add notes`}
+            label={`${label} is unseen. Replace with note`}
             node={node}
             onClick={openFinder}
             state={state}
@@ -365,7 +365,7 @@ function ShowcaseCatalogCard({
                 </span>
               </span>
             </span>
-            <span className="showcase-catalog-add">Add first note →</span>
+            <span className="showcase-catalog-add">Replace with note →</span>
           </CatalogCardFrame>
           {menu}
         </div>
@@ -378,7 +378,7 @@ function ShowcaseCatalogCard({
         data-showcase-node-id={node?.id}
       >
         <CatalogCardFrame
-          label={`${label} is unseen. Add notes`}
+          label={`${label} is unseen. Replace with note`}
           node={node}
           onClick={openFinder}
           state={state}
@@ -394,7 +394,7 @@ function ShowcaseCatalogCard({
           <span className="showcase-catalog-meta">
             <span className="showcase-catalog-line">{metaLine}</span>
           </span>
-          <span className="showcase-catalog-add">Add first note →</span>
+          <span className="showcase-catalog-add">Replace with note →</span>
         </CatalogCardFrame>
         {menu}
       </div>

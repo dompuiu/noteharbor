@@ -7,7 +7,7 @@ function ShowcaseAddCard({ onAdd }) {
   return (
     <ShowcaseGhostAdd
       ariaLabel="Add to this level"
-      hint="Note · Catalog shell · Grouping"
+      hint="Note · Placeholder · Grouping"
       label="Add to this level"
       onClick={onAdd}
     />

@@ -67,7 +67,7 @@ function ShowcaseItemMenu({
     onAddCatalogShell
       ? {
           key: "shell",
-          label: "Add catalog shell after",
+          label: "Add placeholder after",
           icon: "shell-add",
           run: onAddCatalogShell,
         }

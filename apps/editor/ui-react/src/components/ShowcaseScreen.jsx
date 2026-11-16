@@ -103,19 +103,19 @@ const CATALOG_FILTERS = [
     value: "owned",
     label: "Owned",
     emptyText:
-      "Mark a seen note owned, or add a catalog shell, to start the checklist.",
+      "Mark a seen note owned, or add a placeholder, to start the checklist.",
     emptyTitle: "No owned cards.",
   },
   {
     value: "seen",
     label: "Seen",
-    emptyText: "Every card in this showcase is owned or still a shell.",
+    emptyText: "Every card in this showcase is owned or still a placeholder.",
     emptyTitle: "No seen cards.",
   },
   {
     value: "unseen",
     label: "Unseen",
-    emptyText: "Every catalog shell already has a note.",
+    emptyText: "Every placeholder already has a note.",
     emptyTitle: "No unseen cards.",
   },
 ];
@@ -539,7 +539,7 @@ function ShowcaseScreen() {
 
   async function handleAddShells(entries) {
     if (!addTarget?.parent?.id) {
-      throw new Error("A catalog shell needs a category or grouping.");
+      throw new Error("A placeholder needs a category or grouping.");
     }
 
     const created = [];
@@ -556,7 +556,7 @@ function ShowcaseScreen() {
       await placeCreated(addTarget.parent.id, addTarget.afterId, created);
       setActionError("");
     } catch (error) {
-      reportActionError(error, "Could not add the catalog shells.");
+      reportActionError(error, "Could not add the placeholders.");
       throw error;
     }
   }
@@ -734,7 +734,7 @@ function ShowcaseScreen() {
       replaceServerNode(node);
       setActionError("");
     } catch (error) {
-      reportActionError(error, "Could not save the catalog shell.");
+      reportActionError(error, "Could not save the placeholder.");
       throw error;
     }
   }
@@ -766,14 +766,14 @@ function ShowcaseScreen() {
       }
 
       if (!replaced || replaced.node_type !== "note" || replaced.note_id !== noteId) {
-        throw new Error("The catalog shell was not replaced.");
+        throw new Error("The placeholder was not replaced.");
       }
 
       replaceServerNode(replaced);
       setReplaceShellId(null);
       setActionError("");
       refreshShowcases?.().catch(() => {});
-      toastHost?.current?.show("Catalog shell replaced with a note.", "success");
+      toastHost?.current?.show("Placeholder replaced with a note.", "success");
     } catch (error) {
       reportActionError(error, "Could not replace the shell.");
       throw error;
@@ -1690,8 +1690,8 @@ function ShowcaseScreen() {
           <div className="showcase-empty-box">
             <p className="showcase-empty-title">This showcase is empty.</p>
             <p className="showcase-empty-text muted">
-              Start with a category, then add notes, groupings, and catalog
-              shells inside it.
+              Start with a category, then add notes, groupings, and placeholders
+              inside it.
             </p>
             <ShowcaseCategoryTile
               categories={availableCategories}
@@ -1799,7 +1799,7 @@ function ShowcaseScreen() {
         <ShowcaseDialog
           onClose={() => setEditShellId(null)}
           subtitle="Only this planned card's catalog metadata changes."
-          title="Edit catalog shell"
+          title="Edit placeholder"
         >
           <ShowcaseCatalogShellForm
             entry={editShellNode.entry}

@@ -261,7 +261,7 @@ describe("the merged add dialog", () => {
     });
   });
 
-  test("the Catalog shell tab creates planned shells with no note", async () => {
+  test("the Placeholder tab creates planned placeholders with no note", async () => {
     createCatalogEntry.mockResolvedValue({
       node: {
         id: 301,
@@ -279,10 +279,10 @@ describe("the merged add dialog", () => {
     });
 
     const { user, dialog } = await openAddDialog();
-    await user.click(within(dialog).getByRole("tab", { name: "Catalog shell" }));
+    await user.click(within(dialog).getByRole("tab", { name: "Placeholder" }));
     await user.type(within(dialog).getByLabelText("Catalog numbers"), "500");
     await user.click(
-      within(dialog).getByRole("button", { name: "Add 1 shell" }),
+      within(dialog).getByRole("button", { name: "Add 1 placeholder" }),
     );
 
     await waitFor(() => {
@@ -297,7 +297,7 @@ describe("the merged add dialog", () => {
       });
     });
     expect(
-      await screen.findByRole("button", { name: /is unseen\. Add notes/ }),
+      await screen.findByRole("button", { name: /is unseen\. Replace with note/ }),
     ).toBeInTheDocument();
   });
 });

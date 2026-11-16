@@ -590,7 +590,7 @@ describe("the catalog checklist", () => {
     // Unseen: the neutral well and the whole card opening the finder.
     expect(
       screen.getByRole("button", {
-        name: "Pick 25d · 1921 · 10 lei is unseen. Add notes",
+        name: "Pick 25d · 1921 · 10 lei is unseen. Replace with note",
       }),
     ).toBeInTheDocument();
   });
@@ -754,7 +754,7 @@ describe("the catalog checklist", () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", {
-        name: "Pick 25d · 1921 · 10 lei is unseen. Add notes",
+        name: "Pick 25d · 1921 · 10 lei is unseen. Replace with note",
       }),
     ).not.toBeInTheDocument();
 
@@ -767,7 +767,7 @@ describe("the catalog checklist", () => {
     await user.click(screen.getByRole("button", { name: /^All/ }));
     expect(
       screen.getByRole("button", {
-        name: "Pick 25d · 1921 · 10 lei is unseen. Add notes",
+        name: "Pick 25d · 1921 · 10 lei is unseen. Replace with note",
       }),
     ).toBeInTheDocument();
   });
@@ -845,7 +845,7 @@ describe("the catalog checklist", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: "Pick 25d · 1921 · 10 lei is unseen. Add notes",
+        name: "Pick 25d · 1921 · 10 lei is unseen. Replace with note",
       }),
     );
 
@@ -891,7 +891,7 @@ describe("the catalog checklist", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: "Pick 25d · 1921 · 10 lei is unseen. Add notes",
+        name: "Pick 25d · 1921 · 10 lei is unseen. Replace with note",
       }),
     );
     const dialog = await screen.findByRole("dialog", { name: "Add notes" });
@@ -901,15 +901,15 @@ describe("the catalog checklist", () => {
     );
 
     const errors = await screen.findAllByText(
-      "The catalog shell was not replaced.",
+      "The placeholder was not replaced.",
     );
     expect(errors.length).toBeGreaterThan(0);
     expect(
-      screen.queryByText("Catalog shell replaced with a note."),
+      screen.queryByText("Placeholder replaced with a note."),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", {
-        name: "Pick 25d · 1921 · 10 lei is unseen. Add notes",
+        name: "Pick 25d · 1921 · 10 lei is unseen. Replace with note",
       }),
     ).toBeInTheDocument();
   });
@@ -1064,8 +1064,8 @@ describe("the catalog checklist", () => {
   });
 });
 
-describe("catalog shells in the one view", () => {
-  test("the merged Add dialog creates shells with metadata and no notes", async () => {
+describe("placeholders in the one view", () => {
+  test("the merged Add dialog creates placeholders with metadata and no notes", async () => {
     const user = userEvent.setup();
     getShowcaseTree.mockResolvedValue({
       showcase_id: 1,
@@ -1084,14 +1084,14 @@ describe("catalog shells in the one view", () => {
     const dialog = await screen.findByRole("dialog", {
       name: "Add to “Summer”",
     });
-    await user.click(within(dialog).getByRole("tab", { name: "Catalog shell" }));
+    await user.click(within(dialog).getByRole("tab", { name: "Placeholder" }));
     await user.type(
       within(dialog).getByLabelText("Catalog numbers"),
       "22a, 22b",
     );
     await user.type(within(dialog).getByLabelText("Denomination"), "20 lei");
     await user.click(
-      within(dialog).getByRole("button", { name: "Add 2 shells" }),
+      within(dialog).getByRole("button", { name: "Add 2 placeholders" }),
     );
 
     await waitFor(() => expect(createCatalogEntry).toHaveBeenCalledTimes(2));
@@ -1171,7 +1171,7 @@ describe("catalog shells in the one view", () => {
     );
     await user.click(screen.getByRole("menuitem", { name: "Edit details…" }));
     const dialog = await screen.findByRole("dialog", {
-      name: "Edit catalog shell",
+      name: "Edit placeholder",
     });
     await user.clear(within(dialog).getByLabelText("Denomination"));
     await user.type(within(dialog).getByLabelText("Denomination"), "100 lei");

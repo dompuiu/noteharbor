@@ -11,7 +11,7 @@ describe("ShowcaseAddCard", () => {
 
     const card = screen.getByRole("button", { name: "Add to this level" });
     expect(card).toHaveTextContent("Add to this level");
-    expect(card).toHaveTextContent("Note · Catalog shell · Grouping");
+    expect(card).toHaveTextContent("Note · Placeholder · Grouping");
 
     await user.click(card);
     expect(onAdd).toHaveBeenCalledTimes(1);

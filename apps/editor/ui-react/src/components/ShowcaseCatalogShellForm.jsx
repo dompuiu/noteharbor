@@ -21,7 +21,7 @@ function ShowcaseCatalogShellForm({
   onAdd,
   onClose,
   parentLabel = "this block",
-  submitLabel = "Add shells",
+  submitLabel = "Add placeholders",
 }) {
   const editing = entry != null;
   const [catalogs, setCatalogs] = useState(entry?.catalog_number ?? "");
@@ -70,7 +70,7 @@ function ShowcaseCatalogShellForm({
       await onAdd?.(entries);
       onClose?.();
     } catch (submitError) {
-      setError(submitError.message || "Could not add the catalog shells.");
+      setError(submitError.message || "Could not add the placeholders.");
       setBusy(false);
     }
   }
@@ -129,7 +129,7 @@ function ShowcaseCatalogShellForm({
 
         <div className="showcase-entry-preview">
           <p className="muted showcase-entry-preview-label">
-            Shell preview
+            Placeholder preview
           </p>
           <div className="showcase-entry-preview-card">
             <ShowcaseCatalogWell identity={previewIdentity} />
@@ -149,7 +149,7 @@ function ShowcaseCatalogShellForm({
             {editing
               ? `Updates ${previewIdentity}.`
               : `${entryCount} ${
-                  entryCount === 1 ? "shell" : "shells"
+                  entryCount === 1 ? "placeholder" : "placeholders"
                 } will be added to ${parentLabel}.`}
           </p>
         </div>
@@ -171,7 +171,7 @@ function ShowcaseCatalogShellForm({
           {editing
             ? "Save details"
             : entryCount
-              ? `Add ${entryCount} ${entryCount === 1 ? "shell" : "shells"}`
+              ? `Add ${entryCount} ${entryCount === 1 ? "placeholder" : "placeholders"}`
               : submitLabel}
         </button>
       </div>

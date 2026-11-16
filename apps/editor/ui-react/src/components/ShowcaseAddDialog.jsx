@@ -138,7 +138,7 @@ function ShowcaseAddDialog({
             Add to “{parentLabel}”
           </h2>
           <p className="showcase-manager-subtitle">
-            Add a real note from the library or a catalog shell to fill in
+            Add a real note from the library or a placeholder to fill in
             later. New cards land {afterLabel}.
           </p>
           <button
@@ -172,7 +172,7 @@ function ShowcaseAddDialog({
             role="tab"
             type="button"
           >
-            Catalog shell
+            Placeholder
           </button>
           <button
             aria-selected={mode === "grouping"}
