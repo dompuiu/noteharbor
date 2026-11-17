@@ -275,8 +275,13 @@ describe("the showcase category canvas", () => {
     await user.click(
       await screen.findByRole("button", { name: "New category" }),
     );
-    await user.type(screen.getByLabelText("Category name"), "Winter");
-    await user.click(screen.getByRole("button", { name: "Add category" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: "New category" }))
+      .toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText("Category name"), "Winter");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Add category" }),
+    );
 
     await waitFor(() => {
       expect(createShowcaseNode).toHaveBeenCalledWith(1, {

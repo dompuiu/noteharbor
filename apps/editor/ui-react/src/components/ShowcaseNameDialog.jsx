@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { ShowcaseDialog } from "./ShowcaseDialog.jsx";
+import { ShowcaseNameField } from "./ShowcaseNameField.jsx";
 
-// The one name form: adding a grouping after an item, or renaming a grouping
-// or category in place. Both write immediately, so there is no draft Save.
+// The one name form used to create a category or grouping and to rename either
+// in place. Both actions write immediately, so there is no draft Save; the
+// `suggestions` pool turns the field into a pool picker for a new category.
 function ShowcaseNameDialog({
   initialValue = "",
   label = "Name",
@@ -10,6 +12,8 @@ function ShowcaseNameDialog({
   onClose,
   submitLabel = "Save",
   subtitle = "",
+  suggestions = [],
+  suggestionsLabel,
   title,
 }) {
   const [value, setValue] = useState(initialValue);
@@ -39,16 +43,13 @@ function ShowcaseNameDialog({
   return (
     <ShowcaseDialog onClose={onClose} subtitle={subtitle} title={title}>
       <form className="showcase-name-dialog" onSubmit={submit}>
-        <label className="field-block">
-          <span>{label}</span>
-          <input
-            aria-label={label}
-            autoFocus
-            onChange={(event) => setValue(event.target.value)}
-            onFocus={(event) => event.target.select?.()}
-            value={value}
-          />
-        </label>
+        <ShowcaseNameField
+          label={label}
+          onChange={setValue}
+          suggestions={suggestions}
+          suggestionsLabel={suggestionsLabel}
+          value={value}
+        />
 
         {error ? (
           <p className="showcase-error" role="alert">

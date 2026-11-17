@@ -491,6 +491,20 @@ function ShowcaseScreen() {
     setAddTarget({ parent, afterId, mode });
   }
 
+  function openAddCategory() {
+    setNameDialog({
+      kind: "add-category",
+      title: "New category",
+      subtitle:
+        "Reuse a category from the pool or type a new name; Add category places it in the showcase.",
+      label: "Category name",
+      initialValue: "",
+      submitLabel: "Add category",
+      suggestions: availableCategories,
+      suggestionsLabel: "Category suggestions",
+    });
+  }
+
   function openAddAfter(parent, node, mode) {
     if (mode === "grouping") {
       setNameDialog({
@@ -582,6 +596,11 @@ function ShowcaseScreen() {
 
   async function submitNameDialog(trimmed) {
     if (!nameDialog) {
+      return;
+    }
+
+    if (nameDialog.kind === "add-category") {
+      await handleAddCategory(trimmed);
       return;
     }
 
@@ -1701,11 +1720,7 @@ function ShowcaseScreen() {
               Start with a category, then add notes, groupings, and placeholders
               inside it.
             </p>
-            <ShowcaseCategoryTile
-              categories={availableCategories}
-              centered
-              onAdd={handleAddCategory}
-            />
+            <ShowcaseCategoryTile centered onOpen={openAddCategory} />
           </div>
         ) : null}
 
@@ -1750,10 +1765,7 @@ function ShowcaseScreen() {
                   />
                 );
               })}
-              <ShowcaseCategoryTile
-                categories={availableCategories}
-                onAdd={handleAddCategory}
-              />
+              <ShowcaseCategoryTile onOpen={openAddCategory} />
             </>
           ) : (
             <ShowcaseItemsGrid
@@ -1799,6 +1811,8 @@ function ShowcaseScreen() {
           onSubmit={submitNameDialog}
           submitLabel={nameDialog.submitLabel}
           subtitle={nameDialog.subtitle}
+          suggestions={nameDialog.suggestions ?? []}
+          suggestionsLabel={nameDialog.suggestionsLabel}
           title={nameDialog.title}
         />
       ) : null}

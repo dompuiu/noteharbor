@@ -1631,8 +1631,7 @@ input[type="radio"] {
 }
 
 .showcase-cell-controls,
-.showcase-cell-edit-actions,
-.showcase-category-actions {
+.showcase-cell-edit-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
@@ -1648,8 +1647,7 @@ input[type="radio"] {
 }
 
 .showcase-cell-controls .button,
-.showcase-cell-edit-actions .button,
-.showcase-category-actions .button {
+.showcase-cell-edit-actions .button {
   min-height: 30px;
   padding: 4px 10px;
   font-size: 0.8rem;
@@ -2199,34 +2197,6 @@ input[type="radio"] {
 
 .showcase-empty-box .showcase-empty-actions:last-child {
   margin-bottom: 0;
-}
-
-.showcase-category-combobox--centered {
-  width: 100%;
-  max-width: 440px;
-  margin: 0 auto;
-  text-align: left;
-}
-
-.showcase-category-combobox {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  height: 100%;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-}
-
-.showcase-category-input {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
 }
 
 .showcase-error {
@@ -6236,6 +6206,12 @@ th[aria-sort="descending"] .sort-chevron {
    own list below the scrape-conflict and shortcuts overlays. */
 .tags-filter-dropdown.select-dropdown {
   z-index: 250;
+}
+
+/* The showcase name dialog sits on the manager backdrop (155); its pool list
+   must float above that panel to stay clickable. */
+.tags-filter-dropdown.showcase-name-suggestions {
+  z-index: 160;
 }
 
 /* The default bar is chunky against the small option rows: draw a slim,
@@ -10393,6 +10369,11 @@ td.table-col-collection {
 
 .showcase-add-body {
   min-height: 0;
+  /* The dialog's scrolling body clips at its padding edge. Keep a few pixels
+     of inline padding so the focus ring on the edge-most control is not cut,
+     and pull the box back so its contents stay aligned with the dialog. */
+  margin-inline: -6px;
+  padding-inline: 6px;
   overflow-y: auto;
 }
 
