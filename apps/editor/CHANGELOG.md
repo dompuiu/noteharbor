@@ -4,6 +4,10 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+### Added
+
+- Note editor: a full scan's image card now carries a **View** action that opens the Image popover over the draft — Fit first, then **1:1** and the zoom ladder, with the note's Front | Back scans as its pages. It shows a pending upload or scraped file in place of the stored scan, returns focus to the card on close, and leaves the draft untouched.
+
 ### Changed
 
 - Showcase cards: a presentation-only Showcase now draws the same catalog card as one with placeholders. Every note leaf carries the compact catalog code, the date · denomination row, the grade, the notes preview and the Seen/Owned footer, which toggles the note's library-wide ownership. The note card's info tooltip and its `i` shortcut are gone. The `N notes` subtitle is removed, the ✓ Complete chip appears on every Showcase, and the filter empty states share one neutral copy, so the canvas reads the same with or without placeholders.
