@@ -65,8 +65,8 @@ function FolderIcon({ className }) {
 //   and an action row. The four rows match a catalog card's header, photo,
 //   metadata and ownership rows, so the cards line up in one grid row.
 // - `rail` (Auction rail): the rail-label composition — photo left, a fixed
-//   identity rail right with the GROUPING kicker, name, contents and the large
-//   count, and the same action row under both columns.
+//   identity rail right with the folder-led GROUPING kicker, name, contents and
+//   the large count, and the same action row under both columns.
 function ShowcaseGroupingCard({
   grip = null,
   layout = "labels",
@@ -120,12 +120,12 @@ function ShowcaseGroupingCard({
                   aria-hidden="true"
                   className="showcase-grouping-rail-gutter"
                 />
-                <span className="showcase-grouping-kicker">Grouping</span>
-                <span className="showcase-grouping-rail-name-row">
-                  <FolderIcon className="showcase-grouping-rail-name-icon" />
-                  <span className="showcase-grouping-name-text">
-                    {node.name}
-                  </span>
+                <span className="showcase-grouping-kicker">
+                  <FolderIcon className="showcase-grouping-kicker-icon" />
+                  <span>Grouping</span>
+                </span>
+                <span className="showcase-grouping-name-text">
+                  {node.name}
                 </span>
                 {summary}
                 {total > 0 ? (

@@ -10,7 +10,7 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ### Changed
 
-- Showcase: a Grouping card now reads as a folio. One 34px header carries the drag grip, folder, name and actions menu; the cover sits on the same hairline plate as a catalog photo; a contents row counts notes, placeholders and nested groupings; and a quiet open row closes the card, so its header, photo, metadata and action rows line up with the catalog card beside it. In the Auction rail the card turns into a rail label: photo left, identity right with the GROUPING kicker, name, contents and a large count.
+- Showcase: a Grouping card now reads as a folio. One 34px header carries the drag grip, folder, name and actions menu; the cover sits on the same hairline plate as a catalog photo; a contents row counts notes, placeholders and nested groupings; and a quiet open row closes the card, so its header, photo, metadata and action rows line up with the catalog card beside it. In the Auction rail the card turns into a rail label: photo left, identity right with the folder-led GROUPING kicker, name, contents and a large count.
 - Showcase: the New category dialog now says **Add category** places the category in the showcase instead of implying that typing the name adds it immediately.
 
 ## [2.14.0] - 2026-11-16

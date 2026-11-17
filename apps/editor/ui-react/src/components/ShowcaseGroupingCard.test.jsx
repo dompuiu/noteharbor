@@ -177,6 +177,13 @@ describe("ShowcaseGroupingCard rail label", () => {
     expect(card).toHaveClass("showcase-card--grouping-rail");
     expect(rail).not.toBeNull();
     expect(rail).toHaveTextContent("Grouping");
+    // The folder leads the kicker, as it leads the folio header.
+    const kickerIcon = rail.querySelector(".showcase-grouping-kicker svg");
+    expect(kickerIcon).not.toBeNull();
+    expect(kickerIcon).toHaveClass("showcase-grouping-kicker-icon");
+    const nameText = rail.querySelector(".showcase-grouping-name-text");
+    expect(nameText).not.toBeNull();
+    expect(nameText.querySelector("svg")).toBeNull();
     expect(rail).toHaveTextContent("3 notes");
     expect(rail.querySelector(".showcase-grouping-rail-count")).toHaveTextContent(
       "3",
