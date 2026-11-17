@@ -8130,6 +8130,15 @@ button.tag {
   font-size: 0.75rem;
 }
 
+/* The card's one secondary action: open the scan in the Image popover. It
+   rides at meta height beside the provenance line, so the header row keeps
+   its weight instead of growing to the app's 36px control. */
+.image-slot-view {
+  min-height: 28px;
+  padding: 4px 12px;
+  font-size: 0.75rem;
+}
+
 .image-dropzone {
   display: grid;
   place-items: center;

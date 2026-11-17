@@ -1,5 +1,5 @@
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NoteEditForm } from "./NoteEditForm.jsx";
@@ -47,13 +47,13 @@ function notePayload(overrides = {}) {
   };
 }
 
-async function renderForm() {
+async function renderForm(props = {}) {
   render(
     <MemoryRouter initialEntries={["/catalog/notes/1"]}>
       <Routes>
         <Route
           path="/catalog/notes/:id"
-          element={<NoteEditForm selectedCollectionId={1} />}
+          element={<NoteEditForm selectedCollectionId={1} {...props} />}
         />
       </Routes>
     </MemoryRouter>,
@@ -266,5 +266,121 @@ describe("Note editor image slots", () => {
 
     await user.click(checkbox);
     expect(checkbox).toBeChecked();
+  });
+});
+
+describe("Note editor image viewing", () => {
+  function noteWithFullScans(images) {
+    return notePayload({
+      images: images.map((type) => ({
+        type,
+        variant: "full",
+        localPath: `/images/${type}.jpg`,
+        origin: "uploaded",
+      })),
+    });
+  }
+
+  test("offers View only for a full scan that is there", async () => {
+    getNote.mockResolvedValue({ note: noteWithFullScans(["front"]) });
+    await renderForm();
+
+    expect(
+      screen.getByRole("button", { name: "View Front full image" }),
+    ).toBeInTheDocument();
+    // No back scan, and a thumbnail has no detail to inspect on its own.
+    expect(
+      screen.queryByRole("button", { name: "View Back full image" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "View Front thumbnail image" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("opens the Image popover on the scan and returns focus on close", async () => {
+    const user = userEvent.setup();
+    getNote.mockResolvedValue({ note: noteWithFullScans(["front"]) });
+    await renderForm();
+
+    const trigger = screen.getByRole("button", {
+      name: "View Front full image",
+    });
+    await user.click(trigger);
+
+    const dialog = screen.getByRole("dialog", { name: "FIRSTNOTE" });
+    expect(
+      within(dialog).getByRole("button", { name: "1:1" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText("FIRSTNOTE, Front, image 1 of 1"),
+    ).toBeInTheDocument();
+
+    // The first Escape closes the preview (nothing is zoomed yet).
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(
+      screen.queryByRole("dialog", { name: "FIRSTNOTE" }),
+    ).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  test("pages between the two full scans and switches side", async () => {
+    const user = userEvent.setup();
+    getNote.mockResolvedValue({ note: noteWithFullScans(["front", "back"]) });
+    await renderForm();
+
+    await user.click(
+      screen.getByRole("button", { name: "View Front full image" }),
+    );
+
+    expect(screen.getByText("FIRSTNOTE, Front, image 1 of 2")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Show next image" }));
+    expect(screen.getByText("FIRSTNOTE, Back, image 2 of 2")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Front" }));
+    expect(screen.getByText("FIRSTNOTE, Front, image 1 of 2")).toBeInTheDocument();
+  });
+
+  test("a pending upload is what the popover shows", async () => {
+    const user = userEvent.setup();
+    await renderForm();
+
+    fireEvent.drop(
+      screen.getByRole("button", { name: "Choose or drop Back full image" }),
+      {
+        dataTransfer: {
+          files: [new File(["bytes"], "back.jpg", { type: "image/jpeg" })],
+        },
+      },
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "View Back full image" }),
+    );
+
+    expect(
+      screen.getByRole("dialog", { name: "FIRSTNOTE" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("FIRSTNOTE, Back, image 1 of 1"),
+    ).toBeInTheDocument();
+  });
+
+  test("the editor's note walk stays still while the popover is open", async () => {
+    const user = userEvent.setup();
+    const onNavigateNext = vi.fn();
+    getNote.mockResolvedValue({ note: noteWithFullScans(["front"]) });
+    await renderForm({ nextNoteId: 2, onNavigateNext });
+
+    await user.click(
+      screen.getByRole("button", { name: "View Front full image" }),
+    );
+    fireEvent.keyDown(window, { key: "ArrowRight", altKey: true });
+    expect(onNavigateNext).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    fireEvent.keyDown(window, { key: "ArrowRight", altKey: true });
+    expect(onNavigateNext).toHaveBeenCalledTimes(1);
   });
 });

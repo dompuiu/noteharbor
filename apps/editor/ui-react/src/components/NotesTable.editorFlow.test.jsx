@@ -458,6 +458,38 @@ describe("Leaving a changed Note editor", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  test("Escape closes the Image popover, not the editor behind it", async () => {
+    const user = userEvent.setup();
+    notesDb = [
+      {
+        ...note(1, "AAAA"),
+        images: [
+          { type: "front", variant: "full", localPath: "/images/front.jpg" },
+        ],
+      },
+      note(2, "BBBB"),
+    ];
+    renderTable();
+    await openEditorOn(user, "AAAA");
+
+    const trigger = screen.getByRole("button", {
+      name: "View Front full image",
+    });
+    await user.click(trigger);
+    expect(screen.getByRole("dialog", { name: "AAAA" })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    expect(
+      screen.queryByRole("dialog", { name: "AAAA" }),
+    ).not.toBeInTheDocument();
+    // The draft stays open under the layer it opened, and focus returns to
+    // the action that enlarged the scan.
+    expect(currentHash()).toContain("edit/1");
+    expect(screen.getByLabelText("Denomination")).toHaveValue("AAAA");
+    expect(trigger).toHaveFocus();
+  });
+
   test("stepping through unchanged notes never prompts", async () => {
     const user = userEvent.setup();
     renderTable();

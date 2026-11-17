@@ -1623,6 +1623,17 @@ function NotesTable({
       // A focused field gets the first Escape: blurring it keeps the user in
       // the editor, so closing the screen takes a second press.
       const activeElement = document.activeElement;
+
+      // A dialog above the editor — its Image popover — owns Escape while it
+      // is open. Its focus trap keeps focus inside, so the press must close
+      // the preview rather than the draft underneath.
+      if (
+        activeElement instanceof Element &&
+        activeElement.closest(".image-popover-overlay")
+      ) {
+        return;
+      }
+
       const fieldFocused =
         isEditableElement(activeElement) &&
         editorOverlayRef.current?.contains(activeElement);

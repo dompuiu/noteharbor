@@ -25,6 +25,7 @@ import { extractPmgDescriptionFields } from "../lib/pmgDescription.js";
 import { CATALOG_ROUTES } from "../lib/routes.js";
 import { NoteCounter } from "./NoteCounter.jsx";
 import { ActionsMenu } from "./ActionsMenu.jsx";
+import { ImagePopover } from "./Slideshow.jsx";
 import {
   CollectionPositionFields,
   needsPositionReference,
@@ -312,6 +313,10 @@ function NoteEditForm({
     back: false,
   });
   const [activePasteSlot, setActivePasteSlot] = useState(null);
+  // The slot whose full scan the Image popover has open, or null. The popover
+  // is the editor's read-only way to inspect an image: it never writes, so the
+  // slot preview underneath stays the place edits are made.
+  const [imagePreviewKey, setImagePreviewKey] = useState(null);
   const [allNotes, setAllNotes] = useState([]);
   const [positionMode, setPositionMode] = useState(
     noteId ? "keep" : initialPositionMode,
@@ -338,6 +343,7 @@ function NoteEditForm({
   const [pendingScrapedImages, setPendingScrapedImages] = useState({});
   const formRef = useRef(form);
   const inputRefs = useRef({});
+  const imagePreviewTriggerRef = useRef(null);
   const firstFieldRef = useRef(null);
   const formElementRef = useRef(null);
   const scrapeToastTimer = useRef(null);
@@ -621,7 +627,15 @@ function NoteEditForm({
       // field, so Alt+arrows work with focus anywhere — inside a field too.
       // preventDefault also blocks the desktop WebView's Alt+Left/Right
       // history navigation while the editor is open.
-      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+      // The Image popover is a layer of its own: while it is open, a note walk
+      // would swap the note behind the scan the reader is inspecting.
+      if (
+        imagePreviewKey != null ||
+        !event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey
+      ) {
         return;
       }
 
@@ -653,14 +667,20 @@ function NoteEditForm({
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [canNavigateNext, canNavigatePrevious, onNavigateNext, onNavigatePrevious]);
+  }, [
+    canNavigateNext,
+    canNavigatePrevious,
+    imagePreviewKey,
+    onNavigateNext,
+    onNavigatePrevious,
+  ]);
 
   // The editor owns Ctrl/Cmd+S (save and stay), Ctrl/Cmd+Shift+S (save and
   // close), Ctrl/Cmd+D (delete), and Ctrl/Cmd+A (add before). The save keys
   // are the browser's "save page"; delete and add-before are pressed with no
   // field focused (inside a field Ctrl+A belongs to the text, as select-all).
-  // The confirmation dialog and the scrape-conflict overlay take priority:
-  // while either is open the shortcuts are ignored.
+  // The confirmation dialog, the scrape-conflict overlay, and the Image
+  // popover take priority: while any is open the shortcuts are ignored.
   useEffect(() => {
     function handleKeyDown(event) {
       if (event.altKey || !(event.ctrlKey || event.metaKey)) {
@@ -673,7 +693,7 @@ function NoteEditForm({
         return;
       }
 
-      if (scrapeConflictOverlayOpen) {
+      if (scrapeConflictOverlayOpen || imagePreviewKey != null) {
         return;
       }
 
@@ -713,6 +733,7 @@ function NoteEditForm({
 
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
+    imagePreviewKey,
     isCreateMode,
     loading,
     onAddBefore,
@@ -742,6 +763,77 @@ function NoteEditForm({
     },
     [imagePreviews],
   );
+
+  // What a slot currently paints: a pending file, a scraped image, or the
+  // stored scan. An empty string means there is nothing to show (the slot is
+  // empty or marked for deletion), which is the same test the card applies.
+  function slotPreviewSrc(slot) {
+    if (deletedSlots[slot.key]) {
+      return "";
+    }
+
+    return (
+      imagePreviews[slot.key] ||
+      pendingScrapedImages[slot.key] ||
+      versionedImagePath(
+        pickImage(currentImages, slot.type, slot.variant)?.localPath,
+        noteVersion,
+      )
+    );
+  }
+
+  // The Image popover pages are the note's two full scans — the same domain
+  // its Front | Back toggle and "Image n of m" counter name in the slideshow.
+  // A thumbnail is derived convenience, not a scan to inspect at 1:1, so it
+  // gets no page.
+  const imagePreviewItems = imageSlots
+    .filter((slot) => slot.variant === "full")
+    .map((slot) => {
+      const side = slot.type === "front" ? "Front" : "Back";
+      const src = slotPreviewSrc(slot);
+      const pendingFull = Boolean(
+        imagePreviews[slot.key] || pendingScrapedImages[slot.key],
+      );
+      const thumbSlot = imageSlots.find(
+        (candidate) =>
+          candidate.type === slot.type && candidate.variant === "thumbnail",
+      );
+
+      return {
+        alt: `${form.denomination.trim() || "Untitled note"}, ${side}`,
+        key: slot.key,
+        label: side,
+        src,
+        // A pending upload has no stored thumbnail yet; painting the note's
+        // old one while the new file loads would show a different scan.
+        thumb: (pendingFull ? "" : slotPreviewSrc(thumbSlot)) || src,
+        type: slot.type,
+      };
+    })
+    .filter((item) => item.src);
+  const imagePreviewIndex = imagePreviewItems.findIndex(
+    (item) => item.key === imagePreviewKey,
+  );
+  const imagePreviewItem =
+    imagePreviewIndex >= 0 ? imagePreviewItems[imagePreviewIndex] : null;
+
+  // Closing the popover hands focus back to the View action that opened it,
+  // so keyboard work continues where it left off instead of dropping to the
+  // page.
+  useEffect(() => {
+    if (imagePreviewKey != null) {
+      return;
+    }
+
+    const trigger = imagePreviewTriggerRef.current;
+    imagePreviewTriggerRef.current = null;
+
+    if (!trigger?.isConnected) {
+      return;
+    }
+
+    trigger.focus();
+  }, [imagePreviewKey]);
 
   useEffect(
     () => () => {
@@ -782,6 +874,50 @@ function NoteEditForm({
       delete next[slotKey];
       return next;
     });
+  }
+
+  // The Image popover only reads the slots, so opening it never touches the
+  // draft; its Trigger is kept so closing can hand focus back.
+  function openImagePreview(slot, trigger) {
+    imagePreviewTriggerRef.current = trigger ?? null;
+    setImagePreviewKey(slot.key);
+  }
+
+  function showImagePreview(itemPosition) {
+    const item = imagePreviewItems[itemPosition];
+
+    if (!item) {
+      return false;
+    }
+
+    setImagePreviewKey(item.key);
+    return true;
+  }
+
+  // Paging wraps, so the two scans keep both arrows live; a note with one
+  // scan disables them, exactly like a slideshow with one note.
+  function moveImagePreview(offset) {
+    if (!imagePreviewItems.length) {
+      return;
+    }
+
+    const next =
+      imagePreviewItems[
+        (imagePreviewIndex + offset + imagePreviewItems.length) %
+          imagePreviewItems.length
+      ];
+
+    setImagePreviewKey(next.key);
+  }
+
+  function selectImagePreviewSide(type) {
+    const item = imagePreviewItems.find(
+      (candidate) => candidate.type === type,
+    );
+
+    if (item) {
+      setImagePreviewKey(item.key);
+    }
   }
 
   function setSlotFile(slot, file) {
@@ -2004,11 +2140,7 @@ function NoteEditForm({
                   isDeleted: isFullDeleted,
                 });
                 const scrapedImageUrl = pendingScrapedImages[slot.key];
-                const previewSrc = isDeleted
-                  ? ""
-                  : pendingPreview ||
-                    scrapedImageUrl ||
-                    versionedImagePath(currentImage?.localPath, noteVersion);
+                const previewSrc = slotPreviewSrc(slot);
                 const hasPendingFile = Boolean(pendingPreview);
                 const hasPendingImage =
                   hasPendingFile || Boolean(scrapedImageUrl);
@@ -2071,6 +2203,19 @@ function NoteEditForm({
                       <div className="image-slot-header-meta">
                         {metaText ? (
                           <p className="image-slot-meta">{metaText}</p>
+                        ) : null}
+                        {slot.variant === "full" && previewSrc ? (
+                          <button
+                            aria-label={`View ${slotName}`}
+                            className="button image-slot-view"
+                            onClick={(event) =>
+                              openImagePreview(slot, event.currentTarget)
+                            }
+                            title="Open the image popover to inspect this scan at 1:1"
+                            type="button"
+                          >
+                            View
+                          </button>
                         ) : null}
                         {hasSlotAction ? (
                           <ActionsMenu
@@ -2244,6 +2389,31 @@ function NoteEditForm({
           </div>
         ) : null}
       </div>
+
+      {/* Enlarging a scan is a read-only layer above the draft: closing it
+          returns to the card that opened it and leaves the form untouched. */}
+      {imagePreviewItem ? (
+        <ImagePopover
+          alt={imagePreviewItem.alt}
+          availableSides={imagePreviewItems.map((item) => item.type)}
+          canGoNext={imagePreviewItems.length > 1}
+          canGoPrevious={imagePreviewItems.length > 1}
+          counterPosition={imagePreviewIndex + 1}
+          counterTotal={imagePreviewItems.length}
+          noteKey={noteId}
+          noteLabel={form.denomination.trim() || "Untitled note"}
+          onClose={() => setImagePreviewKey(null)}
+          onJump={(position) => showImagePreview(position - 1)}
+          onNext={() => moveImagePreview(1)}
+          onPreviewEnd={() => showImagePreview(imagePreviewItems.length - 1)}
+          onPreviewStart={() => showImagePreview(0)}
+          onPrevious={() => moveImagePreview(-1)}
+          onSelectSide={selectImagePreviewSide}
+          side={imagePreviewItem.type}
+          src={imagePreviewItem.src}
+          thumb={imagePreviewItem.thumb}
+        />
+      ) : null}
     </section>
   );
 }
