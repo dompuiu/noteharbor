@@ -8155,8 +8155,15 @@ button.tag {
   overflow: hidden;
 }
 
-.image-dropzone:hover,
+.image-dropzone:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md);
+}
+
+/* Selection outlives the pointer: a solid accent edge marks the card as the
+   paste target, while hover alone only dashes its edge in the accent. */
 .image-dropzone--active {
+  border-style: solid;
   border-color: var(--accent);
   box-shadow: var(--shadow-md);
 }

@@ -185,7 +185,7 @@ describe("Note editor image slots", () => {
     expect(screen.queryByText("Will delete")).not.toBeInTheDocument();
   });
 
-  test("Enter, Space, and a second click on a dropzone open its file picker", async () => {
+  test("Enter, Space, and a click on the already-selected dropzone open its file picker", async () => {
     const user = userEvent.setup();
     const click = vi
       .spyOn(HTMLInputElement.prototype, "click")
@@ -199,11 +199,13 @@ describe("Note editor image slots", () => {
     await user.keyboard("{Enter}");
     expect(click).toHaveBeenCalledTimes(1);
 
+    click.mockClear();
     await user.keyboard(" ");
-    expect(click).toHaveBeenCalledTimes(2);
+    expect(click).toHaveBeenCalledTimes(1);
 
+    click.mockClear();
     await user.click(dropzone);
-    expect(click).toHaveBeenCalledTimes(3);
+    expect(click).toHaveBeenCalledTimes(1);
 
     click.mockRestore();
   });
@@ -250,6 +252,78 @@ describe("Note editor image slots", () => {
     click.mockRestore();
   });
 
+  test("a first click selects a slot that already has a picture", async () => {
+    const user = userEvent.setup();
+    getNote.mockResolvedValue({
+      note: notePayload({
+        images: [
+          {
+            type: "front",
+            variant: "full",
+            localPath: "/images/front.jpg",
+            origin: "uploaded",
+          },
+        ],
+      }),
+    });
+    await renderForm();
+
+    const dropzone = screen.getByRole("button", {
+      name: "Choose or drop Front full image",
+    });
+    await user.click(dropzone);
+
+    // The solid selected edge is the only feedback a filled slot can show.
+    expect(dropzone).toHaveClass("image-dropzone--active");
+    expect(dropzone).toHaveFocus();
+  });
+
+  test("a click on another slot selects it without opening its picker", async () => {
+    const user = userEvent.setup();
+    const click = vi
+      .spyOn(HTMLInputElement.prototype, "click")
+      .mockImplementation(() => {});
+    await renderForm();
+
+    const front = screen.getByRole("button", {
+      name: "Choose or drop Front full image",
+    });
+    const back = screen.getByRole("button", {
+      name: "Choose or drop Back full image",
+    });
+
+    await user.click(front);
+    await user.click(back);
+
+    expect(front).not.toHaveClass("image-dropzone--active");
+    expect(back).toHaveClass("image-dropzone--active");
+    expect(click).not.toHaveBeenCalled();
+
+    click.mockRestore();
+  });
+
+  test("dragging a file over a slot does not arm its next click", async () => {
+    const user = userEvent.setup();
+    const click = vi
+      .spyOn(HTMLInputElement.prototype, "click")
+      .mockImplementation(() => {});
+    await renderForm();
+
+    const dropzone = screen.getByRole("button", {
+      name: "Choose or drop Front full image",
+    });
+
+    fireEvent.dragOver(dropzone);
+    expect(dropzone).toHaveClass("image-dropzone--active");
+
+    await user.click(dropzone);
+
+    expect(click).not.toHaveBeenCalled();
+    expect(dropzone).toHaveClass("image-dropzone--active");
+
+    click.mockRestore();
+  });
+
   test("leaving a selected dropzone drops the selection", async () => {
     const user = userEvent.setup();
     const click = vi
@@ -264,6 +338,9 @@ describe("Note editor image slots", () => {
     await user.click(screen.getByLabelText("Denomination"));
 
     expect(dropzone).not.toHaveClass("image-dropzone--active");
+    expect(
+      within(dropzone).getByText("Choose, drop, or paste an image"),
+    ).toBeInTheDocument();
 
     // Back from elsewhere, the card is a fresh selection again.
     await user.click(dropzone);
