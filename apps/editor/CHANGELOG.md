@@ -4,6 +4,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.16.0] - 2026-11-17
+
 ### Changed
 
 - Showcase cards: the record's free-text **notes** now read on the card as a preview. The Library label keeps two lines under the caption; the Auction rail pins four lines in the identity column behind a margin rule. A catalog card shows its primary specimen's notes, and a card without text keeps its old height.
