@@ -1317,7 +1317,11 @@ input[type="radio"] {
 }
 
 .showcase-category-rule {
-  width: 100%;
+  /* The head reserves a right gutter for its `⋯` menu. The rule closes the
+     whole section, so it stretches back across that gutter to the section
+     edge instead of stopping at the menu. */
+  align-self: stretch;
+  margin-right: calc(-1 * var(--showcase-category-menu-gutter));
   height: 1px;
   margin-top: 8px;
   background: var(--border-soft);
@@ -10357,8 +10361,11 @@ td.table-col-collection {
 
 /* The section header's menu sits at the right edge of the title block. */
 .showcase-category-head {
+  /* One gutter shared by the header's padding, the rule that crosses it, and
+     the stylesheet test, so the menu never desyncs from the rule. */
+  --showcase-category-menu-gutter: 36px;
   position: relative;
-  padding-right: 36px;
+  padding-right: var(--showcase-category-menu-gutter);
 }
 
 .showcase-category-head > .showcase-item-menu-trigger,
