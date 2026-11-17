@@ -353,6 +353,10 @@ function NoteEditForm({
   const formRef = useRef(form);
   const inputRefs = useRef({});
   const imagePreviewTriggerRef = useRef(null);
+  // The slot a pointer pressed while it was already selected. Read before the
+  // click's own focus lands, so a first click can only select a card while a
+  // second click on the selected card opens its file picker.
+  const imagePickerOnClickRef = useRef(null);
   const firstFieldRef = useRef(null);
   const formElementRef = useRef(null);
   const scrapeToastTimer = useRef(null);
@@ -2265,13 +2269,34 @@ function NoteEditForm({
                       </div>
                     </div>
                     {/* The dropzone is the slot's one action: choosing a file,
-                        dropping one, or pasting a screenshot all start here. */}
+                        dropping one, or pasting a screenshot all start here.
+                        Selecting takes one click, so the card holds focus (and
+                        a paste) before the file picker takes it away; a second
+                        click on the selected card opens the picker. */}
                     <button
                       aria-label={`Choose or drop ${slotName}`}
                       className={`image-dropzone${activePasteSlot === slot.key ? " image-dropzone--active" : ""}`}
-                      onClick={() => {
+                      onBlur={() =>
+                        setActivePasteSlot((current) =>
+                          current === slot.key ? null : current,
+                        )
+                      }
+                      onClick={(event) => {
+                        const opensPicker =
+                          event.detail === 0 ||
+                          imagePickerOnClickRef.current === slot.key;
+                        imagePickerOnClickRef.current = null;
                         setActivePasteSlot(slot.key);
-                        inputRefs.current[slot.key]?.click();
+                        // Clicking a button does not focus it on every
+                        // platform, and paste needs the card to hold focus.
+                        event.currentTarget.focus();
+                        if (opensPicker) {
+                          inputRefs.current[slot.key]?.click();
+                        }
+                      }}
+                      onPointerDown={() => {
+                        imagePickerOnClickRef.current =
+                          activePasteSlot === slot.key ? slot.key : null;
                       }}
                       onDragOver={(event) => {
                         event.preventDefault();
@@ -2303,7 +2328,9 @@ function NoteEditForm({
                         <div className="image-dropzone-empty">
                           {isDeleted
                             ? "Image will be removed"
-                            : "Choose, drop, or paste an image"}
+                            : activePasteSlot === slot.key
+                              ? "Press Ctrl/Cmd+V to paste, or click again to choose a file"
+                              : "Choose, drop, or paste an image"}
                         </div>
                       )}
                     </button>

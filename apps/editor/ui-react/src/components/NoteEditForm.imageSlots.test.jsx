@@ -185,7 +185,7 @@ describe("Note editor image slots", () => {
     expect(screen.queryByText("Will delete")).not.toBeInTheDocument();
   });
 
-  test("Enter, Space, and a click on a dropzone all open its file picker", async () => {
+  test("Enter, Space, and a second click on a dropzone open its file picker", async () => {
     const user = userEvent.setup();
     const click = vi
       .spyOn(HTMLInputElement.prototype, "click")
@@ -204,6 +204,71 @@ describe("Note editor image slots", () => {
 
     await user.click(dropzone);
     expect(click).toHaveBeenCalledTimes(3);
+
+    click.mockRestore();
+  });
+
+  test("a first click selects a dropzone for pasting and a second opens its file picker", async () => {
+    const user = userEvent.setup();
+    const click = vi
+      .spyOn(HTMLInputElement.prototype, "click")
+      .mockImplementation(() => {});
+    await renderForm();
+
+    const dropzone = screen.getByRole("button", {
+      name: "Choose or drop Front full image",
+    });
+
+    await user.click(dropzone);
+
+    expect(click).not.toHaveBeenCalled();
+    expect(dropzone).toHaveFocus();
+    expect(dropzone).toHaveClass("image-dropzone--active");
+    expect(
+      screen.getByText(
+        "Press Ctrl/Cmd+V to paste, or click again to choose a file",
+      ),
+    ).toBeInTheDocument();
+
+    // The selected card takes a pasted screenshot before any picker opens.
+    fireEvent.paste(dropzone, {
+      clipboardData: {
+        items: [
+          {
+            getAsFile: () =>
+              new File(["bytes"], "front.jpg", { type: "image/jpeg" }),
+            type: "image/jpeg",
+          },
+        ],
+      },
+    });
+    expect(await screen.findByText("New image ready")).toBeInTheDocument();
+
+    await user.click(dropzone);
+    expect(click).toHaveBeenCalledTimes(1);
+
+    click.mockRestore();
+  });
+
+  test("leaving a selected dropzone drops the selection", async () => {
+    const user = userEvent.setup();
+    const click = vi
+      .spyOn(HTMLInputElement.prototype, "click")
+      .mockImplementation(() => {});
+    await renderForm();
+
+    const dropzone = screen.getByRole("button", {
+      name: "Choose or drop Front full image",
+    });
+    await user.click(dropzone);
+    await user.click(screen.getByLabelText("Denomination"));
+
+    expect(dropzone).not.toHaveClass("image-dropzone--active");
+
+    // Back from elsewhere, the card is a fresh selection again.
+    await user.click(dropzone);
+    expect(click).not.toHaveBeenCalled();
+    expect(dropzone).toHaveClass("image-dropzone--active");
 
     click.mockRestore();
   });

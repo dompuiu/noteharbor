@@ -12,6 +12,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 - Showcase cards: a presentation-only Showcase now draws the same catalog card as one with placeholders. Every note leaf carries the compact catalog code, the date · denomination row, the grade, the notes preview and the Seen/Owned footer, which toggles the note's library-wide ownership. The note card's info tooltip and its `i` shortcut are gone. The `N notes` subtitle is removed, the ✓ Complete chip appears on every Showcase, and the filter empty states share one neutral copy, so the canvas reads the same with or without placeholders.
 
+- Note editor: the first click on a Note image slot now selects it, so a screenshot can be pasted with Ctrl/Cmd+V; a second click on the selected card's image area opens the file picker. Keyboard activation still opens the picker straight away.
+
 ## [2.16.0] - 2026-11-17
 
 ### Changed
