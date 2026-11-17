@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   createCatalogEntry,
   createShowcaseNode,
+  deleteCategory,
   deleteNode,
   getCategories,
   getShowcaseTree,
@@ -491,6 +492,15 @@ function ShowcaseScreen() {
     setAddTarget({ parent, afterId, mode });
   }
 
+  // An unused pool label can be deleted straight from the suggestion list; the
+  // dialog keeps itself open and the row disappears once the write lands.
+  async function handleDeleteSuggestion(category) {
+    await deleteCategory(category.id);
+    setCategories((current) =>
+      current.filter((entry) => entry.id !== category.id),
+    );
+  }
+
   function openAddCategory() {
     setNameDialog({
       kind: "add-category",
@@ -500,8 +510,8 @@ function ShowcaseScreen() {
       label: "Category name",
       initialValue: "",
       submitLabel: "Add category",
-      suggestions: availableCategories,
       suggestionsLabel: "Category suggestions",
+      onDeleteSuggestion: handleDeleteSuggestion,
     });
   }
 
@@ -1808,10 +1818,15 @@ function ShowcaseScreen() {
           initialValue={nameDialog.initialValue}
           label={nameDialog.label}
           onClose={() => setNameDialog(null)}
+          onDeleteSuggestion={nameDialog.onDeleteSuggestion}
           onSubmit={submitNameDialog}
           submitLabel={nameDialog.submitLabel}
           subtitle={nameDialog.subtitle}
-          suggestions={nameDialog.suggestions ?? []}
+          suggestions={
+            nameDialog.kind === "add-category"
+              ? availableCategories
+              : (nameDialog.suggestions ?? [])
+          }
           suggestionsLabel={nameDialog.suggestionsLabel}
           title={nameDialog.title}
         />

@@ -6405,6 +6405,47 @@ th[aria-sort="descending"] .sort-chevron {
   font-variant-numeric: tabular-nums;
 }
 
+/* A showcase pool suggestion pairs the pick control with a delete action, so
+   the two never nest and the row keeps the option's full hit area. */
+.showcase-name-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.showcase-name-suggestion .tags-filter-option {
+  flex: 1;
+  min-width: 0;
+}
+
+.showcase-name-suggestion-delete {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.showcase-name-suggestion-delete:hover:not(:disabled),
+.showcase-name-suggestion-delete:focus-visible {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.showcase-name-suggestion-delete:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.showcase-name-suggestion-delete-icon {
+  color: currentColor;
+}
+
 .tags-filter-option.is-highlighted,
 .tags-filter-option:hover {
   background: var(--accent-soft);

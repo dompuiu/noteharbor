@@ -4,7 +4,7 @@
 //! - Showcase CRUD + order, node tree building with embedded notes, placement
 //!   rules (top-level categories, groupings under category/grouping, notes
 //!   under parents), node reorder/rename/cover/delete, category pool with
-//!   get-or-create (no delete).
+//!   get-or-create and delete of unplaced labels.
 //! - Route-level catch semantics are: POST/PUT/reorder
 //!   answer any database failure as 400 with the message (existence checks
 //!   before the `try` still propagate 503/500, 404s preserved), while
@@ -65,6 +65,8 @@ pub struct Category {
     pub name: String,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
+    /// How many Showcases place this label. Zero means the pool may delete it.
+    pub showcase_count: i64,
 }
 
 /// The four catalog metadata fields a Catalog entry carries on its node.
@@ -419,8 +421,18 @@ pub fn reorder_showcases(conn: &mut Connection, ids: &[i64]) -> Result<Vec<Showc
 }
 
 // ---------------------------------------------------------------------------
-// Categories (shared label pool, get-or-create, no delete)
+// Categories (shared label pool, get-or-create, delete when unplaced)
 // ---------------------------------------------------------------------------
+
+const CATEGORY_SELECT: &str = "SELECT
+        categories.id,
+        categories.name,
+        categories.created_at,
+        categories.updated_at,
+        (SELECT COUNT(DISTINCT showcase_nodes.showcase_id)
+           FROM showcase_nodes
+           WHERE showcase_nodes.category_id = categories.id) AS showcase_count
+      FROM categories";
 
 fn map_category(row: &Row<'_>) -> rusqlite::Result<Category> {
     Ok(Category {
@@ -428,16 +440,15 @@ fn map_category(row: &Row<'_>) -> rusqlite::Result<Category> {
         name: row.get(1)?,
         created_at: row.get(2)?,
         updated_at: row.get(3)?,
+        showcase_count: row.get(4)?,
     })
 }
 
 fn list_categories(conn: &Connection) -> Result<Vec<Category>, DbError> {
     let mut stmt = conn
-        .prepare(
-            "SELECT id, name, created_at, updated_at
-             FROM categories
-             ORDER BY name COLLATE NOCASE ASC, id ASC",
-        )
+        .prepare(&format!(
+            "{CATEGORY_SELECT} ORDER BY categories.name COLLATE NOCASE ASC, categories.id ASC"
+        ))
         .map_err(classify)?;
     let rows: Vec<Category> = stmt
         .query_map([], map_category)
@@ -449,7 +460,7 @@ fn list_categories(conn: &Connection) -> Result<Vec<Category>, DbError> {
 
 fn get_category(conn: &Connection, id: i64) -> Result<Option<Category>, DbError> {
     let mut stmt = conn
-        .prepare("SELECT id, name, created_at, updated_at FROM categories WHERE id = ?1")
+        .prepare(&format!("{CATEGORY_SELECT} WHERE categories.id = ?1"))
         .map_err(classify)?;
     match stmt.query_row(params![id], map_category) {
         Ok(category) => Ok(Some(category)),
@@ -464,7 +475,9 @@ pub fn create_category(conn: &mut Connection, name: &str) -> Result<Category, Db
         return Err(DbError::Failed("Category name is required.".to_owned()));
     }
     let mut stmt = conn
-        .prepare("SELECT id, name, created_at, updated_at FROM categories WHERE name = ?1 COLLATE NOCASE")
+        .prepare(&format!(
+            "{CATEGORY_SELECT} WHERE categories.name = ?1 COLLATE NOCASE"
+        ))
         .map_err(classify)?;
     if let Ok(existing) = stmt.query_row(params![normalized], map_category) {
         return Ok(existing);
@@ -502,6 +515,28 @@ pub fn rename_category(
     }
     // The route checks existence first; a missing row surfaces as not found.
     get_category(conn, id)?.ok_or_else(|| DbError::Failed("Category not found.".to_owned()))
+}
+
+/// Delete a label only while no Showcase places it. A used label stays in the
+/// pool; removing its last placement first makes it deletable.
+pub fn delete_category(conn: &mut Connection, id: i64) -> Result<(), DbError> {
+    let Some(category) = get_category(conn, id)? else {
+        return Err(DbError::Failed("Category not found.".to_owned()));
+    };
+    if category.showcase_count > 0 {
+        let noun = if category.showcase_count == 1 {
+            "showcase"
+        } else {
+            "showcases"
+        };
+        return Err(DbError::Failed(format!(
+            "This category is placed in {} {noun}.",
+            category.showcase_count
+        )));
+    }
+    conn.execute("DELETE FROM categories WHERE id = ?1", params![id])
+        .map_err(classify)?;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -1704,6 +1739,30 @@ async fn rename_category_handler(
     }
 }
 
+async fn delete_category_handler(
+    State(state): State<AppState>,
+    Path(raw_id): Path<String>,
+) -> Response {
+    let Some(id) = js_number(&Value::String(raw_id)).filter(|value| *value > 0) else {
+        return bad_request("Category id must be a positive integer.");
+    };
+    let exists = match db::with_conn(&state.pool, move |conn| get_category(conn, id)).await {
+        Ok(category) => category.is_some(),
+        Err(error) => return db_failure(error),
+    };
+    if !exists {
+        return not_found("Category not found.");
+    }
+    match db::with_conn(&state.pool, move |conn| delete_category(conn, id)).await {
+        Ok(()) => ok(json!({ "success": true })),
+        // The row can vanish between the existence check and the delete.
+        Err(crate::AppError::Http { message, .. }) if message == "Category not found." => {
+            not_found("Category not found.")
+        }
+        Err(error) => db_failure(error),
+    }
+}
+
 pub fn showcases_router() -> Router<AppState> {
     Router::new()
         .route("/api/showcases", get(list_showcases_handler).post(create_showcase_handler))
@@ -1728,7 +1787,10 @@ pub fn nodes_router() -> Router<AppState> {
 pub fn categories_router() -> Router<AppState> {
     Router::new()
         .route("/api/categories", get(list_categories_handler).post(create_category_handler))
-        .route("/api/categories/{id}", put(rename_category_handler))
+        .route(
+            "/api/categories/{id}",
+            put(rename_category_handler).delete(delete_category_handler),
+        )
 }
 
 #[cfg(test)]

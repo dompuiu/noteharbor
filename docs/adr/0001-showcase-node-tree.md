@@ -1,6 +1,6 @@
 # Showcases are one self-referential ordered node tree
 
-A Showcase is stored as a single self-referential `showcase_nodes` table, where every row is a Category Placement, a Grouping, or a note, distinguished by `node_type` and ordered by a per-sibling `position`, rather than as split placement/contents tables or a polymorphic-parent join. This gives one uniform order per node — the "one order" the authoring canvas needs — a tree that is acyclic by construction, cascading subtree deletes, and a single recursive query for "every note beneath a node". Placement is by reference: a Category is a permanent row in a global `categories` pool that each Showcase references, so renaming a label updates every Showcase while its notes and groupings stay local to each Placement.
+A Showcase is stored as a single self-referential `showcase_nodes` table, where every row is a Category Placement, a Grouping, or a note, distinguished by `node_type` and ordered by a per-sibling `position`, rather than as split placement/contents tables or a polymorphic-parent join. This gives one uniform order per node — the "one order" the authoring canvas needs — a tree that is acyclic by construction, cascading subtree deletes, and a single recursive query for "every note beneath a node". Placement is by reference: a Category is a shared row in a global `categories` pool that each Showcase references, so renaming a label updates every Showcase while its notes and groupings stay local to each Placement.
 
 ## Considered Options
 
@@ -12,7 +12,7 @@ A Showcase is stored as a single self-referential `showcase_nodes` table, where 
 - Moving a Grouping or note rewrites only its `position` (and `parent_node_id`); nothing else references its location.
 - The tree is acyclic by construction, so no cycle-prevention invariant is required.
 - Archive export/import must renumber and remap four reference columns (`showcase_id`, `category_id`, `note_id`, `cover_note_id`) plus the self-referential `parent_node_id`.
-- Category labels are permanent: placements reference them with `ON DELETE RESTRICT`, and deleting a label is not an operation, so a label can never be orphaned by a delete.
+- Category labels follow their placements: a label with no Placement can be deleted, while placements keep `ON DELETE RESTRICT` so a used label is refused. Deleting a Placement still leaves the label in the pool, ready to be reused or deleted from the suggestion list.
 
 ## Extension: catalog shells
 

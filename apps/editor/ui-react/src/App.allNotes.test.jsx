@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("./lib/api.js", () => ({
+  deleteCategory: vi.fn(),
   getAllNotes: vi.fn(),
   getCollections: vi.fn(),
   getHealth: vi.fn(),

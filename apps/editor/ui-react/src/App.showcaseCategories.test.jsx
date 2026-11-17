@@ -12,6 +12,7 @@ vi.mock("./lib/api.js", () => ({
   createCollection: vi.fn(),
   createShowcase: vi.fn(),
   createShowcaseNode: vi.fn(),
+  deleteCategory: vi.fn(),
   deleteCollection: vi.fn(),
   deleteNode: vi.fn(),
   getCategories: vi.fn(),
@@ -49,6 +50,7 @@ import { ShellContent } from "./App.jsx";
 import {
   createCategory,
   createShowcaseNode,
+  deleteCategory,
   deleteNode,
   getCategories,
   getCollections,
@@ -99,8 +101,8 @@ beforeEach(() => {
   });
   getCategories.mockResolvedValue({
     categories: [
-      { id: 1, name: "Summer" },
-      { id: 2, name: "Vienna" },
+      { id: 1, name: "Summer", showcase_count: 1 },
+      { id: 2, name: "Vienna", showcase_count: 0 },
     ],
   });
   getShowcaseTree.mockResolvedValue({ showcase_id: 1, nodes: [SUMMER_NODE] });
@@ -312,6 +314,54 @@ describe("the showcase category canvas", () => {
     expect(
       screen.queryByRole("heading", { name: "Vienna" }),
     ).not.toBeInTheDocument();
+  });
+
+  test("deleting an unused suggestion removes it from the pool list", async () => {
+    const user = userEvent.setup();
+    deleteCategory.mockResolvedValue({ success: true });
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    await user.click(
+      await screen.findByRole("button", { name: "New category" }),
+    );
+    await user.type(screen.getByLabelText("Category name"), "v");
+    await user.keyboard("{ArrowDown}");
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Delete Vienna from the category pool",
+      }),
+    );
+
+    await waitFor(() => expect(deleteCategory).toHaveBeenCalledWith(2));
+    expect(
+      screen.queryByRole("option", { name: "Vienna" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("a refused delete keeps the suggestion and shows the message", async () => {
+    const user = userEvent.setup();
+    deleteCategory.mockRejectedValue(
+      new Error("This category is placed in 2 showcases."),
+    );
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    await user.click(
+      await screen.findByRole("button", { name: "New category" }),
+    );
+    await user.type(screen.getByLabelText("Category name"), "v");
+    await user.keyboard("{ArrowDown}");
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Delete Vienna from the category pool",
+      }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This category is placed in 2 showcases.",
+    );
+    expect(screen.getByRole("option", { name: "Vienna" })).toBeInTheDocument();
   });
 
   test("suggestions stay hidden until ArrowDown opens them", async () => {

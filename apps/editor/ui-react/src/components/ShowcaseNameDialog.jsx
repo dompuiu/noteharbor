@@ -8,6 +8,7 @@ import { ShowcaseNameField } from "./ShowcaseNameField.jsx";
 function ShowcaseNameDialog({
   initialValue = "",
   label = "Name",
+  onDeleteSuggestion,
   onSubmit,
   onClose,
   submitLabel = "Save",
@@ -18,6 +19,7 @@ function ShowcaseNameDialog({
 }) {
   const [value, setValue] = useState(initialValue);
   const [busy, setBusy] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
   const trimmed = value.trim();
 
@@ -40,12 +42,31 @@ function ShowcaseNameDialog({
     }
   }
 
+  async function removeSuggestion(suggestion) {
+    if (!onDeleteSuggestion || deletingId != null) {
+      return;
+    }
+
+    setDeletingId(suggestion.id);
+    setError("");
+
+    try {
+      await onDeleteSuggestion(suggestion);
+    } catch (deleteError) {
+      setError(deleteError.message || "Could not delete the category.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <ShowcaseDialog onClose={onClose} subtitle={subtitle} title={title}>
       <form className="showcase-name-dialog" onSubmit={submit}>
         <ShowcaseNameField
+          deletingSuggestionId={deletingId}
           label={label}
           onChange={setValue}
+          onDelete={onDeleteSuggestion ? removeSuggestion : undefined}
           suggestions={suggestions}
           suggestionsLabel={suggestionsLabel}
           value={value}

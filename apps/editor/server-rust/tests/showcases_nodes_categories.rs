@@ -324,6 +324,62 @@ async fn categories_rename_reports_missing() {
 }
 
 #[tokio::test]
+async fn categories_delete_removes_only_unused_labels() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let first = create_showcase(app.clone(), Some("First")).await;
+    let first_id = first["id"].as_i64().unwrap();
+    let second = create_showcase(app.clone(), Some("Second")).await;
+    let second_id = second["id"].as_i64().unwrap();
+
+    // A label with no placement reports zero usage and deletes.
+    let (_, created) =
+        call(app.clone(), "POST", "/api/categories", Some(json!({ "name": "Spare" }))).await;
+    let spare_id = created["category"]["id"].as_i64().unwrap();
+    assert_eq!(created["category"]["showcase_count"], json!(0));
+
+    let (status, body) =
+        call(app.clone(), "DELETE", &format!("/api/categories/{spare_id}"), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!({ "success": true }));
+
+    let (_, pool) = call(app.clone(), "GET", "/api/categories", None).await;
+    assert!(pool["categories"].as_array().unwrap().is_empty());
+
+    // A placed label is refused, counts its showcases, and keeps its row.
+    let placed = place_category(app.clone(), first_id, "Shared").await;
+    let placed_id = placed["category_id"].as_i64().unwrap();
+    let (status, body) =
+        call(app.clone(), "DELETE", &format!("/api/categories/{placed_id}"), None).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"], json!("This category is placed in 1 showcase."));
+
+    let (status, _) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/showcases/{second_id}/nodes"),
+        Some(json!({ "type": "category", "category_id": placed_id })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    let (_, pool) = call(app.clone(), "GET", "/api/categories", None).await;
+    assert_eq!(pool["categories"][0]["id"], json!(placed_id));
+    assert_eq!(pool["categories"][0]["showcase_count"], json!(2));
+
+    let (status, body) =
+        call(app.clone(), "DELETE", &format!("/api/categories/{placed_id}"), None).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"], json!("This category is placed in 2 showcases."));
+
+    let (status, _) = call(app.clone(), "DELETE", "/api/categories/999999", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) =
+        call(app.clone(), "DELETE", "/api/categories/not-a-number", None).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
 async fn category_placement_by_name_and_id_with_top_level_rule() {
     let (_dir, state) = fresh_state();
     let app = create_app(state);
@@ -428,7 +484,7 @@ async fn category_rename_through_node_placement_updates_every_showcase() {
 }
 
 #[tokio::test]
-async fn node_delete_keeps_label_and_reports_missing() {
+async fn node_delete_keeps_label_and_pool_can_delete_it() {
     let (_dir, state) = fresh_state();
     let app = create_app(state);
     let showcase = create_showcase(app.clone(), Some("Remove placement")).await;
@@ -452,6 +508,11 @@ async fn node_delete_keeps_label_and_reports_missing() {
 
     let (_, pool) = call(app.clone(), "GET", "/api/categories", None).await;
     assert!(pool["categories"].as_array().unwrap().iter().any(|row| row["name"] == json!("Keep me")));
+
+    // Removing the last placement orphans the label, so the pool can drop it.
+    let (status, _) =
+        call(app.clone(), "DELETE", &format!("/api/categories/{category_id}"), None).await;
+    assert_eq!(status, StatusCode::OK);
 
     let (status, _) = call(app.clone(), "DELETE", "/api/nodes/999999", None).await;
     assert_eq!(status, StatusCode::NOT_FOUND);

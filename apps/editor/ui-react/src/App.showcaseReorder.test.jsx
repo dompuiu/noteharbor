@@ -12,6 +12,7 @@ vi.mock("./lib/api.js", () => ({
   createCollection: vi.fn(),
   createShowcase: vi.fn(),
   createShowcaseNode: vi.fn(),
+  deleteCategory: vi.fn(),
   deleteCollection: vi.fn(),
   deleteNode: vi.fn(),
   getCategories: vi.fn(),

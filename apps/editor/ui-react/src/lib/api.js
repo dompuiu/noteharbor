@@ -508,6 +508,14 @@ async function createCategory(name) {
   return handleResponse(response);
 }
 
+async function deleteCategory(id) {
+  const response = await request(`/api/categories/${id}`, {
+    method: 'DELETE'
+  });
+
+  return handleResponse(response);
+}
+
 async function renameCategory(id, name) {
   const response = await request(`/api/categories/${id}`, {
     method: 'PUT',
@@ -681,6 +689,7 @@ export {
   createNote,
   createShowcase,
   createShowcaseNode,
+  deleteCategory,
   deleteCollection,
   deleteNode,
   deleteNote,

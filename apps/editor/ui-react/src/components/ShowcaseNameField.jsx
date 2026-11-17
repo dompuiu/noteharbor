@@ -2,15 +2,20 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useFloatingList } from "../lib/useFloatingList.js";
 import { normalizeTag } from "../lib/tags.js";
+import { MenuIcon } from "./MenuIcon.jsx";
 import { HighlightMatch, rankTagSuggestions } from "./TagsField.jsx";
 
 // The name field shared by the showcase's create and rename dialogs. With a
 // suggestion pool it behaves like the table's tag field: the pool is ranked
 // starts-with-first, the list stays shut until ArrowUp/Down or typing, Enter
-// picks the highlighted name, and Escape falls through to the dialog.
+// picks the highlighted name, and Escape falls through to the dialog. An
+// unplaced pool label also carries a delete action, so the pool can be pruned
+// from the same list that offers it.
 function ShowcaseNameField({
+  deletingSuggestionId = null,
   label,
   onChange,
+  onDelete,
   suggestions = [],
   suggestionsLabel = "Name suggestions",
   value,
@@ -70,6 +75,33 @@ function ShowcaseNameField({
     requestAnimationFrame(() => inputRef.current?.focus());
   }
 
+  function canDelete(suggestion) {
+    // Older payloads may omit the count; treat an unknown count as unused so
+    // the action stays reachable, and let the server reject a used label.
+    return Boolean(onDelete) && (suggestion?.showcase_count ?? 0) === 0;
+  }
+
+  function showcaseUsage(suggestion) {
+    return `${suggestion.showcase_count} ${
+      suggestion.showcase_count === 1 ? "showcase" : "showcases"
+    }`;
+  }
+
+  function suggestionLabel(suggestion) {
+    return suggestion.showcase_count > 0
+      ? `${suggestion.name}, placed in ${showcaseUsage(suggestion)}`
+      : suggestion.name;
+  }
+
+  function deleteSuggestion(suggestion) {
+    if (!canDelete(suggestion) || deletingSuggestionId != null) {
+      return;
+    }
+
+    setHighlighted(-1);
+    onDelete(suggestion);
+  }
+
   function handleKeyDown(event) {
     if (!combobox) {
       return;
@@ -104,6 +136,16 @@ function ShowcaseNameField({
       // field so the user can still review it before pressing the action.
       event.preventDefault();
       pick(visible[highlighted].name);
+      return;
+    }
+
+    if (event.key === "Delete" && isOpen && highlighted >= 0) {
+      const target = visible[highlighted];
+
+      if (canDelete(target)) {
+        event.preventDefault();
+        deleteSuggestion(target);
+      }
       return;
     }
 
@@ -165,22 +207,54 @@ function ShowcaseNameField({
               }}
             >
               {visible.map((suggestion, index) => (
-                <button
-                  aria-selected={index === highlighted}
-                  className={`tags-filter-option${index === highlighted ? " is-highlighted" : ""}`}
-                  id={`${listboxId}-option-${index}`}
+                <div
+                  className="showcase-name-suggestion"
                   key={suggestion.id}
-                  onClick={() => pick(suggestion.name)}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onMouseEnter={() => setHighlighted(index)}
-                  ref={
-                    index === highlighted ? scrollHighlightedIntoView : undefined
-                  }
-                  role="option"
-                  type="button"
+                  role="presentation"
                 >
-                  <HighlightMatch text={suggestion.name} query={value} />
-                </button>
+                  <button
+                    aria-label={suggestionLabel(suggestion)}
+                    aria-selected={index === highlighted}
+                    className={`tags-filter-option${index === highlighted ? " is-highlighted" : ""}`}
+                    id={`${listboxId}-option-${index}`}
+                    onClick={() => pick(suggestion.name)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onMouseEnter={() => setHighlighted(index)}
+                    ref={
+                      index === highlighted ? scrollHighlightedIntoView : undefined
+                    }
+                    role="option"
+                    type="button"
+                  >
+                    <HighlightMatch text={suggestion.name} query={value} />
+                  </button>
+
+                  {canDelete(suggestion) ? (
+                    <button
+                      aria-keyshortcuts="Delete"
+                      aria-label={`Delete ${suggestion.name} from the category pool`}
+                      className="showcase-name-suggestion-delete"
+                      disabled={deletingSuggestionId != null}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        deleteSuggestion(suggestion);
+                      }}
+                      onMouseDown={(event) => event.preventDefault()}
+                      title="Delete from the category pool"
+                      type="button"
+                    >
+                      <MenuIcon
+                        className="showcase-name-suggestion-delete-icon"
+                        name="delete"
+                      />
+                    </button>
+                  ) : typeof suggestion.showcase_count === "number" &&
+                    suggestion.showcase_count > 0 ? (
+                    <span className="tags-filter-option-count">
+                      {showcaseUsage(suggestion)}
+                    </span>
+                  ) : null}
+                </div>
               ))}
             </div>,
             document.body,
