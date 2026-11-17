@@ -408,6 +408,51 @@ describe("the catalog card layouts", () => {
     expect(grid()).toHaveAttribute("data-catalog-layout", "labels");
   });
 
+  test("the Auction rail gives a grouping a rail identity", async () => {
+    const user = userEvent.setup();
+    const group = {
+      id: 50,
+      node_type: "grouping",
+      name: "Some",
+      category_id: null,
+      parent_node_id: 10,
+      note_id: null,
+      cover_note_id: null,
+      position: 5,
+      note: null,
+      cover_note: null,
+      children: [noteNode(400, OWNED_NOTE, 1), noteNode(401, SEEN_NOTE, 2)],
+    };
+    await openShowcase([
+      categoryNode([
+        entryNode(
+          20,
+          {
+            catalog_number: "22a",
+            specimens: [OWNED_NOTE],
+            primary: OWNED_NOTE.id,
+          },
+          1,
+        ),
+        group,
+      ]),
+    ]);
+
+    const grouping = screen.getByRole("button", { name: "Open grouping Some" });
+    expect(grouping).not.toHaveClass("showcase-card--grouping-rail");
+
+    await user.click(layoutGroup().getByRole("radio", { name: "Auction rail" }));
+
+    expect(grouping).toHaveClass("showcase-card--grouping-rail");
+    expect(
+      grouping.querySelector(".showcase-grouping-rail-body"),
+    ).not.toBeNull();
+    expect(
+      grouping.querySelector(".showcase-grouping-rail-count"),
+    ).toHaveTextContent("2");
+    expect(grouping.querySelector(".showcase-grouping-head")).toBeNull();
+  });
+
   test("prints the specimen grade in both layouts", async () => {
     const user = userEvent.setup();
     const graded = note(106, {

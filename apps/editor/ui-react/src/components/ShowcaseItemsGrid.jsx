@@ -165,16 +165,22 @@ function ShowcaseItemsGrid({
         if (node.node_type === "grouping") {
           return (
             <ShowcaseReorderableCell
+              embedded
               key={node.id}
               label={node.name}
               menu={menuFor(node, { isGrouping: true })}
               nodeId={node.id}
               reorder={reorderEnabled ? reorder : null}
             >
-              <ShowcaseGroupingCard
-                node={node}
-                onOpen={() => onOpenGrouping(node)}
-              />
+              {({ grip, menu }) => (
+                <ShowcaseGroupingCard
+                  grip={grip}
+                  layout={catalogMode ? catalogLayout : "labels"}
+                  menu={menu}
+                  node={node}
+                  onOpen={() => onOpenGrouping(node)}
+                />
+              )}
             </ShowcaseReorderableCell>
           );
         }

@@ -1,54 +1,162 @@
+import { useId } from "react";
 import { firstAvailableNoteImage } from "../lib/showcaseImages.js";
 import { resolveGroupingCover } from "../lib/showcaseCovers.js";
+import { isCatalogEntry } from "../lib/showcaseTree.js";
 
-// A Grouping card shows its cover: the manual cover when one is set, else the
-// first Note beneath the Grouping, else a neutral gradient placeholder that
-// still shows the name (presentation spec §3–4). It is presentation-only; the
-// edit controls live beside it, not inside it. Both view and edit mode open on
-// a single click / Enter / Space. The footer carries a folder glyph so a
-// Grouping reads as a container next to a Note; the glyph is inline at 1em so
-// the footer keeps the Note caption's line height.
-function ShowcaseGroupingCard({ node, onOpen }) {
+function countLabel(count, singular, plural) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function countContents(children) {
+  return {
+    notes: children.filter((node) => node.node_type === "note").length,
+    entries: children.filter(isCatalogEntry).length,
+    groupings: children.filter((node) => node.node_type === "grouping")
+      .length,
+  };
+}
+
+// The footer states what sits directly inside the Grouping. Notes, catalog
+// placeholders and nested Groupings each get their own count; an empty
+// Grouping says so instead of printing three zeroes.
+function groupingContents({ notes, entries, groupings }) {
+  if (notes + entries + groupings === 0) {
+    return "No items yet";
+  }
+
+  return [
+    notes > 0 ? countLabel(notes, "note", "notes") : "",
+    entries > 0
+      ? countLabel(entries, "placeholder", "placeholders")
+      : "",
+    groupings > 0 ? countLabel(groupings, "grouping", "groupings") : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function FolderIcon({ className }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      focusable="false"
+      height="14"
+      viewBox="0 0 24 24"
+      width="14"
+    >
+      <path
+        d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+// The Grouping card. The reveal chrome is folded into the card rather than
+// sitting in a second bar above it: the grip lives in the header's left
+// gutter, the actions menu in its right gutter, and both are siblings of the
+// card button because the menu trigger is its own button.
+//
+// - `folio` (labels layout): one header, a hairline photo well, a contents row
+//   and an action row. The four rows match a catalog card's header, photo,
+//   metadata and ownership rows, so the cards line up in one grid row.
+// - `rail` (Auction rail): the rail-label composition — photo left, a fixed
+//   identity rail right with the GROUPING kicker, name, contents and the large
+//   count, and the same action row under both columns.
+function ShowcaseGroupingCard({
+  grip = null,
+  layout = "labels",
+  menu = null,
+  node,
+  onOpen,
+}) {
   const coverImage = firstAvailableNoteImage(resolveGroupingCover(node));
+  const counts = countContents(node.children ?? []);
+  const contents = groupingContents(counts);
+  const total = counts.notes + counts.entries;
+  const contentsId = useId();
+  const rail = layout === "rail";
+  const className = `showcase-grouping${rail ? " showcase-grouping--rail" : ""}${
+    grip ? " showcase-grouping--grip" : ""
+  }${menu ? " showcase-grouping--menu" : ""}`;
+  const summary = (
+    <span className="showcase-grouping-summary" id={contentsId}>
+      {contents}
+    </span>
+  );
+  const action = <span className="showcase-grouping-action">Open →</span>;
+
+  const cover = coverImage ? (
+    <img alt="" className="showcase-grouping-photo" src={coverImage.path} />
+  ) : (
+    <span aria-hidden="true" className="showcase-grouping-empty">
+      <FolderIcon className="showcase-grouping-empty-icon" />
+      <span>No cover</span>
+    </span>
+  );
 
   return (
-    <button
-      aria-label={`Open grouping ${node.name}`}
-      className="showcase-card showcase-card--grouping"
-      data-showcase-node-id={node.id}
-      onClick={onOpen}
-      role="button"
-      tabIndex={0}
-      type="button"
-    >
-      {coverImage ? (
-        <img alt="" className="showcase-card-image" src={coverImage.path} />
-      ) : (
-        <span
-          aria-hidden="true"
-          className="showcase-card-cover showcase-card-cover--empty"
-        />
-      )}
-      <span className="showcase-card-name">
-        <svg
-          aria-hidden="true"
-          className="showcase-card-name-icon"
-          focusable="false"
-          height="16"
-          viewBox="0 0 24 24"
-          width="16"
-        >
-          <path
-            d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
-        </svg>
-        <span className="showcase-card-name-text">{node.name}</span>
-      </span>
-    </button>
+    <div className={className}>
+      <button
+        aria-describedby={contentsId}
+        aria-label={`Open grouping ${node.name}`}
+        className={`showcase-card showcase-card--grouping${
+          rail ? " showcase-card--grouping-rail" : ""
+        }`}
+        data-showcase-node-id={node.id}
+        onClick={onOpen}
+        type="button"
+      >
+        {rail ? (
+          <>
+            <span className="showcase-grouping-rail-main">
+              <span className="showcase-grouping-well">{cover}</span>
+              <span className="showcase-grouping-rail-body">
+                <span
+                  aria-hidden="true"
+                  className="showcase-grouping-rail-gutter"
+                />
+                <span className="showcase-grouping-kicker">Grouping</span>
+                <span className="showcase-grouping-rail-name-row">
+                  <FolderIcon className="showcase-grouping-rail-name-icon" />
+                  <span className="showcase-grouping-name-text">
+                    {node.name}
+                  </span>
+                </span>
+                {summary}
+                {total > 0 ? (
+                  <span className="showcase-grouping-rail-stats">
+                    <span className="showcase-grouping-rail-count">
+                      {total}
+                    </span>
+                    <span className="showcase-grouping-rail-unit">
+                      {total === 1 ? "item" : "items"}
+                    </span>
+                  </span>
+                ) : null}
+              </span>
+            </span>
+            {action}
+          </>
+        ) : (
+          <>
+            <span className="showcase-grouping-head">
+              <FolderIcon className="showcase-grouping-head-icon" />
+              <span className="showcase-grouping-name-text">{node.name}</span>
+            </span>
+            <span className="showcase-grouping-well">{cover}</span>
+            <span className="showcase-grouping-meta">{summary}</span>
+            {action}
+          </>
+        )}
+      </button>
+      {grip}
+      {menu}
+    </div>
   );
 }
 

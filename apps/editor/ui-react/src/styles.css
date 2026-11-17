@@ -1483,13 +1483,6 @@ input[type="radio"] {
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
-/* The grouping spine survives focus: both rings paint together. */
-.showcase-card--grouping:focus-visible {
-  box-shadow:
-    inset 3px 0 0 var(--accent),
-    inset 0 0 0 1px var(--accent);
-}
-
 /* A focused card can only be reached outside a reorder cell (the category
    header); inside a cell the cell itself owns the focus cue. */
 
@@ -1497,66 +1490,308 @@ input[type="radio"] {
   aspect-ratio: 2 / 1;
 }
 
-.showcase-card-name {
-  max-width: 100%;
+/* A Grouping card is a folio. One header doubles as the reorder bar (grip,
+   name, actions), the cover sits in a hairline plate, and two footer rows
+   state what is inside and how to open it. The reorder cell is the frame, so
+   the button inside never paints a second border; the grip and menu sit in the
+   header's reserved corners as siblings of the button.
+   In the Auction rail the same card turns into the rail label: photo left,
+   a fixed identity rail right, the same action row under both. */
+.showcase-grouping {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.showcase-card--grouping {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+/* Header: 34px, matching the catalog card's top line. The 40px/32px insets
+   place the title on the same x as a catalog code and reserve the menu. */
+.showcase-grouping-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  min-width: 0;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.showcase-grouping--grip .showcase-grouping-head {
+  padding-left: 40px;
+}
+
+.showcase-grouping--menu .showcase-grouping-head {
+  padding-right: 32px;
+}
+
+.showcase-grouping-head-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--accent-strong);
+}
+
+.showcase-grouping-name-text {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
+  color: var(--text);
+  font-size: 0.78rem;
   font-weight: 600;
+  line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* A Grouping card shows its cover image (the manual cover or the first note
-   beneath it) or a neutral gradient placeholder that still carries the name.
-   It shares the Note card's surface, padding, and footer metrics so the two
-   stay the same height in one grid row. Only non-sized cues separate them: a
-   slim accent spine and accent border on the card plus an accent-strong
-   folder footer, while a Note stays plain with a muted caption. The footer
-   icon is inline at 1em inside the shared 1.4 line so it never changes the
-   row height. */
-.showcase-card--grouping {
-  justify-content: flex-start;
-  gap: 8px;
-  padding: 10px 10px 6px;
-  border-color: var(--border-control);
-  background: var(--surface);
-  box-shadow: inset 3px 0 0 var(--accent);
+/* The cover keeps the catalog photo plate: the same inset, hairline and 2/1
+   ratio, so the header and footer rows of both cards line up. */
+.showcase-grouping-well {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: calc(100% - 20px);
+  aspect-ratio: 2 / 1;
+  margin: 10px 10px 0;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 2px;
+  background: var(--surface-2);
 }
 
-.showcase-card--grouping .showcase-card-name {
+.showcase-grouping-photo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.showcase-grouping-empty {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  max-width: 100%;
-  color: var(--accent-strong);
-  font-size: 0.85rem;
-  line-height: 1.4;
-  min-height: 1.4em;
+  width: 100%;
+  height: 100%;
+  background: var(--surface-3);
+  color: var(--text-faint);
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
-.showcase-card-name-icon {
-  flex: none;
-  width: 1em;
-  height: 1em;
+.showcase-grouping-empty-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--text-muted);
 }
 
-.showcase-card-name-text {
+/* The contents row is the catalog metadata row: 34px tall, 11px inset. The
+   action row is the ownership row: 28px tall, uppercase, 0.55rem. Together
+   they keep a grouping the same height as the catalog card beside it. */
+.showcase-grouping-meta {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 34px;
+  padding: 2px 11px 6px;
+  color: var(--text-faint);
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+.showcase-grouping-summary {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.showcase-card-cover {
-  display: block;
-  width: 100%;
-  aspect-ratio: 2 / 1;
-  border-radius: var(--radius-md);
+.showcase-grouping-action {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 28px;
+  padding: 5px 11px;
+  border-top: 1px solid var(--border-soft);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  color: var(--text-muted);
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  transition: color 0.14s ease;
 }
 
-.showcase-card-cover--empty {
-  background: var(--surface-3);
-  border: 1px solid var(--border-soft);
+.showcase-card--grouping:hover .showcase-grouping-action,
+.showcase-card--grouping:focus-visible .showcase-grouping-action {
+  color: var(--accent-strong);
+}
+
+/* The grip is an affordance, not a separate drag source; the whole cell stays
+   draggable, so the pointer passes through the handle. It sits in the header's
+   left gutter. */
+.showcase-grouping > .showcase-reorder-handle {
+  position: absolute;
+  z-index: 3;
+  top: 5px;
+  left: 7px;
+  pointer-events: none;
+}
+
+/* ── Auction rail: the rail label ────────────────────────────────────────── */
+
+.showcase-grouping--rail {
+  --grouping-rail-width: 132px;
+  --grouping-rail-pad-left: 11px;
+  --grouping-rail-pad-right: 9px;
+}
+
+.showcase-card--grouping-rail {
+  min-height: 176px;
+}
+
+.showcase-grouping-rail-main {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 9px 0 9px 9px;
+}
+
+.showcase-grouping--rail .showcase-grouping-well {
+  flex: 1 1 auto;
+  align-self: center;
+  width: auto;
+  aspect-ratio: 2 / 1;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.showcase-grouping-rail-body {
+  display: flex;
+  flex: 0 0 var(--grouping-rail-width);
+  flex-direction: column;
+  min-width: 0;
+  padding: 0 var(--grouping-rail-pad-right) 0 var(--grouping-rail-pad-left);
+}
+
+.showcase-grouping-rail-gutter {
+  flex: none;
+  min-height: 20px;
+  padding-right: 30px;
+}
+
+.showcase-grouping-kicker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 5px;
+  color: var(--accent-strong);
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.showcase-grouping-rail-name-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  margin-top: 4px;
+}
+
+.showcase-grouping-rail-name-icon {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  margin-top: 2px;
+  color: var(--accent-strong);
+}
+
+.showcase-grouping--rail .showcase-grouping-name-text {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 0;
+  font-size: 0.8rem;
+  font-weight: 650;
+  line-height: 1.25;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.showcase-grouping--rail .showcase-grouping-summary {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  line-height: 1.3;
+}
+
+.showcase-grouping-rail-stats {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.showcase-grouping-rail-count {
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 0.92;
+  font-variant-numeric: tabular-nums;
+}
+
+.showcase-grouping-rail-unit {
+  margin-bottom: 1px;
+  color: var(--text-faint);
+  font-size: 0.47rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+/* The grip moves into the top of the rail, exactly where the catalog card's
+   grip sits; the menu keeps the cell's top-right corner. */
+.showcase-grouping--rail > .showcase-reorder-handle {
+  top: 9px;
+  left: auto;
+  right: calc(
+    var(--grouping-rail-width) - var(--grouping-rail-pad-left) - 24px
+  );
+}
+
+@media (max-width: 560px) {
+  .showcase-grouping--rail {
+    --grouping-rail-width: 118px;
+    --grouping-rail-pad-left: 9px;
+    --grouping-rail-pad-right: 7px;
+  }
 }
 
 /* The drill navigation: a breadcrumb back through the ancestors. One
@@ -1803,11 +2038,6 @@ input[type="radio"] {
   box-shadow: none;
 }
 
-/* The grouping spine is identity, not focus, so it survives the cell cue. */
-.showcase-reorder-cell .showcase-card--grouping:focus-visible {
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-
 /* Forced colours drop the drawn frame to system ink so keyboard focus keeps an
    enclosing edge without the accent rules' own colour. */
 @media (forced-colors: active) {
@@ -1848,12 +2078,9 @@ input[type="radio"] {
   height: 12px;
 }
 
-/* Prototype: grouping / note edit icons. The remove icon sits top-right on
-   the same line as the drag handle (top:8px, matching
-   `.showcase-reorder-handle`); its containing block is the relative reorder
-   cell. The grouping pencil sits inline right where the title text ends, as a
-   flex item of the title row, vertically centered with the text. */
-.showcase-grouping-remove,
+/* Prototype: note edit icon. The remove icon sits top-right on the same line
+   as the drag handle (top:8px, matching `.showcase-reorder-handle`); its
+   containing block is the relative reorder cell. */
 .showcase-note-remove {
   position: absolute;
   top: 8px;
@@ -1872,68 +2099,12 @@ input[type="radio"] {
   cursor: pointer;
 }
 
-.showcase-grouping-remove:hover,
-.showcase-grouping-remove:focus-visible,
 .showcase-note-remove:hover,
 .showcase-note-remove:focus-visible {
   border-color: var(--danger, #b3261e);
   color: var(--danger, #b3261e);
 }
 
-/* Edit-mode grouping card: the bordered card chrome lives on the wrapper so
-   the title row (folder + text + pencil) can sit outside the open button — a
-   button cannot nest inside another button. The cover button keeps the
-   `.showcase-card` marker class (overridden borderless) so card keyboard
-   navigation still finds exactly one focusable card per grouping. */
-.showcase-grouping-editcard {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-  padding: 10px 10px 6px;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-
-.showcase-grouping-open {
-  display: block;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-.showcase-grouping-name {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  max-width: 100%;
-  color: var(--accent-strong);
-  font-size: 0.85rem;
-  font-weight: 600;
-  line-height: 1.4;
-  min-height: 1.4em;
-}
-
-.showcase-grouping-title {
-  cursor: pointer;
-}
-
-/* Inline rename: the footer row turns into a form and the title text is
-   replaced by a text field in place, followed by save / discard icons. The
-   row takes ~85% of the card width, centered. */
-.showcase-grouping-rename-form {
-  width: 85%;
-  margin: 0 auto;
-}
-
-.showcase-grouping-input,
 .showcase-node-input {
   flex: 1 1 auto;
   min-width: 0;
@@ -1948,15 +2119,12 @@ input[type="radio"] {
 /* Showcase text fields focus like catalog fields: an accent border with a
    soft halo instead of the global offset outline. */
 .showcase-name-field:focus,
-.showcase-category-input:focus,
-.showcase-grouping-input:focus,
 .showcase-node-input:focus {
   border-color: var(--accent);
   outline: 2px solid var(--accent-soft);
   outline-offset: 0;
 }
 
-.showcase-grouping-rename,
 .showcase-node-rename {
   flex: none;
   display: inline-flex;
@@ -1972,10 +2140,6 @@ input[type="radio"] {
   cursor: pointer;
 }
 
-.showcase-grouping-rename:hover,
-.showcase-grouping-rename:focus-visible,
-.showcase-grouping-save:hover,
-.showcase-grouping-save:focus-visible,
 .showcase-node-rename:hover,
 .showcase-node-rename:focus-visible,
 .showcase-node-save:hover,
@@ -1984,8 +2148,6 @@ input[type="radio"] {
   color: var(--accent-strong);
 }
 
-.showcase-grouping-save,
-.showcase-grouping-cancel,
 .showcase-node-save,
 .showcase-node-cancel {
   flex: none;
@@ -2002,16 +2164,12 @@ input[type="radio"] {
   cursor: pointer;
 }
 
-.showcase-grouping-cancel:hover,
-.showcase-grouping-cancel:focus-visible,
 .showcase-node-cancel:hover,
 .showcase-node-cancel:focus-visible {
   border-color: var(--danger, #b3261e);
   color: var(--danger, #b3261e);
 }
 
-.showcase-grouping-save:disabled,
-.showcase-grouping-cancel:disabled,
 .showcase-node-save:disabled,
 .showcase-node-cancel:disabled {
   cursor: not-allowed;

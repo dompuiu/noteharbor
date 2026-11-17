@@ -227,6 +227,29 @@ describe("grouping drill navigation", () => {
     expect(groupingCard("Sub")).toBeInTheDocument();
   });
 
+  test("a grouping merges its reorder chrome into one folio header", async () => {
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    const card = await screen.findByRole("button", {
+      name: "Open grouping Sub",
+    });
+    const cell = card.closest(".showcase-reorder-cell");
+    const header = cell.querySelector(".showcase-grouping-head");
+
+    expect(cell.querySelector(".showcase-reorder-bar")).toBeNull();
+    expect(header).toHaveTextContent("Sub");
+    expect(cell.querySelector(".showcase-reorder-handle")).not.toBeNull();
+    expect(
+      within(header).queryByRole("button", { name: "Actions for Sub" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(cell).getByRole("button", { name: "Actions for Sub" }),
+    ).toBeInTheDocument();
+    // The footer carries the contents; the header carries only the name.
+    expect(within(cell).getByText("1 note · 1 grouping")).toBeInTheDocument();
+    expect(header).not.toHaveTextContent(/1 note/);
+  });
+
   test("clicking a grouping drills in; the breadcrumb goes back", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
 

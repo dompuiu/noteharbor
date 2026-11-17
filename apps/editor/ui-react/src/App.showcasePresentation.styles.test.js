@@ -68,39 +68,35 @@ describe("showcase empty-state styles", () => {
 });
 
 describe("showcase note/grouping card heights", () => {
-  test("grouping shares the note card's padding and alignment", () => {
-    const note = styles.match(/\n\.showcase-card--note\s*\{([^}]*)\}/);
-    const grouping = styles.match(/\n\.showcase-card--grouping\s*\{([^}]*)\}/);
-    expect(note).not.toBeNull();
-    expect(grouping).not.toBeNull();
-    for (const prop of [
-      /justify-content:\s*flex-start/,
-      /gap:\s*8px/,
-      // The bottom pad stays tight so no daylight sits under the caption.
-      /padding:\s*10px 10px 6px/,
-    ]) {
-      expect(note[1]).toMatch(prop);
-      expect(grouping[1]).toMatch(prop);
-    }
+  test("the folio header takes the catalog card's top-line metrics", () => {
+    const head = styles.match(/\n\.showcase-grouping-head\s*\{([^}]*)\}/);
+    const grip = styles.match(
+      /\n\.showcase-grouping--grip \.showcase-grouping-head\s*\{([^}]*)\}/,
+    );
+    const menu = styles.match(
+      /\n\.showcase-grouping--menu \.showcase-grouping-head\s*\{([^}]*)\}/,
+    );
+    expect(head).not.toBeNull();
+    expect(grip).not.toBeNull();
+    expect(menu).not.toBeNull();
+    expect(head[1]).toMatch(/height:\s*34px/);
+    expect(head[1]).toMatch(/border-bottom:\s*1px solid var\(--border-soft\)/);
+    expect(grip[1]).toMatch(/padding-left:\s*40px/);
+    expect(menu[1]).toMatch(/padding-right:\s*32px/);
   });
 
   test("the reorder cell is a window: a bar, then the photo, one frame", () => {
     const cell = styles.match(/\n\.showcase-reorder-cell\s*\{([^}]*)\}/);
     const bar = styles.match(/\n\.showcase-reorder-bar\s*\{([^}]*)\}/);
     const title = styles.match(/\n\.showcase-reorder-title\s*\{([^}]*)\}/);
-    const editcard = styles.match(
-      /\n\.showcase-grouping-editcard\s*\{([^}]*)\}/,
-    );
     expect(cell).not.toBeNull();
     expect(bar).not.toBeNull();
     expect(title).not.toBeNull();
-    expect(editcard).not.toBeNull();
     expect(cell[1]).toMatch(/padding:\s*0 0 6px/);
     expect(cell[1]).not.toMatch(/padding-top/);
     expect(bar[1]).toMatch(/height:\s*34px/);
     expect(bar[1]).toMatch(/border-bottom:\s*1px solid var\(--border-soft\)/);
     expect(title[1]).toMatch(/text-overflow:\s*ellipsis/);
-    expect(editcard[1]).toMatch(/padding:\s*10px 10px 6px/);
   });
 
   test("the card fills its reorder cell so cell and content end together", () => {
@@ -126,42 +122,51 @@ describe("showcase note/grouping card heights", () => {
     expect(card[1]).not.toMatch(/calc/);
   });
 
-  test("grouping footer shares the caption's line metrics", () => {
-    const caption = styles.match(/\n\.showcase-card-caption\s*\{([^}]*)\}/);
-    const name = styles.match(
-      /\n\.showcase-card--grouping \.showcase-card-name\s*\{([^}]*)\}/,
-    );
-    expect(caption).not.toBeNull();
-    expect(name).not.toBeNull();
-    for (const prop of [
-      /font-size:\s*0\.85rem/,
-      /line-height:\s*1\.4/,
-      /min-height:\s*1\.4em/,
-    ]) {
-      expect(caption[1]).toMatch(prop);
-      expect(name[1]).toMatch(prop);
-    }
+  test("the grouping cover sits on the catalog photo plate", () => {
+    const well = styles.match(/\n\.showcase-grouping-well\s*\{([^}]*)\}/);
+    expect(well).not.toBeNull();
+    expect(well[1]).toMatch(/width:\s*calc\(100% - 20px\)/);
+    expect(well[1]).toMatch(/aspect-ratio:\s*2 \/ 1/);
+    expect(well[1]).toMatch(/margin:\s*10px 10px 0/);
+    expect(well[1]).toMatch(/border:\s*1px solid var\(--border-soft\)/);
+    expect(well[1]).toMatch(/background:\s*var\(--surface-2\)/);
   });
 
-  test("grouping stays distinguishable without changing size", () => {
-    const grouping = styles.match(/\n\.showcase-card--grouping\s*\{([^}]*)\}/);
-    const name = styles.match(
-      /\n\.showcase-card--grouping \.showcase-card-name\s*\{([^}]*)\}/,
+  test("the contents and action rows mirror catalog metadata and ownership", () => {
+    const meta = styles.match(/\n\.showcase-grouping-meta\s*\{([^}]*)\}/);
+    const action = styles.match(/\n\.showcase-grouping-action\s*\{([^}]*)\}/);
+    expect(meta).not.toBeNull();
+    expect(action).not.toBeNull();
+    expect(meta[1]).toMatch(/min-height:\s*34px/);
+    expect(meta[1]).toMatch(/padding:\s*2px 11px 6px/);
+    expect(action[1]).toMatch(/min-height:\s*28px/);
+    expect(action[1]).toMatch(/border-top:\s*1px solid var\(--border-soft\)/);
+    expect(action[1]).toMatch(/text-transform:\s*uppercase/);
+    expect(action[1]).toMatch(/color:\s*var\(--text-muted\)/);
+    expect(styles).toMatch(
+      /\.showcase-card--grouping:hover \.showcase-grouping-action,[\s\S]*?color:\s*var\(--accent-strong\)/,
     );
-    const icon = styles.match(/\n\.showcase-card-name-icon\s*\{([^}]*)\}/);
-    const image = styles.match(/\n\.showcase-card-image\s*\{([^}]*)\}/);
-    expect(grouping).not.toBeNull();
-    expect(grouping[1]).toMatch(/background:\s*var\(--surface\)/);
-    expect(grouping[1]).toMatch(/box-shadow:\s*inset 3px 0 0 var\(--accent\)/);
-    expect(name).not.toBeNull();
-    expect(name[1]).toMatch(/color:\s*var\(--accent-strong\)/);
-    expect(icon).not.toBeNull();
-    expect(icon[1]).toMatch(/width:\s*1em/);
-    expect(icon[1]).toMatch(/height:\s*1em/);
-    // The image well is transparent so letterboxed photos blend into the
-    // card instead of adding a third background tone.
-    expect(image).not.toBeNull();
-    expect(image[1]).toMatch(/background:\s*transparent/);
+  });
+
+  test("the auction rail uses the rail-label split", () => {
+    const rail = styles.match(/\n\.showcase-card--grouping-rail\s*\{([^}]*)\}/);
+    const body = styles.match(
+      /\n\.showcase-grouping-rail-body\s*\{([^}]*)\}/,
+    );
+    const count = styles.match(
+      /\n\.showcase-grouping-rail-count\s*\{([^}]*)\}/,
+    );
+    const handle = styles.match(
+      /\n\.showcase-grouping--rail > \.showcase-reorder-handle\s*\{([^}]*)\}/,
+    );
+    expect(rail).not.toBeNull();
+    expect(body).not.toBeNull();
+    expect(count).not.toBeNull();
+    expect(handle).not.toBeNull();
+    expect(rail[1]).toMatch(/min-height:\s*176px/);
+    expect(body[1]).toMatch(/flex:\s*0 0 var\(--grouping-rail-width\)/);
+    expect(count[1]).toMatch(/font-size:\s*1\.45rem/);
+    expect(handle[1]).toMatch(/right:\s*calc\(/);
   });
 });
 
@@ -263,9 +268,12 @@ describe("showcase focus: proof frame", () => {
     expect(rule[1]).toMatch(/box-shadow:\s*none/);
   });
 
-  test("the grouping keeps only its spine once its card is focused", () => {
-    expect(styles).toMatch(
-      /\.showcase-reorder-cell \.showcase-card--grouping:focus-visible\s*\{[^}]*box-shadow:\s*inset 3px 0 0 var\(--accent\)/,
+  test("the grouping keeps the cell's single frame, never a spine", () => {
+    expect(styles).not.toMatch(
+      /\.showcase-card--grouping\s*\{[^}]*box-shadow:\s*inset 3px 0 0/,
+    );
+    expect(styles).not.toMatch(
+      /\.showcase-reorder-cell \.showcase-card--grouping:focus-visible/,
     );
   });
 
