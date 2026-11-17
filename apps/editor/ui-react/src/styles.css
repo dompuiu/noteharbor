@@ -6162,8 +6162,9 @@ th[aria-sort="descending"] .sort-chevron {
 
 /* Every select is the "Add a tag" combobox: one 36px box with the same
    hairline, surface, 10px radius, accent focus ring and accent chevron, and
-   the same floating option list. Only the value differs — a single choice
-   from a closed list, never a free-typed tag. */
+   the same floating option list. A closed select shows one choice; the
+   showcase name field reuses the box in free-text mode so a typed label can
+   live beside the pool's suggestions. */
 .select-wrap {
   position: relative;
   display: flex;
@@ -6357,12 +6358,6 @@ th[aria-sort="descending"] .sort-chevron {
   z-index: 250;
 }
 
-/* The showcase name dialog sits on the manager backdrop (155); its pool list
-   must float above that panel to stay clickable. */
-.tags-filter-dropdown.showcase-name-suggestions {
-  z-index: 160;
-}
-
 /* The default bar is chunky against the small option rows: draw a slim,
    rounded thumb that keeps the track clear. */
 .tags-filter-dropdown::-webkit-scrollbar {
@@ -6405,15 +6400,15 @@ th[aria-sort="descending"] .sort-chevron {
   font-variant-numeric: tabular-nums;
 }
 
-/* A showcase pool suggestion pairs the pick control with a delete action, so
-   the two never nest and the row keeps the option's full hit area. */
-.showcase-name-suggestion {
+/* A suggestion row pairs the pick control with an optional per-option action,
+   so the two never nest and the row keeps the option's full hit area. */
+.select-option-row {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-.showcase-name-suggestion .tags-filter-option {
+.select-option-row .tags-filter-option {
   flex: 1;
   min-width: 0;
 }

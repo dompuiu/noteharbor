@@ -6,9 +6,11 @@ import { TagSuggestionsToggle } from "./TagSuggestionsToggle.jsx";
 
 // The Editor's one select: the same combobox the "Add a tag" field draws —
 // one 36px box, hairline, surface, 10px radius, accent focus ring, accent
-// chevron and floating option list. It is a single-choice combobox, so the
-// list is a closed set: typing filters it, but only a listed option can ever
-// be committed. Blur, Escape and Tab put the current choice back.
+// chevron and floating option list. By default it is a single-choice combobox,
+// so typing filters a closed set. `freeText` turns it into a create-or-pick
+// field where the typed text is the value (and Enter submits the surrounding
+// form when nothing is highlighted); `renderOptionAction` adds a per-option
+// control such as the category pool's delete.
 function labelFor(options, value) {
   const match = options.find(
     (option) => String(option.value) === String(value ?? ""),
@@ -28,9 +30,14 @@ function matches(options, query) {
 
 export function SelectField({
   ariaLabel = "Select",
+  autoFocus = false,
+  freeText = false,
+  listboxLabel,
+  onDeleteOption,
   options = [],
   onChange,
   placeholder = "Select…",
+  renderOptionAction,
   value,
   wrapperClassName = "",
 }) {
@@ -45,6 +52,7 @@ export function SelectField({
   const listboxId = useId();
   const optionId = (index) => `${listboxId}-option-${index}`;
   const filtered = matches(options, filter);
+  const displayValue = freeText ? String(value ?? "") : input;
   const position = useFloatingList(
     isOpen,
     containerRef,
@@ -52,13 +60,15 @@ export function SelectField({
   );
 
   // A closed field always shows the current choice, however the value moved
-  // (a URL restore, a parent reset, or the choice just made).
+  // (a URL restore, a parent reset, or the choice just made). A free-text
+  // field is driven by `value` directly, so there is nothing to restore.
   useEffect(() => {
-    if (!isOpen) {
-      setInput(selectedLabel);
-      setFilter("");
+    if (freeText || isOpen) {
+      return;
     }
-  }, [isOpen, selectedLabel]);
+    setInput(selectedLabel);
+    setFilter("");
+  }, [freeText, isOpen, selectedLabel]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -81,6 +91,10 @@ export function SelectField({
   }
 
   function openList() {
+    // A free-text field has nothing to browse when the pool is empty.
+    if (freeText && !options.length) {
+      return;
+    }
     setIsOpen(true);
     setFilter("");
     setHighlighted(
@@ -90,19 +104,32 @@ export function SelectField({
     );
     requestAnimationFrame(() => {
       inputRef.current?.focus();
-      inputRef.current?.select();
+      if (!freeText) {
+        inputRef.current?.select();
+      }
     });
   }
 
   function choose(option) {
     onChange?.(option.value);
-    setInput(option.label);
+    if (!freeText) {
+      setInput(option.label);
+    }
     setIsOpen(false);
   }
 
   function handleInputChange(event) {
     const next = event.target.value;
     const nextMatches = matches(options, next);
+
+    if (freeText) {
+      onChange?.(next);
+      setFilter(next);
+      setHighlighted(-1);
+      setIsOpen(nextMatches.length > 0);
+      return;
+    }
+
     setInput(next);
     setFilter(next);
     setIsOpen(true);
@@ -129,25 +156,50 @@ export function SelectField({
       return;
     }
 
+    if (event.key === "Delete" && freeText && isOpen && highlighted >= 0) {
+      const target = filtered[highlighted];
+
+      if (target && onDeleteOption) {
+        event.preventDefault();
+        setHighlighted(-1);
+        onDeleteOption(target);
+      }
+      return;
+    }
+
     if (event.key === "Enter") {
-      if (!isOpen) {
+      if (!freeText && !isOpen) {
         event.preventDefault();
         openList();
         return;
       }
-      event.preventDefault();
-      if (highlighted >= 0 && filtered[highlighted]) {
+
+      if (isOpen && highlighted >= 0 && filtered[highlighted]) {
+        event.preventDefault();
         choose(filtered[highlighted]);
-      } else if (filtered.length === 1) {
-        choose(filtered[0]);
+        return;
       }
+
+      if (isOpen && filtered.length === 1) {
+        event.preventDefault();
+        choose(filtered[0]);
+        return;
+      }
+
+      if (!freeText) {
+        event.preventDefault();
+      }
+      // A free-text field falls through so Enter submits the surrounding form
+      // when no suggestion is highlighted.
       return;
     }
 
     if (event.key === "Escape") {
       if (isOpen) {
         event.preventDefault();
-        event.stopPropagation();
+        if (!freeText) {
+          event.stopPropagation();
+        }
         closeList();
       }
       return;
@@ -186,6 +238,7 @@ export function SelectField({
         aria-expanded={isOpen}
         aria-label={ariaLabel}
         autoComplete="off"
+        autoFocus={autoFocus}
         className="select-input"
         onBlur={(event) => {
           if (dropdownRef.current?.contains(event.relatedTarget)) {
@@ -205,7 +258,7 @@ export function SelectField({
         ref={inputRef}
         role="combobox"
         spellCheck={false}
-        value={input}
+        value={displayValue}
       />
       <TagSuggestionsToggle
         className="select-toggle"
@@ -223,22 +276,25 @@ export function SelectField({
       {isOpen && position
         ? createPortal(
             <div
-              aria-label={`${ariaLabel} options`}
+              aria-label={listboxLabel ?? `${ariaLabel} options`}
               className="tags-filter-dropdown select-dropdown"
               id={listboxId}
               ref={dropdownRef}
               role="listbox"
-              style={position}
+              style={{ position: "fixed", ...position }}
             >
               {filtered.map((option, index) => {
                 const selected =
                   String(option.value) === String(value ?? "");
-                return (
+                const key = `${String(option.value)}-${index}`;
+                const action = renderOptionAction?.(option, index);
+                const row = (
                   <button
+                    aria-label={option.ariaLabel ?? option.label}
                     aria-selected={selected}
                     className={`tags-filter-option${index === highlighted ? " is-highlighted" : ""}${selected ? " is-selected" : ""}`}
                     id={optionId(index)}
-                    key={`${String(option.value)}-${index}`}
+                    key={key}
                     onClick={() => choose(option)}
                     onMouseDown={(event) => event.preventDefault()}
                     onMouseEnter={() => setHighlighted(index)}
@@ -253,6 +309,15 @@ export function SelectField({
                   >
                     <HighlightMatch text={option.label} query={filter} />
                   </button>
+                );
+
+                return action ? (
+                  <div className="select-option-row" key={key} role="presentation">
+                    {row}
+                    {action}
+                  </div>
+                ) : (
+                  row
                 );
               })}
               {!filtered.length ? (
