@@ -14,7 +14,7 @@ function categoryMeta(children) {
   ).length;
   const entries = children.length - groupings;
   return [
-    countLabel(entries, "entry", "entries"),
+    entries > 0 ? countLabel(entries, "entry", "entries") : "",
     groupings > 0 ? countLabel(groupings, "grouping", "groupings") : "",
   ]
     .filter(Boolean)
@@ -48,6 +48,7 @@ function ShowcaseCategorySection({
   onClearCover,
 }) {
   const children = category.children ?? [];
+  const meta = categoryMeta(children);
 
   return (
     <section
@@ -56,7 +57,7 @@ function ShowcaseCategorySection({
     >
       <div className="showcase-category-head">
         <h2 className="showcase-category-title">{category.name}</h2>
-        <p className="showcase-category-meta">{categoryMeta(children)}</p>
+        {meta ? <p className="showcase-category-meta">{meta}</p> : null}
         <span aria-hidden="true" className="showcase-category-rule" />
         <ShowcaseItemMenu
           canMoveDown={canMoveDown}

@@ -129,7 +129,7 @@ describe("the showcase category canvas", () => {
     expect(
       await screen.findByRole("heading", { name: "Summer" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("0 entries")).toBeInTheDocument();
+    expect(screen.queryByText("0 entries")).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "New category" }),
     ).toBeInTheDocument();
@@ -217,6 +217,36 @@ describe("the showcase category canvas", () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
     expect(await screen.findByText("1 entry · 1 grouping")).toBeInTheDocument();
+  });
+
+  test("drops a count that is zero from the section meta", async () => {
+    getShowcaseTree.mockResolvedValue({
+      showcase_id: 1,
+      nodes: [
+        {
+          ...SUMMER_NODE,
+          children: [
+            {
+              id: 40,
+              node_type: "note",
+              name: null,
+              category_id: null,
+              parent_node_id: 10,
+              note_id: 100,
+              cover_note_id: null,
+              position: 1,
+              note: { id: 100, denomination: "1", issue_date: "2020" },
+              cover_note: null,
+              children: [],
+            },
+          ],
+        },
+      ],
+    });
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    expect(await screen.findByText("1 entry")).toBeInTheDocument();
+    expect(screen.queryByText(/groupings?$/)).not.toBeInTheDocument();
   });
 
   test("keeps an empty category visible so it can be filled", async () => {
