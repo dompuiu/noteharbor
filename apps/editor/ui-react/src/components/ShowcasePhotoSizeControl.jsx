@@ -9,8 +9,8 @@ import { PHOTO_SIZE_OPTIONS } from "../lib/photoSize.js";
 // accessible name and the hover `title`.
 //
 // A `div[role=group]` (not fieldset/legend) keeps the caption and the pill on
-// one flex row so the pill centers exactly with the header's Edit/View button —
-// a legend always renders on its own row above the pill.
+// one flex row so the pill centers with the toolbar's trailing controls — a
+// legend always renders on its own row above the pill.
 //
 // Only Left/Right change the size (the radios' native behaviour); Up never
 // changes it, and Down hands focus to the current level's cards through

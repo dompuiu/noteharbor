@@ -4,6 +4,10 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+### Fixed
+
+- Showcase: the view toolbar no longer depends on placeholders. Every Showcase keeps the row — a presentation-only or empty one shows only the photo-size control — while the catalog filters, card layout, and Slideshow appear only when the checklist has placeholders.
+
 ## [2.14.0] - 2026-11-16
 
 ### Fixed

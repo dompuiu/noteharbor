@@ -285,9 +285,17 @@ beforeEach(() => {
 });
 
 describe("a presentation-only showcase", () => {
-  test("keeps its existing chrome without catalog counts or filters", async () => {
-    await openShowcase([categoryNode([noteNode(400, OWNED_NOTE, 1)])]);
+  test("keeps the view toolbar without catalog counts or filters", async () => {
+    const { container } = await openShowcase([
+      categoryNode([noteNode(400, OWNED_NOTE, 1)]),
+    ]);
 
+    expect(container.querySelector(".showcase-filter-bar")).not.toBeNull();
+    expect(
+      container.querySelector(
+        ".showcase-filter-bar .showcase-photo-size-control",
+      ),
+    ).not.toBeNull();
     expect(
       screen.queryByRole("progressbar", { name: "Owned cards" }),
     ).not.toBeInTheDocument();
@@ -304,6 +312,19 @@ describe("a presentation-only showcase", () => {
     expect(
       screen.getByRole("button", { name: "1 leu, Pick 22a, 1917" }),
     ).toBeInTheDocument();
+  });
+
+  test("keeps the photo-size control on an empty showcase", async () => {
+    getShowcaseTree.mockResolvedValue({ showcase_id: 1, nodes: [] });
+    const { container } = renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    await screen.findByText("This showcase is empty.");
+    expect(container.querySelector(".showcase-filter-bar")).not.toBeNull();
+    expect(
+      container.querySelector(
+        ".showcase-filter-bar .showcase-photo-size-control",
+      ),
+    ).not.toBeNull();
   });
 });
 

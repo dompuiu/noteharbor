@@ -974,22 +974,6 @@ input[type="radio"] {
   min-width: 0;
 }
 
-/* The trailing cluster (photo-size + Edit/View) shares one baseline so the
-   pill and the buttons read as one toolbar, centered against the title. */
-.showcase-header-controls {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-left: auto;
-  flex-shrink: 0;
-}
-
-.showcase-screen .panel-heading-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
 .showcase-empty {
   padding: 24px 0;
 }
@@ -1021,16 +1005,10 @@ input[type="radio"] {
 }
 
 /* The three-way note photo size control (Small 200px / Medium 320px / Large
-   480px). It sits in the showcase header's trailing cluster in both view and
-   edit mode and only sets the grid's minimum card width. The options are
-   letters in one pill; the chosen size is the white disc with its own ring,
-   and the words stay as the accessible names. */
-.showcase-photo-size {
-  align-self: center;
-  display: flex;
-  align-items: center;
-}
-
+   480px). It sits in the showcase view toolbar and only sets the grid's
+   minimum card width. The options are letters in one pill; the chosen size is
+   the white disc with its own ring, and the words stay as the accessible
+   names. */
 .showcase-photo-size-control {
   display: flex;
   align-items: center;
@@ -2457,14 +2435,19 @@ input[type="radio"] {
   font-variant-numeric: tabular-nums;
 }
 
-/* Photo size and Slideshow keep the header's trailing cluster, moved down to
-   the checklist row so the counts, the rail, and the view controls read as one
-   toolbar. */
+/* Photo size and Slideshow keep the toolbar's trailing cluster on the view
+   row, so the counts, the rail, and the view controls read as one toolbar. In
+   a presentation-only Showcase there is no rail, and the cluster takes the
+   row's free space itself. */
 .showcase-filter-actions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex: none;
+}
+
+.showcase-filter-bar--no-catalog .showcase-filter-actions {
+  margin-left: auto;
 }
 
 .showcase-filter-actions .button {
