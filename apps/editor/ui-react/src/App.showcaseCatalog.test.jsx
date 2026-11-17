@@ -286,10 +286,21 @@ beforeEach(() => {
 });
 
 describe("a presentation-only showcase", () => {
-  test("keeps the view toolbar without catalog counts or filters", async () => {
-    const { container } = await openShowcase([
-      categoryNode([noteNode(400, OWNED_NOTE, 1)]),
-    ]);
+  function presentationOnlyTree() {
+    return [
+      categoryNode([
+        noteNode(400, OWNED_NOTE, 1),
+        noteNode(401, SEEN_NOTE, 2),
+      ]),
+    ];
+  }
+
+  function noteCard(name) {
+    return screen.getByRole("button", { name });
+  }
+
+  test("keeps the full view toolbar without placeholders", async () => {
+    const { container } = await openShowcase(presentationOnlyTree());
 
     expect(container.querySelector(".showcase-filter-bar")).not.toBeNull();
     expect(
@@ -298,24 +309,87 @@ describe("a presentation-only showcase", () => {
       ),
     ).not.toBeNull();
     expect(
-      screen.queryByRole("progressbar", { name: "Owned cards" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("group", { name: "Card filters" }),
+    ).toBeInTheDocument();
     expect(
-      screen.queryByRole("group", { name: "Catalog filters" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "All (2)" }),
+    ).toBeInTheDocument();
     expect(
-      screen.queryByRole("group", { name: "Card layout" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Owned (1)" }),
+    ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Slideshow" }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText("1 note")).toBeInTheDocument();
+      screen.getByRole("button", { name: "Seen (1)" }),
+    ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "1 leu, Pick 22a, 1917" }),
+      screen.getByRole("button", { name: "Unseen (0)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("progressbar", { name: "Owned cards" }),
+    ).toHaveAttribute("aria-valuemax", "2");
+    expect(
+      screen.getByRole("group", { name: "Card layout" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Slideshow" }),
+    ).toBeEnabled();
+    expect(screen.getByText("2 notes")).toBeInTheDocument();
+    expect(
+      noteCard("1 leu, Pick 22a, 1917"),
     ).toBeInTheDocument();
   });
 
-  test("keeps the photo-size control on an empty showcase", async () => {
+  test("filters note cards by ownership", async () => {
+    const user = userEvent.setup();
+    await openShowcase(presentationOnlyTree());
+
+    await user.click(screen.getByRole("button", { name: "Owned (1)" }));
+
+    expect(noteCard("1 leu, Pick 22a, 1917")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "5 lei, Pick 24c, 1920" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("switches the note cards between the two layouts", async () => {
+    const user = userEvent.setup();
+    const { container } = await openShowcase(presentationOnlyTree());
+
+    expect(
+      container.querySelector(".showcase-card--note-labels"),
+    ).not.toBeNull();
+
+    await user.click(
+      within(screen.getByRole("group", { name: "Card layout" })).getByRole(
+        "radio",
+        { name: "Auction rail" },
+      ),
+    );
+
+    expect(
+      screen.getAllByTestId("showcase-grid")[0],
+    ).toHaveAttribute("data-catalog-layout", "rail");
+    expect(
+      container.querySelector(".showcase-card--note-rail"),
+    ).not.toBeNull();
+    expect(noteCard("1 leu, Pick 22a, 1917")).toBeInTheDocument();
+  });
+
+  test("presents only the owned notes, like a checklist", async () => {
+    const user = userEvent.setup();
+    await openShowcase(presentationOnlyTree());
+
+    await user.click(screen.getByRole("button", { name: "Slideshow" }));
+
+    const slideshow = await screen.findByRole("dialog", { name: "1 leu" });
+    expect(within(slideshow).getByText(/1 of 1/)).toBeInTheDocument();
+    expect(
+      within(slideshow).queryByRole("button", {
+        name: "Next note: 5 lei 1920",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("keeps the view toolbar on an empty showcase", async () => {
     getShowcaseTree.mockResolvedValue({ showcase_id: 1, nodes: [] });
     const { container } = renderAt(SHOWCASE_ROUTES.showcase(1));
 
@@ -326,6 +400,25 @@ describe("a presentation-only showcase", () => {
         ".showcase-filter-bar .showcase-photo-size-control",
       ),
     ).not.toBeNull();
+    expect(
+      screen.getByRole("group", { name: "Card layout" }),
+    ).toBeInTheDocument();
+    // The chips and meter keep their slots so the trailing controls never
+    // slide left on an empty showcase.
+    expect(
+      screen.getByRole("group", { name: "Card filters" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "All (0)" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("0 of 0 owned")).toBeInTheDocument();
+    // A zero-range bar is decoration, not a progressbar.
+    expect(
+      screen.queryByRole("progressbar", { name: "Owned cards" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Slideshow" }),
+    ).toBeDisabled();
   });
 });
 

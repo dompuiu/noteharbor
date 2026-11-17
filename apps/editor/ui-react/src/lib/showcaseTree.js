@@ -319,7 +319,8 @@ function hasSeenPrimary(node) {
 
 // Presentation order for a catalog: one slide per owned card, in tree order,
 // using an entry's primary or a note leaf's own Note. Seen and unseen cards are
-// skipped. A presentation-only Showcase keeps using the existing preview walk.
+// skipped. A presentation-only Showcase reads its note leaves through the same
+// owned flag.
 function catalogPresentationNotes(nodes) {
   const out = [];
 

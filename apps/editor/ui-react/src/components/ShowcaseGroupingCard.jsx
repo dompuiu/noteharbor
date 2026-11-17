@@ -64,7 +64,7 @@ function FolderIcon({ className }) {
 // - `folio` (labels layout): one header, a hairline photo well, a contents row
 //   and an action row. The four rows match a catalog card's header, photo,
 //   metadata and ownership rows, so the cards line up in one grid row.
-// - `rail` (Auction rail): the rail-label composition — photo left, a fixed
+// - `rail` (Auction rail): the rail-label composition — photo left, the
 //   identity rail right with the folder-led GROUPING kicker, name, contents and
 //   the large count, and the same action row under both columns.
 function ShowcaseGroupingCard({

@@ -649,7 +649,7 @@ One always-editable canvas. There is no draft or Save/Cancel: adds, renames, rem
 - Categories render expanded at the root; Groupings still drill to show their direct children.
 - The `+ Add` tile opens one dialog with Notes, Placeholder, and Grouping tabs.
 - A Placeholder is a planned card: it carries catalog metadata only, never notes. Picking a note turns the same card into that note in place, preserving order.
-- A three-way photo-size control (Small / Medium / Large) is remembered per browser.
+- A view toolbar carries the ownership filters, the owned meter, the card layout (Library label / Auction rail), photo size (Small / Medium / Large), and Slideshow. The layout and size are remembered per browser, and the toolbar keeps its controls in the same slots on an empty Showcase.
 - The header shows the showcase total note count or the catalog owned/seen/unseen summary.
 
 ### Viewer Apps

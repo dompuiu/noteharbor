@@ -1192,6 +1192,12 @@ input[type="radio"] {
    Edit mode stretches its cells so cards and `+` tiles share one row height;
    view mode keeps its natural card heights via `align-items: start` below. */
 .showcase-grid {
+  /* The Auction rail's identity column: a share of the card, not a fixed
+     strip. A narrow card keeps the 132px floor, while a wide card hands the
+     photo's spare width to the text; the cap stops a full-width card from
+     crowding the scan. Every rail card reads this one value, so notes,
+     groupings and catalog cards keep one identity line in a row. */
+  --showcase-rail-width: clamp(132px, 30%, 240px);
   display: grid;
   grid-template-columns: repeat(
     auto-fill,
@@ -1202,12 +1208,11 @@ input[type="radio"] {
 }
 
 /* The Auction rail fills its row exactly like the Library label, but its
-   fixed identity column leaves too little room between the photo-size
-   minimums for three stretched auto-fill tracks to stay distinct. Each rail
-   size therefore names a column count: every card in a row shares a width,
-   the row still fills, and the three sizes always read differently. Narrower
-   canvases step the counts down so the identity column never swallows the
-   photo. */
+   identity column leaves too little room between the photo-size minimums for
+   three stretched auto-fill tracks to stay distinct. Each rail size therefore
+   names a column count: every card in a row shares a width, the row still
+   fills, and the three sizes always read differently. Narrower canvases step
+   the counts down so the identity column never swallows the photo. */
 .showcase-grid[data-catalog-layout="rail"][data-photo-size="small"] {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -1671,7 +1676,7 @@ input[type="radio"] {
 /* ── Auction rail: the rail label ────────────────────────────────────────── */
 
 .showcase-grouping--rail {
-  --grouping-rail-width: 132px;
+  --grouping-rail-width: var(--showcase-rail-width, 132px);
   --grouping-rail-pad-left: 11px;
   --grouping-rail-pad-right: 9px;
 }
@@ -1750,6 +1755,11 @@ input[type="radio"] {
   color: var(--text-muted);
   font-size: 0.75rem;
   line-height: 1.3;
+  /* The rail has the vertical room the folio's fixed row does not, so the
+     contents list breaks across lines instead of ending in an ellipsis. */
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .showcase-grouping-rail-stats {
@@ -2407,6 +2417,51 @@ input[type="radio"] {
   padding: 10px 10px 6px;
 }
 
+/* The Auction rail for a Note card: the photo keeps the left half while the
+   caption and its info trigger stack on the right. The identity column shares
+   the grouping and catalog rails' width so notes, groupings, and catalog cards
+   line up in one row. */
+.showcase-card--note-rail {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0;
+  padding: 9px 0 9px 9px;
+}
+
+.showcase-card--note-rail .showcase-card-image {
+  flex: 1 1 auto;
+  align-self: center;
+  width: auto;
+  min-width: 0;
+}
+
+.showcase-card--note-rail .showcase-card-caption-row {
+  flex: 0 0 var(--showcase-rail-width, 132px);
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 9px 0 11px;
+}
+
+.showcase-card--note-rail .showcase-card-caption {
+  flex: none;
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-height: 1.3;
+}
+
+@media (max-width: 560px) {
+  .showcase-card--note-rail .showcase-card-caption-row {
+    flex-basis: 118px;
+    padding: 0 7px 0 9px;
+  }
+}
+
 /* The shared 2/1 image well. It is transparent so letterboxed photos blend
    into the card instead of adding a third background tone. The rule doubles
    as the Grouping cover `img` itself, hence `object-fit` lives here too (it
@@ -2607,19 +2662,14 @@ input[type="radio"] {
   font-variant-numeric: tabular-nums;
 }
 
-/* Photo size and Slideshow keep the toolbar's trailing cluster on the view
-   row, so the counts, the rail, and the view controls read as one toolbar. In
-   a presentation-only Showcase there is no rail, and the cluster takes the
-   row's free space itself. */
+/* Photo size, card layout, and Slideshow keep the toolbar's trailing cluster on
+   the view row, so the counts, the meter, and the view controls read as one
+   toolbar. The meter keeps its slot at every level, empty or not. */
 .showcase-filter-actions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex: none;
-}
-
-.showcase-filter-bar--no-catalog .showcase-filter-actions {
-  margin-left: auto;
 }
 
 .showcase-filter-actions .button {
@@ -2983,7 +3033,7 @@ input[type="radio"] {
   flex: none;
 }
 
-/* The Auction rail: photo on the left, fixed identity rail on the right. Its
+/* The Auction rail: photo on the left, the identity rail on the right. Its
    photo keeps the Library label's 2/1 well and sets the card's height from
    its own width; centring instead of stretching lets that ratio win, so a
    larger card gives the plate more vertical room too. The body's minimum
@@ -3020,7 +3070,7 @@ input[type="radio"] {
 
 .showcase-catalog-rail {
   display: flex;
-  flex: 0 0 132px;
+  flex: 0 0 var(--showcase-rail-width, 132px);
   flex-direction: column;
   min-width: 0;
   padding: 0 9px 0 11px;

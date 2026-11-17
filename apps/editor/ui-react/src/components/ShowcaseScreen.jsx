@@ -98,25 +98,28 @@ function focusShowcaseControl(sectionRef, selector) {
 // walk and the click target from drifting apart.
 const SHOWCASE_CARD_SELECTOR = ".showcase-card, .showcase-ghost-add";
 
-const CATALOG_FILTERS = [
+const CARD_FILTERS = [
   { value: "all", label: "All" },
   {
     value: "owned",
     label: "Owned",
     emptyText:
       "Mark a seen note owned, or add a placeholder, to start the checklist.",
+    noteEmptyText: "Mark a seen note owned to see it here.",
     emptyTitle: "No owned cards.",
   },
   {
     value: "seen",
     label: "Seen",
     emptyText: "Every card here is owned or still a placeholder.",
+    noteEmptyText: "Every note here is owned.",
     emptyTitle: "No seen cards.",
   },
   {
     value: "unseen",
     label: "Unseen",
     emptyText: "Every placeholder here already has a note.",
+    noteEmptyText: "This Showcase has no placeholders.",
     emptyTitle: "No unseen cards.",
   },
 ];
@@ -159,7 +162,7 @@ function ShowcaseScreen() {
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [actionError, setActionError] = useState("");
   const [announcement, setAnnouncement] = useState("");
-  const [catalogFilter, setCatalogFilter] = useState("all");
+  const [cardFilter, setCardFilter] = useState("all");
   const [photoSize, setPhotoSize] = usePhotoSize();
   const [catalogLayout, setCatalogLayout] = useCatalogLayout();
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
@@ -897,34 +900,62 @@ function ShowcaseScreen() {
     ? currentPath[currentPath.length - 1]
     : null;
   const catalogMode = hasCatalogEntries(nodes);
-  // The view toolbar belongs to every Showcase, not just a catalog one: it
-  // stays through loading and for a presentation-only Showcase, so the
-  // photo-size control never moves between the header and the row. Only a
-  // failed load suppresses it.
+  // The view toolbar belongs to every Showcase, not just a catalog one: the
+  // ownership filters, owned meter, card layout, photo size, and Slideshow stay
+  // through loading and for a presentation-only Showcase. Note leaves carry an
+  // owned flag too, so the filters read the same states either way, and every
+  // card type honours the two layouts. Only a failed load suppresses the row.
   const showViewToolbar = !loadError;
   const displayNode =
     currentNode?.node_type === "category" ? null : currentNode;
   const displayPath = displayNode ? currentPath : [];
   const displayChildren = displayNode ? (displayNode.children ?? []) : nodes;
-  const filterActive = catalogMode && catalogFilter !== "all";
+  const filterActive = cardFilter !== "all";
   const filteredDisplayChildren = filterActive
-    ? filterCatalogTree(displayChildren, catalogFilter)
+    ? filterCatalogTree(displayChildren, cardFilter)
     : displayChildren;
   const isRootExpanded = displayNode == null;
+  // An empty Showcase already has its own invitation; a filter on it must not
+  // stack a second empty box on top.
   const filterEmpty =
-    filterActive && filteredDisplayChildren.length === 0;
+    filterActive &&
+    filteredDisplayChildren.length === 0 &&
+    displayChildren.length > 0;
   const activeFilter =
-    CATALOG_FILTERS.find((filter) => filter.value === catalogFilter) ??
-    CATALOG_FILTERS[0];
+    CARD_FILTERS.find((filter) => filter.value === cardFilter) ??
+    CARD_FILTERS[0];
+  const filterEmptyText = catalogMode
+    ? activeFilter.emptyText
+    : activeFilter.noteEmptyText;
+  // One slide per owned card: a catalog entry uses its primary, a note leaf
+  // its own Note. Seen and unseen cards are skipped. A presentation-only
+  // Showcase reads note leaves through the same owned flag.
   const presentationNotes = useMemo(
-    () => (catalogMode ? catalogPresentationNotes(nodes) : []),
-    [catalogMode, nodes],
+    () => catalogPresentationNotes(nodes),
+    [nodes],
   );
-  const catalogTotals = catalogCounts(nodes);
+  const slideshowReady = presentationNotes.length > 0;
+  const slideshowTitle = slideshowReady
+    ? "Show the notes you own as a slideshow"
+    : "Add an owned note to start a slideshow";
   // The chips and the meter describe the level on screen, never the whole
   // Showcase: drilled into a Grouping, "All 3" has to agree with the three
   // cards beneath it. At the root the two readings are the same.
   const levelTotals = catalogCounts(displayChildren);
+  // The meter keeps its slot even when the level is empty, so the toolbar's
+  // trailing cluster never slides left. A zero-range bar is decoration, not a
+  // progressbar.
+  const meterAria =
+    levelTotals.total > 0
+      ? {
+          "aria-label": "Owned cards",
+          "aria-valuemax": levelTotals.total,
+          "aria-valuemin": 0,
+          "aria-valuenow": levelTotals.owned,
+          "aria-valuetext": `${levelTotals.owned} of ${levelTotals.total} owned`,
+          role: "progressbar",
+        }
+      : { "aria-hidden": "true" };
 
   const previewParamRaw = new URLSearchParams(location.search).get("preview");
   const previewRequest = previewParamRaw
@@ -1124,11 +1155,10 @@ function ShowcaseScreen() {
   }, [entryNode, loading, location.search, navigate, nodes]);
 
   // The live region counts the same cards the filter chips count, so one
-  // screen never uses two units for the same list. A presentation-only
-  // Showcase has no catalog states, so it counts its Note leaves.
-  const announcedCount = catalogMode
-    ? levelTotals.total
-    : countNoteNodes(filteredDisplayChildren);
+  // screen never uses two units for the same list.
+  const announcedCount = filterActive
+    ? catalogCounts(filteredDisplayChildren).total
+    : levelTotals.total;
 
   useEffect(() => {
     if (loading) {
@@ -1140,7 +1170,7 @@ function ShowcaseScreen() {
     // A filter change re-announces on purpose: the count is the answer to the
     // filter, so the live region names the filter it counted.
     const filterSuffix =
-      catalogMode && catalogFilter !== "all"
+      cardFilter !== "all"
         ? `, ${activeFilter.label.toLowerCase()} filter`
         : "";
 
@@ -1150,8 +1180,7 @@ function ShowcaseScreen() {
   }, [
     activeFilter,
     announcedCount,
-    catalogFilter,
-    catalogMode,
+    cardFilter,
     displayNode,
     loading,
     showcaseName,
@@ -1226,9 +1255,9 @@ function ShowcaseScreen() {
       `[data-showcase-focus="${target.role}"]`;
     const selector = sectionRef.current?.querySelector(targetSelector)
       ? targetSelector
-      : `[data-showcase-filter="${catalogFilter}"]`;
+      : `[data-showcase-filter="${cardFilter}"]`;
     focusShowcaseControl(sectionRef, selector);
-  }, [catalogFilter, loading, nodes]);
+  }, [cardFilter, loading, nodes]);
 
   // ── Keyboard navigation ─────────────────────────────────────────────────
   const drillDepth = urlDrillIds.length;
@@ -1442,7 +1471,7 @@ function ShowcaseScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     addTarget,
-    catalogFilter,
+    cardFilter,
     confirmOpen,
     displayNode,
     drillDepth,
@@ -1668,110 +1697,88 @@ function ShowcaseScreen() {
         ) : null}
 
         {showViewToolbar ? (
-          <div
-            className={
-              catalogMode
-                ? "showcase-filter-bar"
-                : "showcase-filter-bar showcase-filter-bar--no-catalog"
-            }
-          >
-            {catalogMode ? (
-              <>
-                <div
-                  aria-label="Catalog filters"
-                  className="showcase-filter-chips"
-                  role="group"
-                >
-                  {CATALOG_FILTERS.map((filter) => {
-                    const count =
-                      filter.value === "all"
-                        ? levelTotals.total
-                        : levelTotals[filter.value];
+          <div className="showcase-filter-bar">
+            <div
+              aria-label="Card filters"
+              className="showcase-filter-chips"
+              role="group"
+            >
+              {CARD_FILTERS.map((filter) => {
+                const count =
+                  filter.value === "all"
+                    ? levelTotals.total
+                    : levelTotals[filter.value];
 
-                    return (
-                      <button
-                        aria-label={`${filter.label} (${count})`}
-                        aria-pressed={catalogFilter === filter.value}
-                        className="showcase-filter-chip"
-                        data-showcase-filter={filter.value}
-                        key={filter.value}
-                        onClick={() => setCatalogFilter(filter.value)}
-                        type="button"
-                      >
-                        <span>{filter.label}</span>
-                        <span className="showcase-filter-count">{count}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                {/* The one progress reading for the checklist: the chips carry
-                    the three counts, so the rail prints the owned share and
-                    the meter's fill. The words come before the bar, so the
-                    reading needs no hover and no legend. */}
-                <span className="showcase-filter-progress">
-                  <span className="showcase-progress-label">
-                    {`${levelTotals.owned} of ${levelTotals.total} owned`}
-                  </span>
-                  <span
-                    aria-label="Owned cards"
-                    aria-valuemax={levelTotals.total}
-                    aria-valuemin={0}
-                    aria-valuenow={levelTotals.owned}
-                    aria-valuetext={`${levelTotals.owned} of ${levelTotals.total} owned`}
-                    className="showcase-progress"
-                    role="progressbar"
-                    title={`${levelTotals.owned} of ${levelTotals.total} owned`}
+                return (
+                  <button
+                    aria-label={`${filter.label} (${count})`}
+                    aria-pressed={cardFilter === filter.value}
+                    className="showcase-filter-chip"
+                    data-showcase-filter={filter.value}
+                    key={filter.value}
+                    onClick={() => setCardFilter(filter.value)}
+                    type="button"
                   >
-                    <span
-                      className="showcase-progress-fill"
-                      style={{ width: `${ownedPercent}%` }}
-                    />
-                  </span>
-                  <span aria-hidden="true" className="showcase-progress-pct">
-                    {`${ownedPercent}%`}
-                  </span>
-                  {levelTotals.complete ? (
-                    <span className="showcase-complete-chip">
-                      <span
-                        aria-hidden="true"
-                        className="showcase-complete-mark"
-                      >
-                        ✓
-                      </span>
-                      Complete
-                    </span>
-                  ) : null}
-                </span>
-              </>
-            ) : null}
-            <div className="showcase-filter-actions">
-              {catalogMode ? (
-                <ShowcaseLayoutControl
-                  onArrowDown={() => focusCardAt(0)}
-                  onChange={setCatalogLayout}
-                  value={catalogLayout}
+                    <span>{filter.label}</span>
+                    <span className="showcase-filter-count">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {/* The one ownership reading for the level: the chips carry the
+                state counts, so the rail adds the owned share and the meter's
+                fill. The words come before the bar, so the reading needs no
+                hover and no legend. The meter keeps its slot on an empty level
+                so the trailing controls never move. */}
+            <span className="showcase-filter-progress">
+              <span className="showcase-progress-label">
+                {`${levelTotals.owned} of ${levelTotals.total} owned`}
+              </span>
+              <span
+                {...meterAria}
+                className="showcase-progress"
+                title={`${levelTotals.owned} of ${levelTotals.total} owned`}
+              >
+                <span
+                  className="showcase-progress-fill"
+                  style={{ width: `${ownedPercent}%` }}
                 />
+              </span>
+              <span aria-hidden="true" className="showcase-progress-pct">
+                {`${ownedPercent}%`}
+              </span>
+              {catalogMode && levelTotals.complete ? (
+                <span className="showcase-complete-chip">
+                  <span
+                    aria-hidden="true"
+                    className="showcase-complete-mark"
+                  >
+                    ✓
+                  </span>
+                  Complete
+                </span>
               ) : null}
+            </span>
+            <div className="showcase-filter-actions">
+              <ShowcaseLayoutControl
+                onArrowDown={() => focusCardAt(0)}
+                onChange={setCatalogLayout}
+                value={catalogLayout}
+              />
               <ShowcasePhotoSizeControl
                 onArrowDown={() => focusCardAt(0)}
                 onChange={setPhotoSize}
                 value={photoSize}
               />
-              {catalogMode ? (
-                <button
-                  className="button"
-                  disabled={catalogTotals.owned === 0}
-                  onClick={() => openPresentation()}
-                  title={
-                    catalogTotals.owned
-                      ? "Show the notes you own as a slideshow"
-                      : "Add an owned note to start a slideshow"
-                  }
-                  type="button"
-                >
-                  Slideshow
-                </button>
-              ) : null}
+              <button
+                className="button"
+                disabled={!slideshowReady}
+                onClick={() => openPresentation()}
+                title={slideshowTitle}
+                type="button"
+              >
+                Slideshow
+              </button>
             </div>
           </div>
         ) : null}
@@ -1798,11 +1805,11 @@ function ShowcaseScreen() {
         {filterEmpty ? (
           <div className="showcase-empty-box showcase-empty-box--quiet">
             <p className="showcase-empty-title">{activeFilter.emptyTitle}</p>
-            <p className="showcase-empty-text muted">{activeFilter.emptyText}</p>
+            <p className="showcase-empty-text muted">{filterEmptyText}</p>
             <div className="showcase-empty-actions">
               <button
                 className="button"
-                onClick={() => setCatalogFilter("all")}
+                onClick={() => setCardFilter("all")}
                 type="button"
               >
                 Show all cards

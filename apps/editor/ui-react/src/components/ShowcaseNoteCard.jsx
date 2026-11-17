@@ -3,6 +3,10 @@ import {
   firstAvailableNoteImage,
   pickBackImage,
 } from "../lib/showcaseImages.js";
+import {
+  DEFAULT_CATALOG_LAYOUT,
+  normalizeCatalogLayout,
+} from "../lib/catalogLayout.js";
 import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 import { ShowcaseFlipControl } from "./ShowcaseFlipControl.jsx";
 
@@ -17,8 +21,16 @@ import { ShowcaseFlipControl } from "./ShowcaseFlipControl.jsx";
 // itself, but not on the flip or info controls) opens the showcase-wide image
 // preview at the currently visible face; a note without images has no preview
 // and activation is a no-op for the preview.
-function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen }) {
+function ShowcaseNoteCard({
+  note,
+  mode = "view",
+  pressed = false,
+  nodeId,
+  onOpen,
+  layout = DEFAULT_CATALOG_LAYOUT,
+}) {
   const editMode = mode === "edit";
+  const resolvedLayout = normalizeCatalogLayout(layout);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   // The explicit flip: clicking the flip control (or the Shift/Ctrl + ←/→
@@ -221,7 +233,7 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
       aria-describedby={tooltipOpen ? tooltipId : undefined}
       aria-label={label}
       aria-pressed={swapped}
-      className={`showcase-card showcase-card--note${swapped ? " showcase-card--back" : ""}`}
+      className={`showcase-card showcase-card--note showcase-card--note-${resolvedLayout}${swapped ? " showcase-card--back" : ""}`}
       data-has-back={hasDistinctBack ? "true" : undefined}
       data-showcase-node-id={nodeId}
       onBlur={handleBlur}

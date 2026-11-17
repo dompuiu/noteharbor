@@ -33,7 +33,7 @@ import { ShowcaseFlipControl } from "./ShowcaseFlipControl.jsx";
 // - `labels` (Library label): the rail sits at the top with the grip and the
 //   compact catalog code, the photo keeps a hairline well, and a metadata row
 //   carries the date, denomination and grade.
-// - `rail` (Auction rail): the photo keeps the left half while the identity
+// - `rail` (Auction rail): the photo takes the left width while the identity
 //   rail stacks catalog code, date, denomination and grade on the right.
 //
 // Both put ownership in a quiet full-width footer action, so Seen and Owned

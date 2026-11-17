@@ -175,6 +175,50 @@ describe("showcase note/grouping card heights", () => {
     expect(count[1]).toMatch(/font-size:\s*1\.45rem/);
     expect(handle[1]).toMatch(/right:\s*calc\(/);
   });
+
+  // The identity column is a share of the card, not a fixed strip: a wide
+  // card's photo gives the extra width to the text instead of keeping it.
+  test("the rail's identity column grows with a wide card", () => {
+    const grid = styles.match(/\n\.showcase-grid\s*\{([^}]*)\}/);
+    expect(grid).not.toBeNull();
+    expect(grid[1]).toMatch(
+      /--showcase-rail-width:\s*clamp\(132px,\s*30%,\s*240px\)/,
+    );
+
+    // Every rail card reads the one value, so notes, groupings and catalog
+    // cards keep a single identity line in a row.
+    const catalog = styles.match(/\n\.showcase-catalog-rail\s*\{([^}]*)\}/);
+    const note = styles.match(
+      /\.showcase-card--note-rail \.showcase-card-caption-row\s*\{([^}]*)\}/,
+    );
+    const grouping = styles.match(
+      /\n\.showcase-grouping--rail\s*\{([^}]*)\}/,
+    );
+    expect(catalog).not.toBeNull();
+    expect(note).not.toBeNull();
+    expect(grouping).not.toBeNull();
+    expect(catalog[1]).toMatch(
+      /flex:\s*0 0 var\(--showcase-rail-width(?:,\s*132px)?\)/,
+    );
+    expect(note[1]).toMatch(
+      /flex:\s*0 0 var\(--showcase-rail-width(?:,\s*132px)?\)/,
+    );
+    expect(grouping[1]).toMatch(
+      /--grouping-rail-width:\s*var\(--showcase-rail-width(?:,\s*132px)?\)/,
+    );
+  });
+
+  // The rail stack has the vertical room the folio's fixed row lacks, so the
+  // contents list breaks across lines instead of ending in an ellipsis.
+  test("the rail contents list wraps instead of truncating", () => {
+    const summary = styles.match(
+      /\.showcase-grouping--rail \.showcase-grouping-summary\s*\{([^}]*)\}/,
+    );
+    expect(summary).not.toBeNull();
+    expect(summary[1]).toMatch(/white-space:\s*normal/);
+    expect(summary[1]).toMatch(/overflow:\s*visible/);
+    expect(summary[1]).toMatch(/text-overflow:\s*clip/);
+  });
 });
 
 describe("showcase note-card info tooltip", () => {

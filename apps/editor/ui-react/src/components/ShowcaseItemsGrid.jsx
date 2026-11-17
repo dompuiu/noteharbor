@@ -132,10 +132,7 @@ function ShowcaseItemsGrid({
   }
 
   return (
-    <ShowcaseGrid
-      catalogLayout={catalogMode ? catalogLayout : null}
-      size={photoSize}
-    >
+    <ShowcaseGrid catalogLayout={catalogLayout} size={photoSize}>
       {items.map((node) => {
         if (isCatalogEntry(node)) {
           return (
@@ -175,7 +172,7 @@ function ShowcaseItemsGrid({
               {({ grip, menu }) => (
                 <ShowcaseGroupingCard
                   grip={grip}
-                  layout={catalogMode ? catalogLayout : "labels"}
+                  layout={catalogLayout}
                   menu={menu}
                   node={node}
                   onOpen={() => onOpenGrouping(node)}
@@ -220,6 +217,7 @@ function ShowcaseItemsGrid({
               reorder={reorderEnabled ? reorder : null}
             >
               <ShowcaseNoteCard
+                layout={catalogLayout}
                 mode="view"
                 nodeId={node.id}
                 note={node.note}

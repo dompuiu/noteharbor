@@ -4,6 +4,12 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+### Changed
+
+- Showcase: every Showcase now shows the full view toolbar — ownership filters, owned meter, card layout, photo size, and Slideshow — whether or not it has placeholders. A presentation-only Showcase filters and presents its note leaves by the same ownership states, so Slideshow plays the notes marked owned. The card layout switch now reaches note cards too: Library label stacks the photo over its caption, while Auction rail puts the photo beside it. The controls keep their slots on an empty showcase, where the chips read 0 and the meter stays at 0 of 0 owned, so the trailing cluster never slides left.
+
+- Showcase: the Auction rail's identity column now takes a share of a wide card instead of staying a fixed 132px strip, so the photo's spare width goes to the name, contents and count; the grouping's contents list wraps onto as many lines as it needs instead of ending in an ellipsis. Notes, groupings and catalog cards read the one width, so a mixed row keeps a single identity line.
+
 ## [2.15.0] - 2026-11-16
 
 ### Fixed
