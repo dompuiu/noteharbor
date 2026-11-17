@@ -48,8 +48,12 @@ vi.mock("./components/ImportScreen.jsx", () => ({
 }));
 
 vi.mock("./components/NoteEditForm.jsx", () => ({
-  NoteEditForm: ({ noteId, selectedCollectionId }) => (
-    <div data-collection-id={selectedCollectionId} data-note-id={noteId}>
+  NoteEditForm: ({ noteId, selectedCollectionId, showCounter }) => (
+    <div
+      data-collection-id={selectedCollectionId}
+      data-note-id={noteId}
+      data-show-counter={showCounter}
+    >
       Note editor screen
     </div>
   ),
@@ -268,6 +272,7 @@ function expectNoteEditorOpen(noteId, collectionId) {
   const editor = screen.getByText("Note editor screen");
   expect(editor).toHaveAttribute("data-note-id", String(noteId));
   expect(editor).toHaveAttribute("data-collection-id", String(collectionId));
+  expect(editor).toHaveAttribute("data-show-counter", "false");
 }
 
 function summary(container) {

@@ -2118,6 +2118,7 @@ function ShowcaseScreen() {
               onSaveSuccess={handleNoteSaved}
               overlay
               selectedCollectionId={editingNote.collectionId}
+              showCounter={false}
               shortcutsDisabled={confirmOpen}
             />
           </div>

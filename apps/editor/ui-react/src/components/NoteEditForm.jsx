@@ -291,6 +291,7 @@ function NoteEditForm({
   overlay = false,
   previousNoteId = null,
   selectedCollectionId = null,
+  showCounter = true,
   shortcutsDisabled = false,
   totalNotesInView = 0,
 }) {
@@ -1820,36 +1821,41 @@ function NoteEditForm({
               <h1>{screenTitle}</h1>
             </div>
             {/* Position context, with the one command that acts on it; the
-                save path keeps the action side to itself. */}
-            <div className="note-editor-position">
-              <NoteCounter
-                addMode={isCreateMode}
-                canGoNext={canNavigateNext}
-                canGoPrevious={canNavigatePrevious}
-                counterTitle={
-                  isCreateMode
-                    ? "A new note will be inserted here"
-                    : "Current note in table view"
-                }
-                jumpLabel="Current note position"
-                onJump={onJumpToPosition}
-                onNext={onNavigateNext}
-                onPrevious={onNavigatePrevious}
-                position={currentNotePosition}
-                total={totalNotesInView}
-              />
-              {!isCreateMode && onAddBefore ? (
-                <button
-                  className="button"
-                  data-shortcut="Ctrl+A"
-                  disabled={saving}
-                  onClick={onAddBefore}
-                  type="button"
-                >
-                  Add before
-                </button>
-              ) : null}
-            </div>
+                save path keeps the action side to itself. The Showcase overlay
+                has no table sequence, so it hides the counter. */}
+            {showCounter || (!isCreateMode && onAddBefore) ? (
+              <div className="note-editor-position">
+                {showCounter ? (
+                  <NoteCounter
+                    addMode={isCreateMode}
+                    canGoNext={canNavigateNext}
+                    canGoPrevious={canNavigatePrevious}
+                    counterTitle={
+                      isCreateMode
+                        ? "A new note will be inserted here"
+                        : "Current note in table view"
+                    }
+                    jumpLabel="Current note position"
+                    onJump={onJumpToPosition}
+                    onNext={onNavigateNext}
+                    onPrevious={onNavigatePrevious}
+                    position={currentNotePosition}
+                    total={totalNotesInView}
+                  />
+                ) : null}
+                {!isCreateMode && onAddBefore ? (
+                  <button
+                    className="button"
+                    data-shortcut="Ctrl+A"
+                    disabled={saving}
+                    onClick={onAddBefore}
+                    type="button"
+                  >
+                    Add before
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <div className="inline-actions">
             <button
