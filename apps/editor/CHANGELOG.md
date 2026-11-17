@@ -14,6 +14,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 - Note editor: the first click on a Note image slot now selects it, so a screenshot can be pasted with Ctrl/Cmd+V; a second click on the selected card's image area opens the file picker. Keyboard activation still opens the picker straight away.
 
+- Showcase: the note editor opened from a card now names the note in the URL as `#edit/<id>`, so a reload or bookmark lands back in the editor. Closing or saving clears it; the drill's `?node=` stays in place.
+
 ## [2.16.0] - 2026-11-17
 
 ### Changed

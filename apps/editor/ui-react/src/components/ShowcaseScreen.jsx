@@ -23,6 +23,8 @@ import { useCatalogLayout } from "../lib/catalogLayout.js";
 import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 import {
   DEFAULT_DESTINATION,
+  noteEditorHash,
+  parseNoteEditorHash,
   SHOWCASE_ROUTES,
   showcaseNodeSearch,
 } from "../lib/routes.js";
@@ -89,6 +91,18 @@ function focusShowcaseControl(sectionRef, selector) {
   requestAnimationFrame(() => {
     sectionRef.current?.querySelector(selector)?.focus?.();
   });
+}
+
+// A Showcase URL carries two independent parts that must survive each other:
+// the `?node=` / `?preview=` search and the Note editor's `#edit/<noteId>`
+// hash. A partial `navigate({ search })` drops the hash, so both are always
+// named together.
+function showcaseLocation(location, { search, hash } = {}) {
+  return {
+    pathname: location.pathname,
+    search: search ?? location.search,
+    hash: hash ?? location.hash,
+  };
 }
 
 // One selector for the canvas's focusable card stops: real cards plus the
@@ -170,15 +184,37 @@ function ShowcaseScreen() {
   const [nameDialog, setNameDialog] = useState(null);
   // The catalog shell whose metadata is being edited.
   const [editShellId, setEditShellId] = useState(null);
-  // The note opened from an item menu. It rides in the shared note editor
-  // overlay, above the canvas, so editing never leaves the Showcase.
-  const [editingNote, setEditingNote] = useState(null);
+  // Card to refocus when the overlay closes; not part of the URL.
   const noteEditorReturnNodeIdRef = useRef(null);
   const noteEditorOverlayRef = useRef(null);
   const noteEditorDirtyRef = useRef(false);
   const handleNoteEditorDirtyChange = useCallback((dirty) => {
     noteEditorDirtyRef.current = dirty;
   }, []);
+
+  // The Note opened from an item menu rides in the shared editor overlay above
+  // the canvas. The URL names it (`#edit/<noteId>`) so a reload lands back in
+  // the editor; the loaded tree supplies the Collection the form scopes to and
+  // the card that takes focus when the overlay closes.
+  const editingNoteId = parseNoteEditorHash(location.hash);
+  const editingNote = useMemo(() => {
+    const nodeId =
+      editingNoteId == null ? null : findNodeIdForNote(nodes, editingNoteId);
+    const node = nodeId == null ? null : findNodeById(nodes, nodeId);
+
+    if (!node) {
+      return null;
+    }
+
+    const note =
+      node.node_type === "note"
+        ? node.note
+        : node.specimens?.find((specimen) => specimen?.id === editingNoteId);
+
+    return note
+      ? { id: editingNoteId, collectionId: note.collection_id ?? null, nodeId }
+      : null;
+  }, [editingNoteId, nodes]);
 
   const [presentIndex, setPresentIndex] = useState(null);
   const presentReturnNodeIdRef = useRef(null);
@@ -897,20 +933,22 @@ function ShowcaseScreen() {
   // Editing a note changes its own record, not the Showcase structure: the
   // canvas stays as it is and the shared editor opens over it. Saving refetches
   // the tree so every card and slide shows the new record.
+  function navigateNoteEditor(noteId, { replace = false } = {}) {
+    const hash = noteId == null ? "" : noteEditorHash(noteId);
+    navigate(showcaseLocation(location, { hash }), { replace });
+  }
+
   function openNoteEditor(note, nodeId = null) {
     if (!note?.id) {
       return;
     }
 
     noteEditorReturnNodeIdRef.current = nodeId;
-    setEditingNote({
-      id: note.id,
-      collectionId: note.collection_id ?? null,
-    });
+    navigateNoteEditor(note.id);
   }
 
   function closeNoteEditor() {
-    setEditingNote(null);
+    navigateNoteEditor(null, { replace: true });
   }
 
   // Closing discards the form, so an edited Note asks first, with Keep editing
@@ -947,7 +985,7 @@ function ShowcaseScreen() {
     // Table screen; the form's own live region reports that save. Only a
     // return closes the overlay and adds the toast.
     if (intent !== "stay") {
-      setEditingNote(null);
+      closeNoteEditor();
       toastHost?.current?.show("Note saved", "success");
     }
 
@@ -960,9 +998,11 @@ function ShowcaseScreen() {
   }
 
   // Closing returns focus to the card the menu belonged to, so the canvas
-  // picks up where the collector left it.
+  // picks up where the collector left it. Opening from a `#edit/<noteId>` URL
+  // has no menu hand-off, so the tree-resolved card fills the gap.
   useEffect(() => {
     if (editingNote != null) {
+      noteEditorReturnNodeIdRef.current ??= editingNote.nodeId;
       return;
     }
 
@@ -973,11 +1013,30 @@ function ShowcaseScreen() {
     }
 
     noteEditorReturnNodeIdRef.current = null;
-    focusShowcaseControl(
-      sectionRef,
-      `.showcase-card[data-showcase-node-id="${nodeId}"]`,
-    );
+    const cardSelector = `.showcase-card[data-showcase-node-id="${nodeId}"]`;
+    const selector = sectionRef.current?.querySelector(cardSelector)
+      ? cardSelector
+      : SHOWCASE_CARD_SELECTOR;
+    focusShowcaseControl(sectionRef, selector);
   }, [editingNote]);
+
+  // A `#edit/<noteId>` whose Note is not in this Showcase (deleted, or a stale
+  // bookmark) falls back to the canvas, matching a `?node=` that no longer
+  // resolves.
+  useEffect(() => {
+    if (loading || loadError || editingNoteId == null || editingNote != null) {
+      return;
+    }
+
+    navigate(showcaseLocation(location, { hash: "" }), { replace: true });
+  }, [
+    editingNote,
+    editingNoteId,
+    loading,
+    loadError,
+    location,
+    navigate,
+  ]);
 
   // Escape belongs to the editor while it is open: a focused field gets the
   // first press (blur keeps the collector in the editor), and a second press
@@ -1229,11 +1288,13 @@ function ShowcaseScreen() {
       const params = new URLSearchParams(location.search);
       params.delete("preview");
       const text = params.toString();
-      navigate({ search: text ? `?${text}` : "" }, { replace: true });
+      navigate(showcaseLocation(location, { search: text ? `?${text}` : "" }), {
+        replace: true,
+      });
     }
   }, [
     loading,
-    location.search,
+    location,
     navigate,
     previewIndex,
     previewOpen,
@@ -1267,9 +1328,11 @@ function ShowcaseScreen() {
       const params = new URLSearchParams(location.search);
       params.delete("node");
       const text = params.toString();
-      navigate({ search: text ? `?${text}` : "" }, { replace: true });
+      navigate(showcaseLocation(location, { search: text ? `?${text}` : "" }), {
+        replace: true,
+      });
     }
-  }, [entryNode, loading, location.search, navigate, nodes]);
+  }, [entryNode, loading, location, navigate, nodes]);
 
   // The live region counts the same cards the filter chips count, so one
   // screen never uses two units for the same list.

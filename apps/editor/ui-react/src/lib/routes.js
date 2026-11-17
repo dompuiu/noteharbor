@@ -24,6 +24,21 @@ export function showcaseNodeSearch(nodeId) {
   return nodeId == null ? "" : `?node=${nodeId}`;
 }
 
+// The Note editor opens over the screen it was launched from, named in the
+// hash so a reload comes back into it: `#edit/<noteId>`. The Table screen and
+// the Showcase canvas share the shape.
+export function noteEditorHash(noteId) {
+  return `#edit/${noteId}`;
+}
+
+// The Note id in a `#edit/<noteId>` hash, or null for any other hash.
+export function parseNoteEditorHash(hash) {
+  const [path] = String(hash ?? "").replace(/^#/, "").split("?");
+  const match = path.match(/^edit\/(\d+)$/);
+  const noteId = match ? Number(match[1]) : 0;
+  return Number.isSafeInteger(noteId) && noteId > 0 ? noteId : null;
+}
+
 // The retired `new` draft id. `+ New showcase` now posts immediately and opens
 // the real id; this constant only redirects old `/new/edit` bookmarks.
 export const NEW_SHOWCASE_ID = "new";

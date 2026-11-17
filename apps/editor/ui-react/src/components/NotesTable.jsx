@@ -30,7 +30,11 @@ import {
 import { collectionDeleteConfirmation } from "../lib/collectionActions.js";
 import { reportConnectionFailure } from "../lib/connection.js";
 import { isEmptyLibrary } from "../lib/libraryState.js";
-import { CATALOG_ROUTES } from "../lib/routes.js";
+import {
+  CATALOG_ROUTES,
+  noteEditorHash,
+  parseNoteEditorHash,
+} from "../lib/routes.js";
 import {
   clearLegacyTableState,
   defaultTableState,
@@ -423,6 +427,16 @@ function parseTableHash(hash) {
     return emptyTableRoute();
   }
 
+  const editedNoteId = parseNoteEditorHash(normalizedHash);
+
+  if (editedNoteId != null) {
+    return {
+      ...emptyTableRoute(),
+      kind: "edit",
+      noteId: editedNoteId,
+    };
+  }
+
   const [rawPath, rawQuery = ""] = normalizedHash.split("?");
   const segments = rawPath.split("/").filter(Boolean);
   const params = new URLSearchParams(rawQuery);
@@ -434,17 +448,6 @@ function parseTableHash(hash) {
       beforeId: parsePositiveInteger(params.get("before")),
       kind: "create",
     };
-  }
-
-  if (segments[0] === "edit") {
-    const noteId = parsePositiveInteger(segments[1]);
-    return noteId
-      ? {
-          ...emptyTableRoute(),
-          kind: "edit",
-          noteId,
-        }
-      : emptyTableRoute();
   }
 
   if (segments[0] === "slideshow") {
@@ -499,7 +502,7 @@ function buildTableHash(route) {
   }
 
   if (route.kind === "edit" && route.noteId) {
-    return `#edit/${route.noteId}`;
+    return noteEditorHash(route.noteId);
   }
 
   if (route.kind === "slideshow" && route.noteId) {

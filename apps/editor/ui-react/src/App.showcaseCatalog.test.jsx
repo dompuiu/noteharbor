@@ -1,4 +1,4 @@
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -239,11 +239,17 @@ function catalogTree() {
   ];
 }
 
+function LocationProbe() {
+  const location = useLocation();
+  return <span data-testid="hash">{location.hash}</span>;
+}
+
 function renderAt(path) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <CollectionsProvider>
         <ShowcasesProvider>
+          <LocationProbe />
           <ShellContent />
         </ShowcasesProvider>
       </CollectionsProvider>
@@ -251,11 +257,17 @@ function renderAt(path) {
   );
 }
 
-async function openShowcase(tree = catalogTree()) {
+async function openShowcase(tree = catalogTree(), hash = "") {
   getShowcaseTree.mockResolvedValue({ showcase_id: 1, nodes: tree });
-  const result = renderAt(SHOWCASE_ROUTES.showcase(1));
+  const result = renderAt(`${SHOWCASE_ROUTES.showcase(1)}${hash}`);
   await screen.findByRole("heading", { name: "Summer" });
   return result;
+}
+
+function expectNoteEditorOpen(noteId, collectionId) {
+  const editor = screen.getByText("Note editor screen");
+  expect(editor).toHaveAttribute("data-note-id", String(noteId));
+  expect(editor).toHaveAttribute("data-collection-id", String(collectionId));
 }
 
 function summary(container) {
@@ -1341,14 +1353,15 @@ describe("the catalog checklist", () => {
     );
 
     expect(await screen.findByText("Note editor screen")).toBeInTheDocument();
-    expect(screen.getByText("Note editor screen")).toHaveAttribute(
-      "data-note-id",
-      "101",
-    );
-    expect(screen.getByText("Note editor screen")).toHaveAttribute(
-      "data-collection-id",
-      "1",
-    );
+    expectNoteEditorOpen(101, 1);
+    expect(screen.getByTestId("hash")).toHaveTextContent("#edit/101");
+  });
+
+  test("a reload reopens the catalog entry's note editor", async () => {
+    await openShowcase(catalogTree(), "#edit/101");
+
+    expect(await screen.findByText("Note editor screen")).toBeInTheDocument();
+    expectNoteEditorOpen(101, 1);
   });
 
   test("Slideshow lists only owned entries and uses the primary", async () => {

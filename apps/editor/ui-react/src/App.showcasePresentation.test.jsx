@@ -45,9 +45,18 @@ vi.mock("./components/ImportScreen.jsx", () => ({
 }));
 
 vi.mock("./components/NoteEditForm.jsx", () => ({
-  NoteEditForm: ({ noteId, selectedCollectionId }) => (
+  NoteEditForm: ({ noteId, selectedCollectionId, onCancel, onSaveSuccess }) => (
     <div data-collection-id={selectedCollectionId} data-note-id={noteId}>
       Note editor screen
+      <button type="button" onClick={onCancel}>
+        Close
+      </button>
+      <button
+        type="button"
+        onClick={() => onSaveSuccess?.({}, [], null, "return")}
+      >
+        Save and return
+      </button>
     </div>
   ),
 }));
@@ -80,6 +89,7 @@ function LocationProbe() {
     <>
       <span data-testid="pathname">{location.pathname}</span>
       <span data-testid="search">{location.search}</span>
+      <span data-testid="hash">{location.hash}</span>
     </>
   );
 }
@@ -95,6 +105,10 @@ function renderAt(path) {
 
 function currentSearch() {
   return screen.getByTestId("search").textContent;
+}
+
+function currentHash() {
+  return screen.getByTestId("hash").textContent;
 }
 
 const FRONT = (id) => ({
@@ -708,6 +722,72 @@ describe("the note card in view mode", () => {
       "data-collection-id",
       "1",
     );
+    expect(currentHash()).toBe("#edit/100");
+  });
+
+  test("a reload lands back in the note editor, and closing clears it", async () => {
+    renderAt(`${SHOWCASE_ROUTES.showcase(1)}#edit/100`);
+
+    expect(await screen.findByText("Note editor screen")).toHaveAttribute(
+      "data-note-id",
+      "100",
+    );
+    expect(currentHash()).toBe("#edit/100");
+
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    await waitFor(() => expect(currentHash()).toBe(""));
+    expect(screen.queryByText("Note editor screen")).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "1 leu, 1917" })).toHaveFocus(),
+    );
+  });
+
+  test("saving and returning clears the #edit hash", async () => {
+    renderAt(`${SHOWCASE_ROUTES.showcase(1)}#edit/100`);
+    await screen.findByText("Note editor screen");
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save and return" }),
+    );
+
+    await waitFor(() => expect(currentHash()).toBe(""));
+    expect(screen.queryByText("Note editor screen")).not.toBeInTheDocument();
+  });
+
+  test("a stale ?node= keeps the reloaded #edit editor open", async () => {
+    renderAt(`${SHOWCASE_ROUTES.showcase(1)}?node=999#edit/100`);
+
+    expect(await screen.findByText("Note editor screen")).toHaveAttribute(
+      "data-note-id",
+      "100",
+    );
+    await waitFor(() => expect(currentSearch()).toBe(""));
+    expect(currentHash()).toBe("#edit/100");
+  });
+
+  test("a reload keeps the node drill beside the #edit hash", async () => {
+    renderAt(`${SHOWCASE_ROUTES.showcase(1)}?node=20#edit/300`);
+
+    expect(await screen.findByText("Note editor screen")).toHaveAttribute(
+      "data-note-id",
+      "300",
+    );
+    expect(currentSearch()).toBe("?node=20");
+    expect(currentHash()).toBe("#edit/300");
+
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    await waitFor(() => expect(currentHash()).toBe(""));
+    expect(currentSearch()).toBe("?node=20");
+  });
+
+  test("a #edit hash for a note outside the showcase falls back to the canvas", async () => {
+    renderAt(`${SHOWCASE_ROUTES.showcase(1)}#edit/999`);
+
+    await screen.findByRole("heading", { name: "Summer" });
+    await waitFor(() => expect(currentHash()).toBe(""));
+    expect(screen.queryByText("Note editor screen")).not.toBeInTheDocument();
   });
 
   test("edit mode always shows the front, whatever the pointer does", async () => {
