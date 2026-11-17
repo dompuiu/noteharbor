@@ -415,6 +415,7 @@ function ShowcaseNotePicker({
     return (
       <label
         className={`showcase-note-row${isAdded ? " showcase-note-row--added" : ""}${selectedIds.has(note.id) ? " showcase-note-row--selected" : ""}`}
+        title={isAdded ? "Already in this Showcase" : undefined}
       >
         <input
           aria-label={`${noteCaption(note)} ${note.catalog_number ?? ""} ${note.collection_name ?? ""}`.trim()}

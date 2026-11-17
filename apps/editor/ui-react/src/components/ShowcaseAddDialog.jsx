@@ -40,9 +40,9 @@ function GroupingNameForm({ onAdd, onClose }) {
           aria-label="Grouping name"
           autoFocus
           onChange={(event) => setName(event.target.value)}
-          placeholder="e.g. Kingdom"
           value={name}
         />
+        <small className="field-help">For example, Kingdom.</small>
       </label>
 
       {error ? (
@@ -120,7 +120,7 @@ function ShowcaseAddDialog({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  const parentLabel = parent?.name ?? "this block";
+  const parentLabel = parent?.name ?? "this Category or Grouping";
   const afterLabel = afterId == null ? "at the end" : "after the chosen item";
 
   return (
@@ -143,11 +143,26 @@ function ShowcaseAddDialog({
           </p>
           <button
             aria-label="Close add dialog"
-            className="button showcase-add-close"
+            className="showcase-add-close showcase-add-close--icon"
             onClick={onClose}
+            title="Close"
             type="button"
           >
-            Done
+            <svg
+              aria-hidden="true"
+              focusable="false"
+              height="16"
+              viewBox="0 0 24 24"
+              width="16"
+            >
+              <path
+                d="M6 6l12 12M18 6L6 18"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeWidth="2"
+              />
+            </svg>
           </button>
         </div>
 

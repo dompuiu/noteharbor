@@ -14,6 +14,7 @@ import {
   primarySpecimen,
 } from "../lib/showcaseTree.js";
 import { ShowcaseCatalogWell } from "./ShowcaseCatalogWell.jsx";
+import { ShowcaseFlipControl } from "./ShowcaseFlipControl.jsx";
 
 // One card in a catalog Showcase. A note leaf is owned or seen; a catalog shell
 // is always unseen. The card body is one button that opens the note (or the
@@ -129,7 +130,7 @@ function CardPhoto({
   backPath,
   image,
   label,
-  onFlipClick,
+  onFlipToggle,
   showFlip,
   swapped,
 }) {
@@ -161,44 +162,14 @@ function CardPhoto({
         <span className="showcase-card-no-image">No image</span>
       ) : null}
       {showFlip ? (
-        <span
-          aria-hidden="true"
-          className="showcase-card-flip"
-          onClick={onFlipClick}
-          title={swapped ? "Show front" : "Show back"}
-        >
-          <svg
-            aria-hidden="true"
-            className="showcase-card-flip-icon"
-            focusable="false"
-            height="14"
-            viewBox="0 0 24 24"
-            width="14"
-          >
-            <path
-              d="M7 8h10l-3-3"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-            />
-            <path
-              d="M17 16H7l3 3"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-            />
-          </svg>
-        </span>
+        <ShowcaseFlipControl onToggle={onFlipToggle} swapped={swapped} />
       ) : null}
     </span>
   );
 }
 
 function CatalogCardFrame({
+  buttonRef = null,
   children,
   label,
   onClick,
@@ -212,6 +183,7 @@ function CatalogCardFrame({
   return (
     <button
       aria-label={label}
+      ref={buttonRef}
       // Only a card with a distinct back is a face toggle; a card that can
       // only open the viewer must not announce a pressed state it cannot
       // change.
@@ -246,6 +218,7 @@ function ShowcaseCatalogCard({
   // pointer leave we blur only that button, so a mouse click never leaves the
   // chip behind, while a keyboard-focused card keeps it.
   const pointerFocusRef = useRef(null);
+  const cardButtonRef = useRef(null);
   const entry = isCatalogEntry(node);
   const state = nodeCatalogState(node);
   const note = entry ? primarySpecimen(node) : node?.note;
@@ -296,19 +269,21 @@ function ShowcaseCatalogCard({
     setFlipped(false);
   }
 
-  // The flip control is a plain span (the card body is the button), so it stops
-  // the click before the card's activation runs and parks focus on the card so
-  // the back stays until the pointer or focus leaves.
-  function handleFlipClick(event) {
-    event.preventDefault();
-    event.stopPropagation();
-
+  // The shared flip control reports a toggle: a pointer click parks focus on
+  // the card so the back stays until the pointer or focus leaves; a keyboard
+  // activation keeps focus on the control so the face can be turned again.
+  function handleFlipToggle(viaPointer) {
     if (!hasDistinctBack) {
       return;
     }
 
     setFlipped((current) => !current);
-    const cardButton = event.currentTarget.closest("button");
+
+    if (!viaPointer) {
+      return;
+    }
+
+    const cardButton = cardButtonRef.current;
     cardButton?.focus();
     pointerFocusRef.current = cardButton;
   }
@@ -422,6 +397,7 @@ function ShowcaseCatalogCard({
         onMouseLeave={handleMouseLeave}
       >
         <CatalogCardFrame
+          buttonRef={cardButtonRef}
           label={activationLabel}
           node={node}
           onClick={openBody}
@@ -436,7 +412,7 @@ function ShowcaseCatalogCard({
               backPath={backPath}
               image={image}
               label={label}
-              onFlipClick={handleFlipClick}
+              onFlipToggle={handleFlipToggle}
               showFlip={flipVisible}
               swapped={swapped}
             />
@@ -474,6 +450,7 @@ function ShowcaseCatalogCard({
       onMouseLeave={handleMouseLeave}
     >
       <CatalogCardFrame
+        buttonRef={cardButtonRef}
         label={activationLabel}
         node={node}
         onClick={openBody}
@@ -491,7 +468,7 @@ function ShowcaseCatalogCard({
           backPath={backPath}
           image={image}
           label={label}
-          onFlipClick={handleFlipClick}
+          onFlipToggle={handleFlipToggle}
           showFlip={flipVisible}
           swapped={swapped}
         />

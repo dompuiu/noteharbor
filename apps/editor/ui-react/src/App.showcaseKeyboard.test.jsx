@@ -415,7 +415,7 @@ describe("keyboard add and menus", () => {
 
     const summer = screen.getByRole("region", { name: "Category Summer" });
     await userEvent.click(
-      within(summer).getByRole("button", { name: "Add to this level" }),
+      within(summer).getByRole("button", { name: "Add a note or placeholder" }),
     );
     await screen.findByRole("dialog", { name: "Add to “Summer”" });
 
@@ -432,7 +432,7 @@ describe("keyboard add and menus", () => {
 
     const summer = screen.getByRole("region", { name: "Category Summer" });
     await userEvent.click(
-      within(summer).getByRole("button", { name: "Add to this level" }),
+      within(summer).getByRole("button", { name: "Add a note or placeholder" }),
     );
     const dialog = await screen.findByRole("dialog", { name: "Add to “Summer”" });
     const done = within(dialog).getByRole("button", { name: "Close add dialog" });

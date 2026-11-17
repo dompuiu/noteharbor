@@ -110,13 +110,13 @@ const CATALOG_FILTERS = [
   {
     value: "seen",
     label: "Seen",
-    emptyText: "Every card in this showcase is owned or still a placeholder.",
+    emptyText: "Every card here is owned or still a placeholder.",
     emptyTitle: "No seen cards.",
   },
   {
     value: "unseen",
     label: "Unseen",
-    emptyText: "Every placeholder already has a note.",
+    emptyText: "Every placeholder here already has a note.",
     emptyTitle: "No unseen cards.",
   },
 ];
@@ -154,6 +154,9 @@ function ShowcaseScreen() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  // Bumping this re-runs the load effect: the failed-load card's Try again
+  // pill asks for the same fetch again instead of a page reload.
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [actionError, setActionError] = useState("");
   const [announcement, setAnnouncement] = useState("");
   const [catalogFilter, setCatalogFilter] = useState("all");
@@ -251,7 +254,7 @@ function ShowcaseScreen() {
     return () => {
       active = false;
     };
-  }, [showcaseId]);
+  }, [loadAttempt, showcaseId]);
 
   function reportActionError(error, fallback) {
     const message = error?.message || fallback;
@@ -918,6 +921,10 @@ function ShowcaseScreen() {
     [catalogMode, nodes],
   );
   const catalogTotals = catalogCounts(nodes);
+  // The chips and the meter describe the level on screen, never the whole
+  // Showcase: drilled into a Grouping, "All 3" has to agree with the three
+  // cards beneath it. At the root the two readings are the same.
+  const levelTotals = catalogCounts(displayChildren);
 
   const previewParamRaw = new URLSearchParams(location.search).get("preview");
   const previewRequest = previewParamRaw
@@ -1116,10 +1123,12 @@ function ShowcaseScreen() {
     }
   }, [entryNode, loading, location.search, navigate, nodes]);
 
-  const announcedCount = isRootExpanded
-    ? filteredDisplayChildren.filter((node) => node.node_type === "category")
-        .length
-    : filteredDisplayChildren.length;
+  // The live region counts the same cards the filter chips count, so one
+  // screen never uses two units for the same list. A presentation-only
+  // Showcase has no catalog states, so it counts its Note leaves.
+  const announcedCount = catalogMode
+    ? levelTotals.total
+    : countNoteNodes(filteredDisplayChildren);
 
   useEffect(() => {
     if (loading) {
@@ -1127,8 +1136,26 @@ function ShowcaseScreen() {
     }
 
     const name = displayNode ? displayNode.name : showcaseName;
-    setAnnouncement(`${name}, ${announcedCount} items`);
-  }, [announcedCount, displayNode, loading, showcaseName]);
+    const noun = announcedCount === 1 ? "card" : "cards";
+    // A filter change re-announces on purpose: the count is the answer to the
+    // filter, so the live region names the filter it counted.
+    const filterSuffix =
+      catalogMode && catalogFilter !== "all"
+        ? `, ${activeFilter.label.toLowerCase()} filter`
+        : "";
+
+    setAnnouncement(
+      `${name}, ${announcedCount} ${noun}${filterSuffix}`,
+    );
+  }, [
+    activeFilter,
+    announcedCount,
+    catalogFilter,
+    catalogMode,
+    displayNode,
+    loading,
+    showcaseName,
+  ]);
 
   function openNode(node) {
     if (node?.node_type === "category") {
@@ -1453,8 +1480,8 @@ function ShowcaseScreen() {
     replaceShellId == null ? null : findNodeById(nodes, replaceShellId);
   const editShellNode =
     editShellId == null ? null : findNodeById(nodes, editShellId);
-  const ownedPercent = catalogTotals.total
-    ? Math.round((catalogTotals.owned / catalogTotals.total) * 100)
+  const ownedPercent = levelTotals.total
+    ? Math.round((levelTotals.owned / levelTotals.total) * 100)
     : 0;
 
   const showEmpty = !loading && !loadError && nodes.length === 0;
@@ -1589,7 +1616,9 @@ function ShowcaseScreen() {
               </div>
             )}
             {catalogMode ? null : (
-              <p className="muted showcase-note-count">{`${noteCount} notes`}</p>
+              <p className="muted showcase-note-count">
+                {noteCount === 1 ? "1 note" : `${noteCount} notes`}
+              </p>
             )}
             {nameError ? (
               <p className="error-text" role="alert">
@@ -1614,9 +1643,28 @@ function ShowcaseScreen() {
         ) : null}
 
         {!loading && loadError ? (
-          <p className="showcase-error" role="alert">
-            {loadError}
-          </p>
+          <div
+            className="showcase-empty-box showcase-empty-box--quiet showcase-load-error"
+          >
+            <div className="showcase-load-error-copy" role="alert">
+              <p className="showcase-empty-title">
+                Could not load this showcase.
+              </p>
+              <p className="showcase-empty-text muted">{loadError}</p>
+              <p className="showcase-empty-text muted">
+                The saved Showcase is untouched. Try the request again.
+              </p>
+            </div>
+            <div className="showcase-empty-actions">
+              <button
+                className="button button-primary"
+                onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+                type="button"
+              >
+                Try again
+              </button>
+            </div>
+          </div>
         ) : null}
 
         {showViewToolbar ? (
@@ -1637,8 +1685,8 @@ function ShowcaseScreen() {
                   {CATALOG_FILTERS.map((filter) => {
                     const count =
                       filter.value === "all"
-                        ? catalogTotals.total
-                        : catalogTotals[filter.value];
+                        ? levelTotals.total
+                        : levelTotals[filter.value];
 
                     return (
                       <button
@@ -1657,17 +1705,22 @@ function ShowcaseScreen() {
                   })}
                 </div>
                 {/* The one progress reading for the checklist: the chips carry
-                    the three counts, so the rail adds only the owned share. */}
+                    the three counts, so the rail prints the owned share and
+                    the meter's fill. The words come before the bar, so the
+                    reading needs no hover and no legend. */}
                 <span className="showcase-filter-progress">
+                  <span className="showcase-progress-label">
+                    {`${levelTotals.owned} of ${levelTotals.total} owned`}
+                  </span>
                   <span
                     aria-label="Owned cards"
-                    aria-valuemax={catalogTotals.total}
+                    aria-valuemax={levelTotals.total}
                     aria-valuemin={0}
-                    aria-valuenow={catalogTotals.owned}
-                    aria-valuetext={`${catalogTotals.owned} of ${catalogTotals.total} owned`}
+                    aria-valuenow={levelTotals.owned}
+                    aria-valuetext={`${levelTotals.owned} of ${levelTotals.total} owned`}
                     className="showcase-progress"
                     role="progressbar"
-                    title={`${catalogTotals.owned} of ${catalogTotals.total} owned`}
+                    title={`${levelTotals.owned} of ${levelTotals.total} owned`}
                   >
                     <span
                       className="showcase-progress-fill"
@@ -1677,7 +1730,7 @@ function ShowcaseScreen() {
                   <span aria-hidden="true" className="showcase-progress-pct">
                     {`${ownedPercent}%`}
                   </span>
-                  {catalogTotals.complete ? (
+                  {levelTotals.complete ? (
                     <span className="showcase-complete-chip">
                       <span
                         aria-hidden="true"
@@ -1743,9 +1796,18 @@ function ShowcaseScreen() {
         ) : null}
 
         {filterEmpty ? (
-          <div className="showcase-empty-box">
+          <div className="showcase-empty-box showcase-empty-box--quiet">
             <p className="showcase-empty-title">{activeFilter.emptyTitle}</p>
             <p className="showcase-empty-text muted">{activeFilter.emptyText}</p>
+            <div className="showcase-empty-actions">
+              <button
+                className="button"
+                onClick={() => setCatalogFilter("all")}
+                type="button"
+              >
+                Show all cards
+              </button>
+            </div>
           </div>
         ) : null}
 

@@ -309,7 +309,7 @@ describe("a presentation-only showcase", () => {
     expect(
       screen.queryByRole("button", { name: "Slideshow" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("1 notes")).toBeInTheDocument();
+    expect(screen.getByText("1 note")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "1 leu, Pick 22a, 1917" }),
     ).toBeInTheDocument();
@@ -584,6 +584,158 @@ describe("the keyboard path through a catalog card", () => {
 });
 
 describe("the catalog checklist", () => {
+  test("prints the owned share beside the meter, not just a percentage", async () => {
+    await openShowcase();
+
+    // The meter never needs a hover to say what it measures.
+    expect(screen.getByText("2 of 4 owned")).toBeInTheDocument();
+    expect(screen.getByText("50%")).toBeInTheDocument();
+  });
+
+  test("the chips and the meter describe the level you stand in", async () => {
+    const user = userEvent.setup();
+    const group = {
+      id: 50,
+      node_type: "grouping",
+      name: "Sub",
+      category_id: null,
+      parent_node_id: 10,
+      note_id: null,
+      cover_note_id: null,
+      position: 5,
+      note: null,
+      cover_note: null,
+      children: [
+        entryNode(
+          30,
+          {
+            catalog_number: "22a",
+            specimens: [OWNED_NOTE],
+            primary: OWNED_NOTE.id,
+          },
+          1,
+        ),
+        entryNode(
+          31,
+          {
+            catalog_number: "23b",
+            specimens: [SECOND_OWNED_ENTRY_NOTE],
+            primary: SECOND_OWNED_ENTRY_NOTE.id,
+          },
+          2,
+        ),
+        entryNode(32, { catalog_number: "25d" }, 3),
+      ],
+    };
+
+    await openShowcase([
+      categoryNode([
+        entryNode(
+          20,
+          {
+            catalog_number: "24c",
+            specimens: [SEEN_NOTE],
+            primary: SEEN_NOTE.id,
+          },
+          1,
+        ),
+        group,
+      ]),
+    ]);
+
+    // At the root the counts describe the whole showcase tree.
+    expect(
+      screen.getByRole("button", { name: "All (4)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Owned (2)" }),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Open grouping Sub" }),
+    );
+
+    // Drilled into Sub the same chips count the two owned cards and the one
+    // unseen position under it, so the numbers agree with the grid.
+    expect(
+      await screen.findByRole("button", { name: "All (3)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Owned (2)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Seen (0)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Unseen (1)" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Owned cards" })).toHaveAttribute(
+      "aria-valuemax",
+      "3",
+    );
+  });
+
+  test("an empty filter at this level offers a way back to every card", async () => {
+    const user = userEvent.setup();
+    const group = {
+      id: 50,
+      node_type: "grouping",
+      name: "Sub",
+      category_id: null,
+      parent_node_id: 10,
+      note_id: null,
+      cover_note_id: null,
+      position: 1,
+      note: null,
+      cover_note: null,
+      children: [
+        entryNode(
+          30,
+          {
+            catalog_number: "22a",
+            specimens: [OWNED_NOTE],
+            primary: OWNED_NOTE.id,
+          },
+          1,
+        ),
+      ],
+    };
+
+    await openShowcase([categoryNode([group])]);
+    await user.click(
+      await screen.findByRole("button", { name: "Open grouping Sub" }),
+    );
+
+    // Seen exists in the showcase but not under Sub.
+    await user.click(await screen.findByRole("button", { name: "Seen (0)" }));
+    expect(screen.getByText("No seen cards.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Show all cards" }));
+
+    expect(
+      screen.getByRole("button", { name: "All (1)" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText("No seen cards.")).not.toBeInTheDocument();
+  });
+
+  test("a failed load names the problem and offers Try again", async () => {
+    const user = userEvent.setup();
+    getShowcaseTree
+      .mockRejectedValueOnce(new Error("The store is offline."))
+      .mockResolvedValueOnce({ showcase_id: 1, nodes: catalogTree() });
+
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    expect(await screen.findByText("Could not load this showcase.")).toBeInTheDocument();
+    expect(screen.getByText("The store is offline.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Summer" }),
+    ).toBeInTheDocument();
+  });
+
   test("paints the three card states and the header counts", async () => {
     const { container } = await openShowcase();
 
@@ -1146,7 +1298,7 @@ describe("placeholders in the one view", () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
     await user.click(
-      await screen.findByRole("button", { name: "Add to this level" }),
+      await screen.findByRole("button", { name: "Add a note or placeholder" }),
     );
     const dialog = await screen.findByRole("dialog", {
       name: "Add to “Summer”",

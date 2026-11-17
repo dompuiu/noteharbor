@@ -4,6 +4,7 @@ import {
   pickBackImage,
 } from "../lib/showcaseImages.js";
 import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
+import { ShowcaseFlipControl } from "./ShowcaseFlipControl.jsx";
 
 // The read-only Note card (presentation spec §3, §8). The front image is the
 // default; if there is no front it falls back to the back, else a muted
@@ -98,21 +99,21 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
     onOpen?.(event);
   }
 
-  // The flip control is a plain span (never a nested button) since the card
-  // itself is the button — same as the info icon. It stops the click so the
-  // card's own tap handler never runs, then parks focus on the card so the
-  // back stays until focus leaves (blur resets it below).
-  function handleFlipClick(event) {
-    event.preventDefault();
-    event.stopPropagation();
-
+  // The flip control stops the click so the card's own tap handler never
+  // runs, then parks focus on the card so the back stays until focus leaves
+  // (blur resets it below). A keyboard activation keeps focus on the control
+  // instead, so the returned face can be toggled again at once.
+  function handleFlipToggle(viaPointer) {
     if (editMode || !hasDistinctBack) {
       return;
     }
 
     setFlipped((current) => !current);
-    cardRef.current?.focus();
-    pointerFocusRef.current = cardRef.current;
+
+    if (viaPointer) {
+      cardRef.current?.focus();
+      pointerFocusRef.current = cardRef.current;
+    }
   }
 
   function handleMouseEnter() {
@@ -142,7 +143,14 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
     }
   }
 
-  function handleBlur() {
+  function handleBlur(event) {
+    // Focus that stays inside this card — the flip control is one of its own
+    // stops — is not leaving it. Without this the flip would unmount under
+    // the keyboard cursor the moment it took focus.
+    if (event?.relatedTarget && cardRef.current?.contains(event.relatedTarget)) {
+      return;
+    }
+
     if (!editMode) {
       setFocused(false);
       // Leaving the note returns to the front, however the back was reached.
@@ -248,38 +256,10 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
           <span className="showcase-card-no-image">No image</span>
         ) : null}
         {flipVisible ? (
-          <span
-            aria-hidden="true"
-            className="showcase-card-flip"
-            onClick={handleFlipClick}
-            title={swapped ? "Show front" : "Show back"}
-          >
-            <svg
-              aria-hidden="true"
-              className="showcase-card-flip-icon"
-              focusable="false"
-              height="14"
-              viewBox="0 0 24 24"
-              width="14"
-            >
-              <path
-                d="M7 8h10l-3-3"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-              />
-              <path
-                d="M17 16H7l3 3"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-              />
-            </svg>
-          </span>
+          <ShowcaseFlipControl
+            onToggle={handleFlipToggle}
+            swapped={swapped}
+          />
         ) : null}
       </span>
       <span className="showcase-card-caption-row">

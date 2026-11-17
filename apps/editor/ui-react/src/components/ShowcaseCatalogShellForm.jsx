@@ -20,7 +20,7 @@ function ShowcaseCatalogShellForm({
   entry = null,
   onAdd,
   onClose,
-  parentLabel = "this block",
+  parentLabel = "this Category or Grouping",
   submitLabel = "Add placeholders",
 }) {
   const editing = entry != null;
@@ -85,11 +85,15 @@ function ShowcaseCatalogShellForm({
               aria-label={editing ? "Catalog number" : "Catalog numbers"}
               autoFocus
               onChange={(event) => setCatalogs(event.target.value)}
-              placeholder={editing ? "22a" : "22a, 22b, 22c"}
               ref={firstFieldRef}
               type="text"
               value={catalogs}
             />
+            <small className="field-help">
+              {editing
+                ? "The catalog value this placeholder holds, for example 22a."
+                : "One placeholder per catalog value, separated by commas: 22a, 22b, 22c."}
+            </small>
           </label>
 
           <div className="showcase-entry-row">
@@ -98,20 +102,20 @@ function ShowcaseCatalogShellForm({
               <input
                 aria-label="Denomination"
                 onChange={(event) => setDenomination(event.target.value)}
-                placeholder="20 lei"
                 type="text"
                 value={denomination}
               />
+              <small className="field-help">For example, 20 lei.</small>
             </label>
             <label className="field-block">
               <span>Issue date</span>
               <input
                 aria-label="Issue date"
                 onChange={(event) => setIssueDate(event.target.value)}
-                placeholder="1877"
                 type="text"
                 value={issueDate}
               />
+              <small className="field-help">For example, 1877.</small>
             </label>
           </div>
 
@@ -120,10 +124,12 @@ function ShowcaseCatalogShellForm({
             <input
               aria-label="Source"
               onChange={(event) => setSource(event.target.value)}
-              placeholder="Pick catalog, a friend's collection…"
               type="text"
               value={source}
             />
+            <small className="field-help">
+              Where the planned card comes from, for example a catalog.
+            </small>
           </label>
         </div>
 

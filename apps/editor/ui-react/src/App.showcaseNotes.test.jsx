@@ -123,7 +123,7 @@ async function openAddDialog() {
   renderAt(SHOWCASE_ROUTES.showcase(1));
   await screen.findByRole("link", { name: "Kingdom" });
   await user.click(
-    await screen.findByRole("button", { name: "Add to this level" }),
+    await screen.findByRole("button", { name: "Add a note or placeholder" }),
   );
   const dialog = await screen.findByRole("dialog", {
     name: "Add to “Summer”",

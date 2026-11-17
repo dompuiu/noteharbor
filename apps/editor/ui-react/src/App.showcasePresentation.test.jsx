@@ -284,7 +284,7 @@ describe("browsing a showcase read-only", () => {
     ).toBeInTheDocument();
     const section = screen.getByRole("region", { name: "Category Vienna" });
     expect(
-      within(section).getByRole("button", { name: "Add to this level" }),
+      within(section).getByRole("button", { name: "Add a note or placeholder" }),
     ).toBeInTheDocument();
   });
 });
@@ -431,13 +431,13 @@ describe("entering a node", () => {
     expect(status).toHaveAttribute("aria-live", "polite");
 
     await waitFor(() => {
-      expect(status).toHaveTextContent("My showcase, 2 items");
+      expect(status).toHaveTextContent("My showcase, 2 cards");
     });
 
     await openSub();
 
     await waitFor(() => {
-      expect(status).toHaveTextContent("Sub, 1 items");
+      expect(status).toHaveTextContent("Sub, 1 card");
     });
   });
 });

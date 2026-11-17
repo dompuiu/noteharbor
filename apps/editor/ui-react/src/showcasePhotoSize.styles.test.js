@@ -136,6 +136,23 @@ describe("showcase photo size styles", () => {
     expect(body[1]).toMatch(/container-name:\s*showcase-shell/);
   });
 
+  // Below 560px of canvas there is no room for a photo and an identity rail
+  // side by side: the rail card becomes one column with the scan on top, and
+  // its catalog line wraps instead of clipping to a fragment.
+  test("a narrow canvas stacks the Auction rail under the photo", () => {
+    const narrow = atRule(styles, "@container showcase-shell (max-width: 560px)");
+    expect(narrow).not.toBeNull();
+    expect(narrow).toMatch(
+      /\[data-catalog-layout="rail"\]\[data-photo-size\]\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    );
+    expect(narrow).toMatch(
+      /\.showcase-card--rail \.showcase-catalog-body\s*\{[^}]*flex-direction:\s*column/,
+    );
+    expect(narrow).toMatch(
+      /\.showcase-card--rail \.showcase-catalog-code,[\s\S]*?white-space:\s*normal/,
+    );
+  });
+
   test("marks the chosen size with the surface disc and its own ring", () => {
     const rule = styles.match(
       /\.showcase-photo-size-option:has\(input:checked\)\s*\{([^}]*)\}/,
@@ -150,8 +167,8 @@ describe("showcase photo size styles", () => {
   test("draws each option as a pill-sized disc in one pill", () => {
     const rule = styles.match(/\n\.showcase-photo-size-option\s*\{([^}]*)\}/);
     expect(rule).not.toBeNull();
-    expect(rule[1]).toMatch(/width:\s*28px/);
-    expect(rule[1]).toMatch(/height:\s*28px/);
+    expect(rule[1]).toMatch(/width:\s*32px/);
+    expect(rule[1]).toMatch(/height:\s*32px/);
     expect(rule[1]).toMatch(/border-radius:\s*var\(--radius-pill\)/);
   });
 

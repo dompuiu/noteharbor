@@ -25,6 +25,13 @@ describe("showcase empty-state styles", () => {
     expect(box[1]).toMatch(/gap:\s*\d/);
   });
 
+  test("a filtered empty level is a quiet notice, not a dashed drop zone", () => {
+    const quiet = styles.match(/\n\.showcase-empty-box--quiet\s*\{([^}]*)\}/);
+    expect(quiet).not.toBeNull();
+    expect(quiet[1]).not.toMatch(/dashed/);
+    expect(quiet[1]).toMatch(/border:\s*1px solid var\(--border-soft\)/);
+  });
+
   test("the add affordances are flat ghost surfaces, not dashed placeholders", () => {
     const ghost = styles.match(/\n\.showcase-ghost-add\s*\{([^}]*)\}/);
     expect(ghost).not.toBeNull();
@@ -111,15 +118,15 @@ describe("showcase note/grouping card heights", () => {
     expect(fill[1]).toMatch(/background:\s*transparent/);
   });
 
-  test("the ghost card keeps a 120px floor while the grid stretches it", () => {
-    // The grid stretches the card to the row like a note; the floor only
-    // keeps an otherwise empty level from collapsing. No calc here, so it
-    // can never push the row taller than the notes.
-    const card = styles.match(/\n\.showcase-add-card\s*\{([^}]*)\}/);
-    expect(card).not.toBeNull();
-    expect(card[1]).toMatch(/height:\s*100%/);
-    expect(card[1]).toMatch(/min-height:\s*120px/);
-    expect(card[1]).not.toMatch(/calc/);
+  test("the level's add action closes the grid as one slim row", () => {
+    // A card-sized empty tile read as a missing specimen; the add action is a
+    // one-line bar spanning the whole row instead.
+    const bar = styles.match(
+      /\n\.showcase-grid > \.showcase-ghost-add--bar\s*\{([^}]*)\}/,
+    );
+    expect(bar).not.toBeNull();
+    expect(bar[1]).toMatch(/grid-column:\s*1\s*\/\s*-1/);
+    expect(styles).not.toMatch(/\n\.showcase-add-card\s*\{/);
   });
 
   test("the grouping cover sits on the catalog photo plate", () => {

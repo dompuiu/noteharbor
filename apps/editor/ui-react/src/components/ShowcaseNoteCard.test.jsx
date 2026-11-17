@@ -133,6 +133,23 @@ describe("ShowcaseNoteCard", () => {
     expect(card.querySelector(".showcase-card-flip")).toBeNull();
   });
 
+  test("the flip control is a keyboard stop of its own", async () => {
+    render(<ShowcaseNoteCard note={note()} />);
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    act(() => card.focus());
+
+    // The flip control is reachable without a pointer or an undocumented
+    // chord, and it does not unmount under the focus that reveals it.
+    const flip = screen.getByRole("button", { name: "Show back" });
+    act(() => flip.focus());
+    expect(screen.getByRole("button", { name: "Show back" })).toBe(flip);
+
+    await userEvent.keyboard("{Enter}");
+    expect(card).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Show front" })).toBeDefined();
+  });
+
   test("clicking the flip control toggles the back and blur returns", async () => {
     render(<ShowcaseNoteCard note={note()} />);
 

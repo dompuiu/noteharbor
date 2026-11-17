@@ -466,7 +466,7 @@ describe("editing groupings on the canvas", () => {
     await screen.findByRole("button", { name: "Open grouping Sub" });
 
     await user.click(
-      screen.getByRole("button", { name: "Add to this level" }),
+      screen.getByRole("button", { name: "Add a note or placeholder" }),
     );
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("tab", { name: "Grouping" }));
