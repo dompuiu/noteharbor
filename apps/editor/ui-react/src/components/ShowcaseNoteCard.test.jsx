@@ -476,4 +476,64 @@ describe("ShowcaseNoteCard", () => {
     expect(tooltip).toHaveTextContent("paper");
     expect(tooltip).not.toHaveTextContent("Description:");
   });
+
+  // The Library label carries the record's notes under the caption, so the
+  // story is read without opening the tooltip. It is the card's own row,
+  // after the caption, never a second title line.
+  test("the library label shows the note's notes under the caption", () => {
+    render(<ShowcaseNoteCard note={note({ notes: "Printed in Bucharest." })} />);
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    const notes = card.querySelector(".showcase-card-notes");
+    const captionRow = card.querySelector(".showcase-card-caption-row");
+
+    expect(notes).not.toBeNull();
+    expect(notes).toHaveClass("showcase-card-notes--labels");
+    expect(notes).toHaveTextContent("Notes");
+    expect(notes).toHaveTextContent("Printed in Bucharest.");
+    expect(captionRow.compareDocumentPosition(notes)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(card).toHaveAccessibleDescription(/Printed in Bucharest\./);
+  });
+
+  // The Auction rail keeps its identity column and pins the notes under it
+  // behind the red margin rule, so the annotation reads as part of the rail
+  // rather than another caption.
+  test("the auction rail carries the notes in the identity column", () => {
+    render(
+      <ShowcaseNoteCard
+        layout="rail"
+        note={note({
+          catalog_number: "17",
+          notes: "Printed in Bucharest.",
+        })}
+      />,
+    );
+
+    const card = screen.getByRole("button", { name: "1 leu, Pick 17, 1917" });
+    const rail = card.querySelector(".showcase-card-caption-row");
+    const notes = rail.querySelector(".showcase-card-notes--rail");
+
+    expect(card).toHaveClass("showcase-card--note-rail");
+    expect(notes).not.toBeNull();
+    expect(notes).toHaveTextContent("Notes");
+    expect(notes).toHaveTextContent("Printed in Bucharest.");
+    expect(rail).toHaveTextContent("1 leu · Pick 17 · 1917");
+    expect(card).toHaveAccessibleDescription(/Printed in Bucharest\./);
+  });
+
+  test("a note without notes adds no notes row in either layout", () => {
+    const { rerender } = render(<ShowcaseNoteCard note={note()} />);
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    expect(card.querySelector(".showcase-card-notes")).toBeNull();
+
+    rerender(<ShowcaseNoteCard layout="rail" note={note()} />);
+    expect(
+      screen
+        .getByRole("button", { name: "1 leu, 1917" })
+        .querySelector(".showcase-card-notes"),
+    ).toBeNull();
+  });
 });

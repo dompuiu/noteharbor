@@ -8,6 +8,7 @@ import {
   normalizeCatalogLayout,
 } from "../lib/catalogLayout.js";
 import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
+import { ShowcaseCardNotes } from "./ShowcaseCardNotes.jsx";
 import { ShowcaseFlipControl } from "./ShowcaseFlipControl.jsx";
 
 // The read-only Note card (presentation spec §3, §8). The front image is the
@@ -21,6 +22,8 @@ import { ShowcaseFlipControl } from "./ShowcaseFlipControl.jsx";
 // itself, but not on the flip or info controls) opens the showcase-wide image
 // preview at the currently visible face; a note without images has no preview
 // and activation is a no-op for the preview.
+// The record's notes read on the card: two lines under the caption in the
+// Library label, four lines in the identity column in the Auction rail.
 function ShowcaseNoteCard({
   note,
   mode = "view",
@@ -49,6 +52,7 @@ function ShowcaseNoteCard({
   // pointer instead of lingering under the card's focus.
   const pointerFocusRef = useRef(null);
   const tooltipId = useId();
+  const notesId = useId();
   // Leaving the icon starts a short close delay instead of hiding at once,
   // so the cursor can travel onto the tooltip itself without a flicker.
   // Entering either end cancels the pending close.
@@ -86,6 +90,16 @@ function ShowcaseNoteCard({
   // No description and no tags means no icon and no tooltip at all.
   const hasDetails = Boolean(description) || tagNames.length > 0;
   const tooltipOpen = hasDetails && (infoHovered || infoPinned);
+  const notesDescriptionId = description ? notesId : undefined;
+  // The notes read on the card; the description also covers them, so a screen
+  // reader hears the story without pinning the tooltip. Opening the tooltip
+  // adds it alongside the tags.
+  const describedBy = [
+    notesDescriptionId,
+    tooltipOpen ? tooltipId : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
   // The flip control only exists on notes with a distinct back, and only
   // surfaces on hover/focus (or while flipped, so it can be flipped back).
   const flipVisible =
@@ -230,7 +244,7 @@ function ShowcaseNoteCard({
 
   return (
     <button
-      aria-describedby={tooltipOpen ? tooltipId : undefined}
+      aria-describedby={describedBy || undefined}
       aria-label={label}
       aria-pressed={swapped}
       className={`showcase-card showcase-card--note showcase-card--note-${resolvedLayout}${swapped ? " showcase-card--back" : ""}`}
@@ -340,7 +354,17 @@ function ShowcaseNoteCard({
             ) : null}
           </span>
         ) : null}
+        {resolvedLayout === "rail" ? (
+          <ShowcaseCardNotes
+            id={notesDescriptionId}
+            layout="rail"
+            text={description}
+          />
+        ) : null}
       </span>
+      {resolvedLayout === "labels" ? (
+        <ShowcaseCardNotes id={notesDescriptionId} text={description} />
+      ) : null}
     </button>
   );
 }

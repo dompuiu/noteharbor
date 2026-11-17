@@ -312,4 +312,68 @@ describe("ShowcaseCatalogCard face flip", () => {
       "/api/images/notes/101/back.jpg?v=rev-101",
     );
   });
+
+  // The card shows the primary specimen's notes, not the position's or the
+  // first specimen's: the primary is what the card presents everywhere else.
+  test("the library label shows the primary specimen's notes", () => {
+    const first = note({ id: 101, notes: "The first copy." });
+    const primary = note({ id: 102, notes: "The upgrade copy." });
+    const node = {
+      ...entryNode(first),
+      specimens: [first, primary],
+      primary_note_id: 102,
+    };
+
+    render(<ShowcaseCatalogCard node={node} />);
+
+    const card = screen.getByRole("button", {
+      name: "Slideshow from Pick 22a · 1917 · 1 leu",
+    });
+    const notes = card.querySelector(".showcase-card-notes");
+
+    expect(notes).not.toBeNull();
+    expect(notes).toHaveTextContent("Notes");
+    expect(notes).toHaveTextContent("The upgrade copy.");
+    expect(notes).not.toHaveTextContent("The first copy.");
+    expect(card).toHaveAccessibleDescription(/The upgrade copy\./);
+  });
+
+  // The Auction rail pins the notes under the identity lines, inside the rail
+  // column and behind the red margin rule, so the eye reads scan, identity,
+  // story in one pass.
+  test("the auction rail puts the notes in the identity column", () => {
+    render(
+      <ShowcaseCatalogCard
+        layout="rail"
+        node={entryNode(note({ notes: "The upgrade copy." }))}
+      />,
+    );
+
+    const card = screen.getByRole("button", {
+      name: "Slideshow from Pick 22a · 1917 · 1 leu",
+    });
+    const rail = card.querySelector(".showcase-catalog-rail");
+    const notes = rail.querySelector(".showcase-card-notes--rail");
+
+    expect(notes).not.toBeNull();
+    expect(notes).toHaveTextContent("The upgrade copy.");
+    expect(rail).toHaveTextContent("P22a");
+    expect(card).toHaveAccessibleDescription(/The upgrade copy\./);
+  });
+
+  test("an unseen position has no notes row", () => {
+    const node = {
+      ...entryNode(note()),
+      specimens: [],
+      primary_note_id: null,
+    };
+
+    render(<ShowcaseCatalogCard node={node} />);
+
+    expect(
+      screen
+        .getByRole("button", { name: /is unseen\. Replace with note/ })
+        .querySelector(".showcase-card-notes"),
+    ).toBeNull();
+  });
 });

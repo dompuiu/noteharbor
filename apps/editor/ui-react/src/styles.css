@@ -2462,6 +2462,54 @@ input[type="radio"] {
   }
 }
 
+/* The record's free-text notes, read on the card instead of only behind the
+   info tooltip. The Library label keeps two lines under the caption; the
+   Auction rail gives four lines in the identity column, pinned by a margin
+   rule. The block is shared by the note and catalog cards, so the two read
+   the same in either layout. */
+.showcase-card-notes {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-self: stretch;
+  gap: 1px;
+  min-width: 0;
+  padding-top: 5px;
+  border-top: 1px solid var(--border-soft);
+  text-align: left;
+}
+
+.showcase-card-notes-label {
+  color: var(--text-faint);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.showcase-card-notes-text {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.showcase-card-notes--rail {
+  margin-top: 6px;
+  padding: 5px 0 0 7px;
+  border-top: 0;
+  border-left: 1px solid var(--border-control);
+}
+
+.showcase-card-notes--rail .showcase-card-notes-text {
+  font-size: 0.72rem;
+  -webkit-line-clamp: 4;
+}
+
 /* The shared 2/1 image well. It is transparent so letterboxed photos blend
    into the card instead of adding a third background tone. The rule doubles
    as the Grouping cover `img` itself, hence `object-fit` lives here too (it
@@ -2931,6 +2979,13 @@ input[type="radio"] {
   line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The catalog card's notes row sits under the metadata line, inset like the
+   line above it. The Auction rail carries the shared red-rule treatment
+   inside the identity column instead. */
+.showcase-card--labels .showcase-card-notes {
+  margin: 0 11px 8px;
 }
 
 .showcase-catalog-grade {

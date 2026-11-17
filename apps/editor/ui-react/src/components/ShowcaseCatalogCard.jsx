@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import {
   firstAvailableNoteImage,
   pickBackImage,
@@ -14,6 +14,7 @@ import {
   primarySpecimen,
 } from "../lib/showcaseTree.js";
 import { ShowcaseCatalogWell } from "./ShowcaseCatalogWell.jsx";
+import { ShowcaseCardNotes } from "./ShowcaseCardNotes.jsx";
 import { ShowcaseFlipControl } from "./ShowcaseFlipControl.jsx";
 
 // One card in a catalog Showcase. A note leaf is owned or seen; a catalog shell
@@ -40,6 +41,8 @@ import { ShowcaseFlipControl } from "./ShowcaseFlipControl.jsx";
 // read the same in either layout. The state label is the ownership toggle and
 // a sibling of the card button (buttons cannot nest); the photo never changes
 // opacity or colour, because only the label says whether the record is owned.
+// The primary specimen's notes read on the card: two lines under the metadata
+// in the Library label, four lines in the identity rail.
 function noteLabel(note) {
   return formatShowcaseCatalogNumber(note?.catalog_number, { compact: true });
 }
@@ -171,6 +174,7 @@ function CardPhoto({
 function CatalogCardFrame({
   buttonRef = null,
   children,
+  describedBy,
   label,
   onClick,
   onKeyDown,
@@ -182,6 +186,7 @@ function CatalogCardFrame({
 }) {
   return (
     <button
+      aria-describedby={describedBy}
       aria-label={label}
       ref={buttonRef}
       // Only a card with a distinct back is a face toggle; a card that can
@@ -219,6 +224,7 @@ function ShowcaseCatalogCard({
   // chip behind, while a keyboard-focused card keeps it.
   const pointerFocusRef = useRef(null);
   const cardButtonRef = useRef(null);
+  const notesId = useId();
   const entry = isCatalogEntry(node);
   const state = nodeCatalogState(node);
   const note = entry ? primarySpecimen(node) : node?.note;
@@ -236,6 +242,8 @@ function ShowcaseCatalogCard({
   const denomination = text(source?.denomination);
   const metaLine = [date, denomination].filter(Boolean).join(" · ");
   const grade = gradeOf(note);
+  const notes = text(note?.notes);
+  const notesDescriptionId = notes ? notesId : undefined;
 
   function handleMouseEnter() {
     setHovered(true);
@@ -398,6 +406,7 @@ function ShowcaseCatalogCard({
       >
         <CatalogCardFrame
           buttonRef={cardButtonRef}
+          describedBy={notesDescriptionId}
           label={activationLabel}
           node={node}
           onClick={openBody}
@@ -424,6 +433,11 @@ function ShowcaseCatalogCard({
               {denomination ? (
                 <span className="showcase-catalog-denom">{denomination}</span>
               ) : null}
+              <ShowcaseCardNotes
+                id={notesDescriptionId}
+                layout="rail"
+                text={notes}
+              />
               <CatalogGrade grade={grade} layout="rail" />
             </span>
           </span>
@@ -451,6 +465,7 @@ function ShowcaseCatalogCard({
     >
       <CatalogCardFrame
         buttonRef={cardButtonRef}
+        describedBy={notesDescriptionId}
         label={activationLabel}
         node={node}
         onClick={openBody}
@@ -476,6 +491,10 @@ function ShowcaseCatalogCard({
           <span className="showcase-catalog-line">{metaLine}</span>
           <CatalogGrade grade={grade} layout="labels" />
         </span>
+        <ShowcaseCardNotes
+          id={notesDescriptionId}
+          text={notes}
+        />
       </CatalogCardFrame>
       {menu}
       <StateLabel
