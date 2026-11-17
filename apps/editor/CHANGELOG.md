@@ -4,6 +4,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.17.0] - 2026-11-17
+
 ### Added
 
 - Note editor: a full scan's image card now carries a **View** action that opens the Image popover over the draft — Fit first, then **1:1** and the zoom ladder, with the note's Front | Back scans as its pages. It shows a pending upload or scraped file in place of the stored scan, returns focus to the card on close, and leaves the draft untouched.
