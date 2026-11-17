@@ -1627,10 +1627,7 @@ function NotesTable({
       // A dialog above the editor — its Image popover — owns Escape while it
       // is open. Its focus trap keeps focus inside, so the press must close
       // the preview rather than the draft underneath.
-      if (
-        activeElement instanceof Element &&
-        activeElement.closest(".image-popover-overlay")
-      ) {
+      if (activeElement?.closest?.(".image-popover-overlay")) {
         return;
       }
 

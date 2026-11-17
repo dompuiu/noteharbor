@@ -786,23 +786,19 @@ function NoteEditForm({
   // its Front | Back toggle and "Image n of m" counter name in the slideshow.
   // A thumbnail is derived convenience, not a scan to inspect at 1:1, so it
   // gets no page.
+  const previewNoteLabel = form.denomination.trim() || "Untitled note";
   const imagePreviewItems = imageSlots
     .filter((slot) => slot.variant === "full")
     .map((slot) => {
-      const side = slot.type === "front" ? "Front" : "Back";
       const src = slotPreviewSrc(slot);
       const pendingFull = Boolean(
         imagePreviews[slot.key] || pendingScrapedImages[slot.key],
       );
-      const thumbSlot = imageSlots.find(
-        (candidate) =>
-          candidate.type === slot.type && candidate.variant === "thumbnail",
-      );
+      const thumbSlot = pickImage(imageSlots, slot.type, "thumbnail");
 
       return {
-        alt: `${form.denomination.trim() || "Untitled note"}, ${side}`,
+        alt: `${previewNoteLabel}, ${slot.type === "front" ? "Front" : "Back"}`,
         key: slot.key,
-        label: side,
         src,
         // A pending upload has no stored thumbnail yet; painting the note's
         // old one while the new file loads would show a different scan.
@@ -816,6 +812,7 @@ function NoteEditForm({
   );
   const imagePreviewItem =
     imagePreviewIndex >= 0 ? imagePreviewItems[imagePreviewIndex] : null;
+  const canPageImagePreview = imagePreviewItems.length > 1;
 
   // Closing the popover hands focus back to the View action that opened it,
   // so keyboard work continues where it left off instead of dropping to the
@@ -877,12 +874,14 @@ function NoteEditForm({
   }
 
   // The Image popover only reads the slots, so opening it never touches the
-  // draft; its Trigger is kept so closing can hand focus back.
+  // draft; its trigger is kept so closing can hand focus back.
   function openImagePreview(slot, trigger) {
-    imagePreviewTriggerRef.current = trigger ?? null;
+    imagePreviewTriggerRef.current = trigger;
     setImagePreviewKey(slot.key);
   }
 
+  // The popover speaks in one-based positions ("image 2 of 2"); the items
+  // array is zero-based, and this is the single place the two meet.
   function showImagePreview(itemPosition) {
     const item = imagePreviewItems[itemPosition];
 
@@ -2390,18 +2389,18 @@ function NoteEditForm({
         ) : null}
       </div>
 
-      {/* Enlarging a scan is a read-only layer above the draft: closing it
-          returns to the card that opened it and leaves the form untouched. */}
+      {/* The enlarged scan is a layer above the draft: read-only, and it
+          closes back onto the card that opened it. */}
       {imagePreviewItem ? (
         <ImagePopover
           alt={imagePreviewItem.alt}
           availableSides={imagePreviewItems.map((item) => item.type)}
-          canGoNext={imagePreviewItems.length > 1}
-          canGoPrevious={imagePreviewItems.length > 1}
+          canGoNext={canPageImagePreview}
+          canGoPrevious={canPageImagePreview}
           counterPosition={imagePreviewIndex + 1}
           counterTotal={imagePreviewItems.length}
           noteKey={noteId}
-          noteLabel={form.denomination.trim() || "Untitled note"}
+          noteLabel={previewNoteLabel}
           onClose={() => setImagePreviewKey(null)}
           onJump={(position) => showImagePreview(position - 1)}
           onNext={() => moveImagePreview(1)}
