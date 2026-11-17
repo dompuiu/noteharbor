@@ -48,7 +48,11 @@ vi.mock("./components/ImportScreen.jsx", () => ({
 }));
 
 vi.mock("./components/NoteEditForm.jsx", () => ({
-  NoteEditForm: () => <div>Note editor screen</div>,
+  NoteEditForm: ({ noteId, selectedCollectionId }) => (
+    <div data-collection-id={selectedCollectionId} data-note-id={noteId}>
+      Note editor screen
+    </div>
+  ),
 }));
 
 import { ShellContent } from "./App.jsx";
@@ -1255,6 +1259,29 @@ describe("the catalog checklist", () => {
         name: "Pick 22a · 1917 · 1 leu is seen. Mark as owned",
       }),
     ).toBeInTheDocument();
+  });
+
+  test("the item menu edits the displayed note", async () => {
+    const user = userEvent.setup();
+    await openShowcase();
+
+    await user.click(
+      screen.getByRole("button", { name: "Actions for Pick 22a" }),
+    );
+    const menu = screen.getByRole("menu", { name: "Actions for Pick 22a" });
+    await user.click(
+      within(menu).getByRole("menuitem", { name: "Edit note…" }),
+    );
+
+    expect(await screen.findByText("Note editor screen")).toBeInTheDocument();
+    expect(screen.getByText("Note editor screen")).toHaveAttribute(
+      "data-note-id",
+      "101",
+    );
+    expect(screen.getByText("Note editor screen")).toHaveAttribute(
+      "data-collection-id",
+      "1",
+    );
   });
 
   test("Slideshow lists only owned entries and uses the primary", async () => {

@@ -7,6 +7,7 @@ import { MenuIcon } from "./MenuIcon.jsx";
 //
 // - every item: add a note, a grouping, or a catalog shell after it, remove it
 // - catalog entry or catalog-mode note: mark the displayed note owned or not
+// - note, or an entry's displayed note: edit the note
 // - grouping: open, rename, set/clear its cover
 // - note inside a grouping: make it the grouping's cover
 // - catalog shell: replace it with a library note, edit its details
@@ -25,6 +26,7 @@ function ShowcaseItemMenu({
   onClearCover,
   onReplaceShell,
   onEditDetails,
+  onEditNote,
   onMoveUp,
   onMoveDown,
   canMoveUp = false,
@@ -46,6 +48,14 @@ function ShowcaseItemMenu({
           label: owned ? "Mark this note as not owned" : "Mark this note owned",
           icon: owned ? "check-circle" : "circle",
           run: onToggleOwned,
+        }
+      : null,
+    onEditNote
+      ? {
+          key: "edit-note",
+          label: "Edit note…",
+          icon: "edit",
+          run: onEditNote,
         }
       : null,
     onAddNote

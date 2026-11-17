@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   createCatalogEntry,
@@ -69,6 +69,7 @@ import { ShowcaseNotePicker } from "./ShowcaseNotePicker.jsx";
 import { ShowcaseLayoutControl } from "./ShowcaseLayoutControl.jsx";
 import { ShowcasePhotoSizeControl } from "./ShowcasePhotoSizeControl.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
+import { NoteEditForm } from "./NoteEditForm.jsx";
 import { ImagePopover, Slideshow } from "./Slideshow.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 import { useToastHost } from "./Toast.jsx";
@@ -176,6 +177,15 @@ function ShowcaseScreen() {
   const [nameDialog, setNameDialog] = useState(null);
   // The catalog shell whose metadata is being edited.
   const [editShellId, setEditShellId] = useState(null);
+  // The note opened from an item menu. It rides in the shared note editor
+  // overlay, above the canvas, so editing never leaves the Showcase.
+  const [editingNote, setEditingNote] = useState(null);
+  const noteEditorReturnNodeIdRef = useRef(null);
+  const noteEditorOverlayRef = useRef(null);
+  const noteEditorDirtyRef = useRef(false);
+  const handleNoteEditorDirtyChange = useCallback((dirty) => {
+    noteEditorDirtyRef.current = dirty;
+  }, []);
 
   const [presentIndex, setPresentIndex] = useState(null);
   const presentReturnNodeIdRef = useRef(null);
@@ -890,6 +900,124 @@ function ShowcaseScreen() {
     }
   }
 
+  // ── Note editor ───────────────────────────────────────────────────────────
+  // Editing a note changes its own record, not the Showcase structure: the
+  // canvas stays as it is and the shared editor opens over it. Saving refetches
+  // the tree so every card and slide shows the new record.
+  function openNoteEditor(note, nodeId = null) {
+    if (!note?.id) {
+      return;
+    }
+
+    noteEditorReturnNodeIdRef.current = nodeId;
+    setEditingNote({
+      id: note.id,
+      collectionId: note.collection_id ?? null,
+    });
+  }
+
+  function closeNoteEditor() {
+    setEditingNote(null);
+  }
+
+  // Closing discards the form, so an edited Note asks first, with Keep editing
+  // as the safe default, exactly like the Table screen's editor overlay.
+  function guardNoteEditorExit(action) {
+    if (confirmOpen) {
+      return;
+    }
+
+    if (!noteEditorDirtyRef.current) {
+      action();
+      return;
+    }
+
+    confirm({
+      title: "Discard changes?",
+      body: "Your changes will be lost.",
+      cancelLabel: "Keep editing",
+      confirmLabel: "Discard",
+    }).then((confirmed) => {
+      if (confirmed) {
+        action();
+      }
+    });
+  }
+
+  async function handleNoteSaved(
+    _savedNote,
+    _reorderedNotes,
+    _collection,
+    intent = "return",
+  ) {
+    // Save and stay keeps the editor open on the saved Note, matching the
+    // Table screen; the form's own live region reports that save. Only a
+    // return closes the overlay and adds the toast.
+    if (intent !== "stay") {
+      setEditingNote(null);
+      toastHost?.current?.show("Note saved", "success");
+    }
+
+    try {
+      const tree = await getShowcaseTree(showcaseId);
+      setNodes(tree.nodes ?? []);
+    } catch (error) {
+      reportActionError(error, "Could not refresh the showcase.");
+    }
+  }
+
+  // Closing returns focus to the card the menu belonged to, so the canvas
+  // picks up where the collector left it.
+  useEffect(() => {
+    if (editingNote != null) {
+      return;
+    }
+
+    const nodeId = noteEditorReturnNodeIdRef.current;
+
+    if (nodeId == null) {
+      return;
+    }
+
+    noteEditorReturnNodeIdRef.current = null;
+    focusShowcaseControl(
+      sectionRef,
+      `.showcase-card[data-showcase-node-id="${nodeId}"]`,
+    );
+  }, [editingNote]);
+
+  // Escape belongs to the editor while it is open: a focused field gets the
+  // first press (blur keeps the collector in the editor), and a second press
+  // asks to discard or closes an untouched form.
+  useEffect(() => {
+    if (editingNote == null) {
+      return undefined;
+    }
+
+    function handleKeyDown(event) {
+      if (event.key !== "Escape" || confirmOpen) {
+        return;
+      }
+
+      const activeElement = document.activeElement;
+
+      if (
+        isEditableElement(activeElement) &&
+        noteEditorOverlayRef.current?.contains(activeElement)
+      ) {
+        activeElement.blur();
+        return;
+      }
+
+      guardNoteEditorExit(closeNoteEditor);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confirmOpen, editingNote]);
+
   // ── Preview and presentation ─────────────────────────────────────────────
   const entryNode = new URLSearchParams(location.search).get("node");
   const urlDrillIds = entryNode
@@ -1359,6 +1487,7 @@ function ShowcaseScreen() {
         replaceShellId != null ||
         nameDialog != null ||
         editShellId != null ||
+        editingNote != null ||
         confirmOpen ||
         presentIndex != null
       ) {
@@ -1476,6 +1605,7 @@ function ShowcaseScreen() {
     displayNode,
     drillDepth,
     editShellId,
+    editingNote,
     nameDialog,
     presentIndex,
     previewOpen,
@@ -1541,6 +1671,7 @@ function ShowcaseScreen() {
     onAddShellAfter: openAddAfter,
     onClearCover: handleClearCover,
     onEditShell: (node) => setEditShellId(node.id),
+    onEditNote: openNoteEditor,
     onOpenGrouping: openNode,
     onOpenNote: openShowcasePreview,
     onOpenShell: (node) => setReplaceShellId(node.id),
@@ -1579,7 +1710,7 @@ function ShowcaseScreen() {
       className="screen-stack showcase-screen"
       ref={sectionRef}
     >
-      <div className="screen-body">
+      <div className="screen-body" inert={editingNote != null}>
         <div className="panel-heading">
           <div className="panel-heading-copy">
             {renamingName ? (
@@ -1926,6 +2057,26 @@ function ShowcaseScreen() {
           onJump={(position) => setPresentIndex(position - 1)}
           readOnly
         />
+      ) : null}
+
+      {editingNote ? (
+        <section className="edit-note-overlay" ref={noteEditorOverlayRef}>
+          <div
+            className="edit-note-overlay-frame"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <NoteEditForm
+              cancelLabel="Close"
+              noteId={editingNote.id}
+              onCancel={() => guardNoteEditorExit(closeNoteEditor)}
+              onDirtyChange={handleNoteEditorDirtyChange}
+              onSaveSuccess={handleNoteSaved}
+              overlay
+              selectedCollectionId={editingNote.collectionId}
+              shortcutsDisabled={confirmOpen}
+            />
+          </div>
+        </section>
       ) : null}
 
       {showShortcutsHelp ? (

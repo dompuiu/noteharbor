@@ -33,6 +33,7 @@ function ShowcaseCategorySection({
   onAddGroupingAfter,
   onAddShellAfter,
   onEditShell,
+  onEditNote,
   onOpenGrouping,
   onOpenNote,
   onOpenShell,
@@ -81,6 +82,7 @@ function ShowcaseCategorySection({
         onAddShellAfter={onAddShellAfter}
         onClearCover={onClearCover}
         onEditShell={onEditShell}
+        onEditNote={onEditNote}
         onOpenGrouping={onOpenGrouping}
         onOpenNote={onOpenNote}
         onOpenShell={onOpenShell}

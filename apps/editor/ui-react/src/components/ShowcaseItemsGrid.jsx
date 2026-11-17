@@ -36,6 +36,7 @@ function ShowcaseItemsGrid({
   onAddGroupingAfter,
   onAddShellAfter,
   onEditShell,
+  onEditNote,
   onOpenGrouping,
   onOpenNote,
   onOpenShell,
@@ -83,6 +84,11 @@ function ShowcaseItemsGrid({
       ownershipNote != null && (isCatalogEntry(node) || catalogMode)
         ? nodeCatalogState(node)
         : null;
+    const displayedNote = isCatalogEntry(node)
+      ? primarySpecimen(node)
+      : node.node_type === "note"
+        ? node.note
+        : null;
 
     return (
       <ShowcaseItemMenu
@@ -98,6 +104,11 @@ function ShowcaseItemsGrid({
         canMoveDown={index >= 0 && index < items.length - 1}
         canMoveUp={index > 0}
         onEditDetails={() => onEditShell(node)}
+        onEditNote={
+          displayedNote && onEditNote
+            ? () => onEditNote(displayedNote, node.id)
+            : undefined
+        }
         onMoveDown={
           reorderEnabled ? () => moveNode(node, 1) : undefined
         }

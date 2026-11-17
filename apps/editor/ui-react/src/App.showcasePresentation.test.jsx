@@ -45,7 +45,11 @@ vi.mock("./components/ImportScreen.jsx", () => ({
 }));
 
 vi.mock("./components/NoteEditForm.jsx", () => ({
-  NoteEditForm: () => <div>Note editor screen</div>,
+  NoteEditForm: ({ noteId, selectedCollectionId }) => (
+    <div data-collection-id={selectedCollectionId} data-note-id={noteId}>
+      Note editor screen
+    </div>
+  ),
 }));
 
 import { ShellContent } from "./App.jsx";
@@ -107,6 +111,7 @@ const BACK = (id) => ({
 
 function note(id, { denomination, issue_date, images }) {
   return {
+    collection_id: 1,
     id,
     denomination,
     issue_date,
@@ -680,6 +685,30 @@ describe("the note card in view mode", () => {
     expect(card).toHaveAttribute("role", "button");
     expect(card).toHaveAttribute("aria-label", "1 leu, 1917");
     expect(card).toHaveAttribute("aria-pressed", "false");
+  });
+
+  test("the item menu edits the note", async () => {
+    await openWithNote();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Actions for 1 leu 1917" }),
+    );
+    const menu = screen.getByRole("menu", {
+      name: "Actions for 1 leu 1917",
+    });
+    await userEvent.click(
+      within(menu).getByRole("menuitem", { name: "Edit note…" }),
+    );
+
+    expect(await screen.findByText("Note editor screen")).toBeInTheDocument();
+    expect(screen.getByText("Note editor screen")).toHaveAttribute(
+      "data-note-id",
+      "100",
+    );
+    expect(screen.getByText("Note editor screen")).toHaveAttribute(
+      "data-collection-id",
+      "1",
+    );
   });
 
   test("edit mode always shows the front, whatever the pointer does", async () => {
