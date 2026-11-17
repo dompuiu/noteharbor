@@ -908,6 +908,8 @@ function NotesTable({
   // gutter column is showing, which changes the column widths.
   const selectAllRef = useRef(null);
   const editorDirtyRef = useRef(false);
+  // Whether the Note editor's Image popover is the layer holding Escape.
+  const editorImagePreviewOpenRef = useRef(false);
   const confirmOpenRef = useRef(false);
   const closeEditorRef = useRef(null);
   const collectionNameFieldRef = useRef(null);
@@ -929,6 +931,9 @@ function NotesTable({
   confirmOpenRef.current = confirmOpen;
   const handleEditorDirtyChange = useCallback((dirty) => {
     editorDirtyRef.current = dirty;
+  }, []);
+  const handleEditorImagePreviewChange = useCallback((open) => {
+    editorImagePreviewOpenRef.current = open;
   }, []);
 
   // A not-yet-saved collection has no view to rename: its header is the
@@ -1624,10 +1629,10 @@ function NotesTable({
       // the editor, so closing the screen takes a second press.
       const activeElement = document.activeElement;
 
-      // A dialog above the editor — its Image popover — owns Escape while it
-      // is open. Its focus trap keeps focus inside, so the press must close
+      // The editor's Image popover is a layer above the editor and owns
+      // Escape while it is open, whoever holds focus: the press must close
       // the preview rather than the draft underneath.
-      if (activeElement?.closest?.(".image-popover-overlay")) {
+      if (editorImagePreviewOpenRef.current) {
         return;
       }
 
@@ -4449,6 +4454,7 @@ function NotesTable({
               onCancel={() => guardEditorExit(() => closeEditorRef.current?.())}
               onDelete={handleDeleteEditingNote}
               onDirtyChange={handleEditorDirtyChange}
+              onImagePreviewChange={handleEditorImagePreviewChange}
               onJumpToPosition={jumpEditorToPosition}
               onNavigateNext={() =>
                 guardEditorExit(() => navigateToAdjacentEdit(nextEditingNoteId))

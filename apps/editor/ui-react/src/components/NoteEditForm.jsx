@@ -122,6 +122,14 @@ function pickImage(images, type, variant) {
   );
 }
 
+// The editor's card descriptor for a type and variant. It is the slot the
+// reader sees, not the image row the slot paints.
+function pickSlot(slots, type, variant) {
+  return (
+    slots.find((slot) => slot.type === type && slot.variant === variant) ?? null
+  );
+}
+
 function hasEffectiveImage({ currentImage, pendingImage, isDeleted }) {
   if (pendingImage) {
     return true;
@@ -274,6 +282,7 @@ function NoteEditForm({
   onCancel,
   onDelete,
   onDirtyChange,
+  onImagePreviewChange,
   onJumpToPosition,
   onNavigateNext,
   onNavigatePrevious,
@@ -402,6 +411,17 @@ function NoteEditForm({
   useEffect(() => {
     return () => onDirtyChange?.(false);
   }, [onDirtyChange]);
+
+  // The editor overlay keys its Escape handling off this: the Image popover
+  // layers above the editor, so the press that closes it must not also close
+  // the screen (and its draft) underneath.
+  useEffect(() => {
+    onImagePreviewChange?.(imagePreviewKey != null);
+  }, [imagePreviewKey, onImagePreviewChange]);
+
+  useEffect(() => {
+    return () => onImagePreviewChange?.(false);
+  }, [onImagePreviewChange]);
 
   const wrapperClassName = overlay
     ? "edit-note-overlay-content"
@@ -622,20 +642,30 @@ function NoteEditForm({
 
   useEffect(() => {
     function handleKeyDown(event) {
+      // The Image popover is a layer of its own: while it is open the editor's
+      // note walk would swap the note behind the scan the reader is
+      // inspecting. The press still belongs to the WebView, so Alt+Left/Right
+      // stays blocked from history navigation the same way it is below.
+      if (imagePreviewKey != null) {
+        if (
+          event.altKey &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.shiftKey &&
+          (event.key === "ArrowLeft" || event.key === "ArrowRight")
+        ) {
+          event.preventDefault();
+        }
+
+        return;
+      }
+
       // Note navigation is Alt+Arrow only. Everything else (typing, including
       // Shift+h/l capitals, caret movement, text selection) belongs to the
       // field, so Alt+arrows work with focus anywhere — inside a field too.
       // preventDefault also blocks the desktop WebView's Alt+Left/Right
       // history navigation while the editor is open.
-      // The Image popover is a layer of its own: while it is open, a note walk
-      // would swap the note behind the scan the reader is inspecting.
-      if (
-        imagePreviewKey != null ||
-        !event.altKey ||
-        event.ctrlKey ||
-        event.metaKey ||
-        event.shiftKey
-      ) {
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
         return;
       }
 
@@ -768,7 +798,7 @@ function NoteEditForm({
   // stored scan. An empty string means there is nothing to show (the slot is
   // empty or marked for deletion), which is the same test the card applies.
   function slotPreviewSrc(slot) {
-    if (deletedSlots[slot.key]) {
+    if (!slot || deletedSlots[slot.key]) {
       return "";
     }
 
@@ -794,7 +824,7 @@ function NoteEditForm({
       const pendingFull = Boolean(
         imagePreviews[slot.key] || pendingScrapedImages[slot.key],
       );
-      const thumbSlot = pickImage(imageSlots, slot.type, "thumbnail");
+      const thumbSlot = pickSlot(imageSlots, slot.type, "thumbnail");
 
       return {
         alt: `${previewNoteLabel}, ${slot.type === "front" ? "Front" : "Back"}`,
@@ -813,6 +843,15 @@ function NoteEditForm({
   const imagePreviewItem =
     imagePreviewIndex >= 0 ? imagePreviewItems[imagePreviewIndex] : null;
   const canPageImagePreview = imagePreviewItems.length > 1;
+
+  // A slot edit can remove the image the popover was showing; the key then
+  // names no page. The layer is gone, so its guard on the editor's shortcuts
+  // must go with it.
+  useEffect(() => {
+    if (imagePreviewKey != null && imagePreviewIndex < 0) {
+      setImagePreviewKey(null);
+    }
+  }, [imagePreviewIndex, imagePreviewKey]);
 
   // Closing the popover hands focus back to the View action that opened it,
   // so keyboard work continues where it left off instead of dropping to the
@@ -2205,12 +2244,13 @@ function NoteEditForm({
                         ) : null}
                         {slot.variant === "full" && previewSrc ? (
                           <button
+                            aria-haspopup="dialog"
                             aria-label={`View ${slotName}`}
                             className="button image-slot-view"
                             onClick={(event) =>
                               openImagePreview(slot, event.currentTarget)
                             }
-                            title="Open the image popover to inspect this scan at 1:1"
+                            title="Enlarge this scan in the Image popover, then step to 1:1"
                             type="button"
                           >
                             View

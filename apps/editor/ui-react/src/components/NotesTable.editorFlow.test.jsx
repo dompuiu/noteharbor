@@ -490,6 +490,39 @@ describe("Leaving a changed Note editor", () => {
     expect(trigger).toHaveFocus();
   });
 
+  test("Escape belongs to the popover even when focus has left it", async () => {
+    const user = userEvent.setup();
+    notesDb = [
+      {
+        ...note(1, "AAAA"),
+        images: [
+          { type: "front", variant: "full", localPath: "/images/front.jpg" },
+        ],
+      },
+      note(2, "BBBB"),
+    ];
+    renderTable();
+    await openEditorOn(user, "AAAA");
+
+    await user.click(
+      screen.getByRole("button", { name: "View Front full image" }),
+    );
+    expect(screen.getByRole("dialog", { name: "AAAA" })).toBeInTheDocument();
+
+    // Nothing behind the popover may close the draft when the layer, not its
+    // inner focus, is what still owns the key.
+    act(() => {
+      document.activeElement.blur();
+    });
+    await user.keyboard("{Escape}");
+
+    expect(
+      screen.queryByRole("dialog", { name: "AAAA" }),
+    ).not.toBeInTheDocument();
+    expect(currentHash()).toContain("edit/1");
+    expect(screen.getByLabelText("Denomination")).toHaveValue("AAAA");
+  });
+
   test("stepping through unchanged notes never prompts", async () => {
     const user = userEvent.setup();
     renderTable();

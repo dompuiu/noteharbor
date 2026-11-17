@@ -252,6 +252,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Primary:** Deep Red ground and border with white text; the only filled button at rest. Brightens to `#cc0000` on hover and darkens to `#990000` while pressed.
 - **Danger:** `#a30000` fill with white text; the soft variant uses a red wash, red text, and a red hairline.
 - **Focus:** a 2px red outline at 2px offset, including the slideshow's image plates. Transitions are 0.15s on background, border, and colour.
+- **Compact:** the one instance is the Note editor image card's **View** action: 28px minimum height, 4px×12px padding, 0.75rem label. It rides the card's meta-sized header instead of a toolbar, so the standard 36px pill would grow the row for a secondary action.
 
 ### Inputs / Fields
 - **Style:** white ground, 1px control border, 10px radius, 34px minimum height, 0.86rem text.

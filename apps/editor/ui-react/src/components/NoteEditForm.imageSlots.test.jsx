@@ -1,5 +1,5 @@
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NoteEditForm } from "./NoteEditForm.jsx";
@@ -19,7 +19,7 @@ vi.mock("../lib/collections.jsx", () => ({
   useCollections: () => ({ collections: [{ id: 1, name: "Test" }] }),
 }));
 
-import { getNote, getNotes, getTags } from "../lib/api.js";
+import { getNote, getNotes, getTags, updateNote } from "../lib/api.js";
 
 const SLOT_LABELS = [
   "Front full",
@@ -342,7 +342,26 @@ describe("Note editor image viewing", () => {
     expect(screen.getByText("FIRSTNOTE, Front, image 1 of 2")).toBeInTheDocument();
   });
 
-  test("a pending upload is what the popover shows", async () => {
+  test("a back-only note names its one page and leaves Front inert", async () => {
+    const user = userEvent.setup();
+    getNote.mockResolvedValue({ note: noteWithFullScans(["back"]) });
+    await renderForm();
+
+    await user.click(
+      screen.getByRole("button", { name: "View Back full image" }),
+    );
+
+    expect(screen.getByText("FIRSTNOTE, Back, image 1 of 1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Front" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    expect(
+      screen.getByRole("button", { name: "Show next image" }),
+    ).toBeDisabled();
+  });
+
+  test("a pending upload opens as the note's back scan", async () => {
     const user = userEvent.setup();
     await renderForm();
 
@@ -367,6 +386,29 @@ describe("Note editor image viewing", () => {
     ).toBeInTheDocument();
   });
 
+  test("the popover paints the stored full scan", async () => {
+    const user = userEvent.setup();
+    getNote.mockResolvedValue({ note: noteWithFullScans(["front"]) });
+    // jsdom never decodes an image, and the popover only paints a source it
+    // has decoded, so stand in for the decode.
+    window.HTMLImageElement.prototype.decode = () => Promise.resolve();
+
+    try {
+      await renderForm();
+      await user.click(
+        screen.getByRole("button", { name: "View Front full image" }),
+      );
+
+      await waitFor(() => {
+        expect(
+          document.querySelector(".image-popover-full")?.getAttribute("src"),
+        ).toMatch(/^\/images\/front\.jpg/);
+      });
+    } finally {
+      delete window.HTMLImageElement.prototype.decode;
+    }
+  });
+
   test("the editor's note walk stays still while the popover is open", async () => {
     const user = userEvent.setup();
     const onNavigateNext = vi.fn();
@@ -376,11 +418,34 @@ describe("Note editor image viewing", () => {
     await user.click(
       screen.getByRole("button", { name: "View Front full image" }),
     );
-    fireEvent.keyDown(window, { key: "ArrowRight", altKey: true });
+    // The press is swallowed, so the desktop WebView cannot read it as
+    // history navigation behind the scan.
+    expect(
+      fireEvent.keyDown(window, { key: "ArrowRight", altKey: true }),
+    ).toBe(false);
     expect(onNavigateNext).not.toHaveBeenCalled();
 
     fireEvent.keyDown(window, { key: "Escape" });
-    fireEvent.keyDown(window, { key: "ArrowRight", altKey: true });
+    expect(
+      fireEvent.keyDown(window, { key: "ArrowRight", altKey: true }),
+    ).toBe(false);
     expect(onNavigateNext).toHaveBeenCalledTimes(1);
+  });
+
+  test("the editor's save shortcut waits while the popover is open", async () => {
+    const user = userEvent.setup();
+    getNote.mockResolvedValue({ note: noteWithFullScans(["front"]) });
+    updateNote.mockResolvedValue({ note: notePayload() });
+    await renderForm();
+
+    await user.click(
+      screen.getByRole("button", { name: "View Front full image" }),
+    );
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    expect(updateNote).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    await waitFor(() => expect(updateNote).toHaveBeenCalledTimes(1));
   });
 });
