@@ -144,10 +144,6 @@ const shortcutGroups = [
         description: "Flip the focused note card between front and back",
       },
       {
-        keys: ["i"],
-        description: "Show the focused note card's description and tags",
-      },
-      {
         keys: ["Drag"],
         description:
           "Drag a card onto another to reorder the level; use the card's ⋯ menu for add, rename, cover, and remove",

@@ -287,12 +287,6 @@ function nodeCatalogState(node) {
   return null;
 }
 
-function hasCatalogEntries(nodes) {
-  return (nodes ?? []).some(
-    (node) => isCatalogEntry(node) || hasCatalogEntries(node.children),
-  );
-}
-
 // The Note a card or a slide shows. The server keeps one primary per entry; a
 // stale or missing id falls back to the first specimen so a position with
 // specimens never loses its picture.
@@ -370,15 +364,6 @@ function catalogCounts(nodes) {
     counts.total > 0 && counts.seen === 0 && counts.unseen === 0;
 
   return counts;
-}
-
-// How many cards one Category (or Grouping) holds. In a catalog an entry is a
-// card even with no specimens; in a presentation only note leaves count. Both
-// the root's empty-section rule and a section's own guard read this.
-function categoryCardCount(node, catalogMode) {
-  return catalogMode
-    ? catalogCounts([node]).total
-    : countNoteNodes([node]);
 }
 
 // Apply one of the catalog filters without losing the containers that hold a
@@ -776,7 +761,6 @@ export {
   catalogEntryState,
   catalogMergeKey,
   catalogPresentationNotes,
-  categoryCardCount,
   countNoteNodes,
   filterCatalogTree,
   findNodeById,
@@ -784,7 +768,6 @@ export {
   findNodeIdPath,
   findNodePath,
   findParentId,
-  hasCatalogEntries,
   hasSeenPrimary,
   isCatalogEntry,
   nodeCatalogState,

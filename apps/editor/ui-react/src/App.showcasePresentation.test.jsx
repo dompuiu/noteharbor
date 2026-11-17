@@ -246,14 +246,14 @@ describe("browsing a showcase read-only", () => {
       screen.getByRole("button", { name: "Open grouping Sub" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "1 leu, 1917" }),
+      screen.getByRole("button", { name: "1917 · 1 leu" }),
     ).toBeInTheDocument();
   });
 
   test("a Category shows its direct children in manual order", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
-    const noteCard = await screen.findByRole("button", { name: "1 leu, 1917" });
+    const noteCard = await screen.findByRole("button", { name: "1917 · 1 leu" });
     const groupingCard = screen.getByRole("button", {
       name: "Open grouping Sub",
     });
@@ -268,7 +268,7 @@ describe("browsing a showcase read-only", () => {
     await openSub();
 
     expect(
-      await screen.findByRole("button", { name: "10 lei, 1930" }),
+      await screen.findByRole("button", { name: "1930 · 10 lei" }),
     ).toBeInTheDocument();
   });
 
@@ -323,7 +323,7 @@ describe("view-mode URL sync", () => {
     renderAt(`${SHOWCASE_ROUTES.showcase(1)}?node=20`);
 
     expect(
-      await screen.findByRole("button", { name: "10 lei, 1930" }),
+      await screen.findByRole("button", { name: "1930 · 10 lei" }),
     ).toBeInTheDocument();
   });
 
@@ -385,7 +385,7 @@ describe("view/edit mode switching", () => {
     });
     expect(currentSearch()).toBe("?node=20");
     expect(
-      await screen.findByRole("button", { name: "10 lei, 1930" }),
+      await screen.findByRole("button", { name: "1930 · 10 lei" }),
     ).toBeInTheDocument();
   });
 
@@ -401,7 +401,7 @@ describe("view/edit mode switching", () => {
     });
     expect(within(breadcrumb).getByText("Sub")).toBeInTheDocument();
     expect(
-      await screen.findByRole("button", { name: "10 lei, 1930" }),
+      await screen.findByRole("button", { name: "1930 · 10 lei" }),
     ).toBeInTheDocument();
   });
 
@@ -451,7 +451,7 @@ describe("the note card in view mode", () => {
   async function openWithNote() {
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
-    return screen.findByRole("button", { name: "1 leu, 1917" });
+    return screen.findByRole("button", { name: "1917 · 1 leu" });
   }
 
   test("hovering reveals the flip control but keeps the front", async () => {
@@ -590,7 +590,7 @@ describe("the note card in view mode", () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "5 lei, 1920" }),
+      await screen.findByRole("button", { name: "1920 · 5 lei" }),
     );
     await screen.findByRole("heading", { name: "5 lei, 1920" });
 
@@ -640,13 +640,13 @@ describe("the note card in view mode", () => {
       expect(currentSearch()).toBe("?node=20");
     });
     expect(
-      screen.getByRole("button", { name: "10 lei, 1930" }),
+      screen.getByRole("button", { name: "1930 · 10 lei" }),
     ).toBeInTheDocument();
   });
 
   test("paging from a drilled level back to a root note drops the drill", async () => {
     renderAt(`${SHOWCASE_ROUTES.showcase(1)}?node=20`);
-    const subNote = await screen.findByRole("button", { name: "10 lei, 1930" });
+    const subNote = await screen.findByRole("button", { name: "1930 · 10 lei" });
     fireEvent.click(subNote);
     await screen.findByRole("heading", { name: "10 lei, 1930" });
     expect(currentSearch()).toBe("?node=20&preview=410%3Afront");
@@ -681,9 +681,8 @@ describe("the note card in view mode", () => {
   test("a card is focusable and reports its label and pressed state", async () => {
     const card = await openWithNote();
 
-    expect(card).toHaveAttribute("tabindex", "0");
-    expect(card).toHaveAttribute("role", "button");
-    expect(card).toHaveAttribute("aria-label", "1 leu, 1917");
+    expect(card.tagName).toBe("BUTTON");
+    expect(card).toHaveAttribute("aria-label", "1917 · 1 leu");
     expect(card).toHaveAttribute("aria-pressed", "false");
   });
 
@@ -714,7 +713,7 @@ describe("the note card in view mode", () => {
   test("edit mode always shows the front, whatever the pointer does", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
-    const card = await screen.findByRole("button", { name: "1 leu, 1917" });
+    const card = await screen.findByRole("button", { name: "1917 · 1 leu" });
     await userEvent.hover(card);
     act(() => card.focus());
 

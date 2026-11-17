@@ -11,7 +11,6 @@ import { ShowcaseCatalogCard } from "./ShowcaseCatalogCard.jsx";
 import { ShowcaseGrid } from "./ShowcaseGrid.jsx";
 import { ShowcaseGroupingCard } from "./ShowcaseGroupingCard.jsx";
 import { ShowcaseItemMenu } from "./ShowcaseItemMenu.jsx";
-import { ShowcaseNoteCard } from "./ShowcaseNoteCard.jsx";
 import { ShowcaseReorderableCell } from "./ShowcaseReorderableCell.jsx";
 
 function noteLabel(node) {
@@ -26,7 +25,6 @@ function noteLabel(node) {
 function ShowcaseItemsGrid({
   parent,
   items,
-  catalogMode,
   catalogLayout = "labels",
   photoSize,
   reorderEnabled = true,
@@ -77,13 +75,11 @@ function ShowcaseItemsGrid({
           : node.name;
     const ownershipNote = isCatalogEntry(node)
       ? primarySpecimen(node)
-      : catalogMode
+      : node.node_type === "note"
         ? node.note
         : null;
     const catalogState =
-      ownershipNote != null && (isCatalogEntry(node) || catalogMode)
-        ? nodeCatalogState(node)
-        : null;
+      ownershipNote != null ? nodeCatalogState(node) : null;
     const displayedNote = isCatalogEntry(node)
       ? primarySpecimen(node)
       : node.node_type === "note"
@@ -194,46 +190,26 @@ function ShowcaseItemsGrid({
         }
 
         if (node.node_type === "note") {
-          if (catalogMode) {
-            return (
-              <ShowcaseReorderableCell
-                embedded
-                key={node.id}
-                label={noteLabel(node)}
-                menu={menuFor(node)}
-                nodeId={node.id}
-                reorder={reorderEnabled ? reorder : null}
-              >
-                {({ grip, menu }) => (
-                  <ShowcaseCatalogCard
-                    grip={grip}
-                    layout={catalogLayout}
-                    menu={menu}
-                    node={node}
-                    onOpenNote={onOpenNote}
-                    onPresent={onPresent}
-                    onToggleOwned={onOwnershipToggle}
-                  />
-                )}
-              </ShowcaseReorderableCell>
-            );
-          }
-
           return (
             <ShowcaseReorderableCell
+              embedded
               key={node.id}
               label={noteLabel(node)}
               menu={menuFor(node)}
               nodeId={node.id}
               reorder={reorderEnabled ? reorder : null}
             >
-              <ShowcaseNoteCard
-                layout={catalogLayout}
-                mode="view"
-                nodeId={node.id}
-                note={node.note}
-                onOpen={(kind) => onOpenNote(node, kind)}
-              />
+              {({ grip, menu }) => (
+                <ShowcaseCatalogCard
+                  grip={grip}
+                  layout={catalogLayout}
+                  menu={menu}
+                  node={node}
+                  onOpenNote={onOpenNote}
+                  onPresent={onPresent}
+                  onToggleOwned={onOwnershipToggle}
+                />
+              )}
             </ShowcaseReorderableCell>
           );
         }

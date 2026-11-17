@@ -182,7 +182,7 @@ function canvasOrder() {
       .getAllByRole("button")
       .map((card) => card.getAttribute("aria-label"))
       .filter((label) =>
-        ["Open grouping Sub", "1, 2020", "5, 1990"].includes(label),
+        ["Open grouping Sub", "2020 · 1", "1990 · 5"].includes(label),
       )
   );
 }
@@ -252,7 +252,7 @@ describe("showcase child reordering", () => {
     await openSummer();
 
     const source = cellFor("Open grouping Sub");
-    const target = cellFor("5, 1990");
+    const target = cellFor("1990 · 5");
     const dataTransfer = makeDataTransfer();
 
     await act(async () => {
@@ -272,7 +272,7 @@ describe("showcase child reordering", () => {
     await waitFor(() => {
       expect(reorderNodes).toHaveBeenCalledWith(1, 10, [11, 12, 20]);
     });
-    expect(canvasOrder()).toEqual(["1, 2020", "5, 1990", "Open grouping Sub"]);
+    expect(canvasOrder()).toEqual(["2020 · 1", "1990 · 5", "Open grouping Sub"]);
   });
 
   test("a drag that lands a card back where it started persists nothing", async () => {
@@ -280,7 +280,7 @@ describe("showcase child reordering", () => {
     await openSummer();
 
     const source = cellFor("Open grouping Sub");
-    const target = cellFor("1, 2020");
+    const target = cellFor("2020 · 1");
     const dataTransfer = makeDataTransfer();
 
     await act(async () => {
@@ -298,6 +298,6 @@ describe("showcase child reordering", () => {
     });
 
     expect(reorderNodes).not.toHaveBeenCalled();
-    expect(canvasOrder()).toEqual(["Open grouping Sub", "1, 2020", "5, 1990"]);
+    expect(canvasOrder()).toEqual(["Open grouping Sub", "2020 · 1", "1990 · 5"]);
   });
 });

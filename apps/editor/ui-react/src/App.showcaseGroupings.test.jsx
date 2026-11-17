@@ -422,7 +422,7 @@ describe("grouping cover", () => {
     renderAt(`${SHOWCASE_ROUTES.showcase(1)}?node=20`);
 
     expect(
-      await screen.findByRole("button", { name: "1, 2020" }),
+      await screen.findByRole("button", { name: "2020 · 1" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Open grouping Deep" }),
@@ -451,7 +451,7 @@ describe("grouping cover", () => {
       screen.getByRole("button", { name: "Open grouping Sub" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "1, 2020" }),
+      screen.getByRole("button", { name: "2020 · 1" }),
     ).toBeInTheDocument();
   });
 });
@@ -528,7 +528,7 @@ describe("editing groupings on the canvas", () => {
 
     // Sub's own child note and the deeper grouping are not on the Summer level.
     expect(
-      screen.queryByRole("button", { name: "1, 2020" }),
+      screen.queryByRole("button", { name: "2020 · 1" }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Open grouping Deep" }),
@@ -537,7 +537,7 @@ describe("editing groupings on the canvas", () => {
     await userEvent.click(groupingCard("Sub"));
 
     expect(
-      await screen.findByRole("button", { name: "1, 2020" }),
+      await screen.findByRole("button", { name: "2020 · 1" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Open grouping Deep" }),

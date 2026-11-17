@@ -239,7 +239,7 @@ beforeEach(() => {
 });
 
 async function firstContentCards() {
-  const note = await screen.findByRole("button", { name: "1 leu, 1917" });
+  const note = await screen.findByRole("button", { name: "1917 · 1 leu" });
   const sub = screen.getByRole("button", { name: "Open grouping Sub" });
   return { note, sub };
 }
@@ -291,7 +291,7 @@ describe("moving card focus", () => {
     });
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
-    await screen.findAllByRole("button", { name: /^1 leu, 1917 #/ });
+    await screen.findAllByRole("button", { name: /^1917 #\d+ · 1 leu$/ });
     const cards = Array.from(
       document.querySelectorAll(
         ".showcase-screen .showcase-card, .showcase-screen .showcase-ghost-add",
@@ -327,9 +327,8 @@ describe("opening the focused card", () => {
   test("Enter and Space open the preview on a note card", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
-    const card = await screen.findByRole("button", { name: "1 leu, 1917" });
+    const card = await screen.findByRole("button", { name: "1917 · 1 leu" });
     act(() => card.focus());
-    expect(card).toHaveAttribute("aria-pressed", "false");
 
     await userEvent.keyboard("{Enter}");
     await waitFor(() => expect(search()).toBe("?preview=400%3Afront"));
@@ -346,7 +345,6 @@ describe("opening the focused card", () => {
     await userEvent.keyboard(" ");
     await waitFor(() => expect(search()).toBe("?preview=400%3Afront"));
     act(() => card.blur());
-    expect(card).toHaveAttribute("aria-pressed", "false");
   });
 });
 
@@ -379,7 +377,7 @@ describe("Escape and focus restoration", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: "Open grouping Sub" }),
     );
-    await screen.findByRole("button", { name: "10 lei, 1930" });
+    await screen.findByRole("button", { name: "1930 · 10 lei" });
 
     const breadcrumb = screen.getByRole("navigation", {
       name: "Showcase breadcrumb",
@@ -463,7 +461,7 @@ describe("header focus", () => {
   test("Down arrow in the showcase name moves focus to the first card", async () => {
     const user = userEvent.setup();
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    const first = await screen.findByRole("button", { name: "1 leu, 1917" });
+    const first = await screen.findByRole("button", { name: "1917 · 1 leu" });
 
     await user.click(
       screen.getByRole("button", { name: "Rename showcase: My showcase" }),

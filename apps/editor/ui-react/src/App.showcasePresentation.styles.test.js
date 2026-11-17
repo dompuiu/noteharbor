@@ -185,22 +185,15 @@ describe("showcase note/grouping card heights", () => {
       /--showcase-rail-width:\s*clamp\(132px,\s*30%,\s*240px\)/,
     );
 
-    // Every rail card reads the one value, so notes, groupings and catalog
-    // cards keep a single identity line in a row.
+    // Every rail card reads the one value, so groupings and catalog cards keep
+    // a single identity line in a row.
     const catalog = styles.match(/\n\.showcase-catalog-rail\s*\{([^}]*)\}/);
-    const note = styles.match(
-      /\.showcase-card--note-rail \.showcase-card-caption-row\s*\{([^}]*)\}/,
-    );
     const grouping = styles.match(
       /\n\.showcase-grouping--rail\s*\{([^}]*)\}/,
     );
     expect(catalog).not.toBeNull();
-    expect(note).not.toBeNull();
     expect(grouping).not.toBeNull();
     expect(catalog[1]).toMatch(
-      /flex:\s*0 0 var\(--showcase-rail-width(?:,\s*132px)?\)/,
-    );
-    expect(note[1]).toMatch(
       /flex:\s*0 0 var\(--showcase-rail-width(?:,\s*132px)?\)/,
     );
     expect(grouping[1]).toMatch(
@@ -218,26 +211,6 @@ describe("showcase note/grouping card heights", () => {
     expect(summary[1]).toMatch(/white-space:\s*normal/);
     expect(summary[1]).toMatch(/overflow:\s*visible/);
     expect(summary[1]).toMatch(/text-overflow:\s*clip/);
-  });
-});
-
-describe("showcase note-card info tooltip", () => {
-  test("the info icon stays inline at 1em like the grouping footer icon", () => {
-    const icon = styles.match(/\n\.showcase-card-info-icon\s*\{([^}]*)\}/);
-    expect(icon).not.toBeNull();
-    expect(icon[1]).toMatch(/width:\s*1em/);
-    expect(icon[1]).toMatch(/height:\s*1em/);
-  });
-
-  test("the tooltip opens below the caption row, by the info icon", () => {
-    const row = styles.match(/\n\.showcase-card-caption-row\s*\{([^}]*)\}/);
-    const tooltip = styles.match(/\n\.showcase-card-tooltip\s*\{([^}]*)\}/);
-    expect(row).not.toBeNull();
-    expect(tooltip).not.toBeNull();
-    expect(row[1]).toMatch(/position:\s*relative/);
-    expect(tooltip[1]).toMatch(/position:\s*absolute/);
-    expect(tooltip[1]).toMatch(/top:\s*calc\(100%/);
-    expect(tooltip[1]).toMatch(/right:\s*0/);
   });
 });
 

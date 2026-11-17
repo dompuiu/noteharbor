@@ -214,9 +214,11 @@ describe("the merged add dialog", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
     expect(
-      await screen.findByRole("button", { name: "1 leu, Pick 22, 1917" }),
+      await screen.findByRole("button", { name: "Pick 22 · 1917 · 1 leu" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("3 notes")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "All (3)" }),
+    ).toBeInTheDocument();
   });
 
   test("Deselect all removes only the currently filtered picks", async () => {

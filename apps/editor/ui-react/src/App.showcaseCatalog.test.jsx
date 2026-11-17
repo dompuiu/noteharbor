@@ -336,9 +336,16 @@ describe("a presentation-only showcase", () => {
     expect(
       screen.getByRole("button", { name: "Slideshow" }),
     ).toBeEnabled();
-    expect(screen.getByText("2 notes")).toBeInTheDocument();
     expect(
-      noteCard("1 leu, Pick 22a, 1917"),
+      noteCard("Pick 22a · 1917 · 1 leu"),
+    ).toBeInTheDocument();
+    // A note leaf reads as a catalog card even without a placeholder in the
+    // tree: same compact code line and the same ownership footer.
+    expect(
+      container.querySelector(".showcase-card--catalog.showcase-card--labels"),
+    ).not.toBeNull();
+    expect(
+      noteCard("Pick 22a · 1917 · 1 leu is owned. Mark as not owned"),
     ).toBeInTheDocument();
   });
 
@@ -348,9 +355,9 @@ describe("a presentation-only showcase", () => {
 
     await user.click(screen.getByRole("button", { name: "Owned (1)" }));
 
-    expect(noteCard("1 leu, Pick 22a, 1917")).toBeInTheDocument();
+    expect(noteCard("Pick 22a · 1917 · 1 leu")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "5 lei, Pick 24c, 1920" }),
+      screen.queryByRole("button", { name: "Pick 24c · 1920 · 5 lei" }),
     ).not.toBeInTheDocument();
   });
 
@@ -359,7 +366,7 @@ describe("a presentation-only showcase", () => {
     const { container } = await openShowcase(presentationOnlyTree());
 
     expect(
-      container.querySelector(".showcase-card--note-labels"),
+      container.querySelector(".showcase-card--catalog.showcase-card--labels"),
     ).not.toBeNull();
 
     await user.click(
@@ -373,9 +380,69 @@ describe("a presentation-only showcase", () => {
       screen.getAllByTestId("showcase-grid")[0],
     ).toHaveAttribute("data-catalog-layout", "rail");
     expect(
-      container.querySelector(".showcase-card--note-rail"),
+      container.querySelector(".showcase-card--catalog.showcase-card--rail"),
     ).not.toBeNull();
-    expect(noteCard("1 leu, Pick 22a, 1917")).toBeInTheDocument();
+    expect(noteCard("Pick 22a · 1917 · 1 leu")).toBeInTheDocument();
+  });
+
+  test("a presentation note's footer toggles ownership", async () => {
+    const user = userEvent.setup();
+    await openShowcase(presentationOnlyTree());
+
+    await user.click(
+      noteCard("Pick 24c · 1920 · 5 lei is seen. Mark as owned"),
+    );
+
+    expect(updateNote).toHaveBeenCalledWith(
+      103,
+      expect.objectContaining({ owned: true }),
+      1,
+    );
+  });
+
+  test("a complete presentation showcase wears the Complete chip", async () => {
+    const { container } = await openShowcase([
+      categoryNode([noteNode(400, OWNED_NOTE, 1)]),
+    ]);
+
+    expect(summary(container)).toHaveTextContent("Complete");
+  });
+
+  test("reads the note text on the card, with no info tooltip", async () => {
+    const detailed = {
+      ...OWNED_NOTE,
+      notes: "A printer's mark in the margin.",
+      tags: ["margin"],
+    };
+    const { container } = await openShowcase([
+      categoryNode([noteNode(400, detailed, 1)]),
+    ]);
+
+    expect(
+      container.querySelector(".showcase-card-notes-text"),
+    ).toHaveTextContent("A printer's mark in the margin.");
+    // The card is the catalog card: no info icon and no `i` tooltip.
+    expect(container.querySelector(".showcase-card-info")).toBeNull();
+    fireEvent.keyDown(noteCard("Pick 22a · 1917 · 1 leu"), { key: "i" });
+    expect(container.querySelector(".showcase-card-tooltip")).toBeNull();
+  });
+
+  test("a note with no catalog metadata still renders", async () => {
+    const bare = { id: 150, collection_id: 1, images: [], tags: [] };
+    await openShowcase([categoryNode([noteNode(402, bare, 1)])]);
+
+    expect(noteCard("Untitled note")).toBeInTheDocument();
+  });
+
+  test("uses the neutral empty copy without owned cards", async () => {
+    const user = userEvent.setup();
+    await openShowcase([categoryNode([noteNode(401, SEEN_NOTE, 1)])]);
+
+    await user.click(screen.getByRole("button", { name: "Owned (0)" }));
+
+    expect(
+      screen.getByText("Mark a seen card owned to see it here."),
+    ).toBeInTheDocument();
   });
 
   test("presents only the owned notes, like a checklist", async () => {

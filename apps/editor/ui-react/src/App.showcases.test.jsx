@@ -185,7 +185,7 @@ describe("Showcase view", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("the header shows the total note count of the loaded tree", async () => {
+  test("the toolbar counts the notes in the loaded tree", async () => {
     getShowcaseTree.mockResolvedValue({
       showcase_id: 1,
       nodes: [
@@ -227,7 +227,9 @@ describe("Showcase view", () => {
     });
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
-    expect(await screen.findByText("2 notes")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "All (2)" }),
+    ).toBeInTheDocument();
   });
 });
 

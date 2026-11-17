@@ -31,14 +31,12 @@ import {
   catalogCounts,
   catalogEntryIdentity,
   catalogPresentationNotes,
-  countNoteNodes,
   filterCatalogTree,
   findNodeById,
   findNodeIdForNote,
   findNodeIdPath,
   findNodePath,
   findParentId,
-  hasCatalogEntries,
   isCatalogEntry,
   noteOwnedInTree,
   removeNodeTree,
@@ -60,7 +58,6 @@ import { ShowcaseCategorySection } from "./ShowcaseCategorySection.jsx";
 import { ShowcaseCategoryTile } from "./ShowcaseCategoryTile.jsx";
 import { ShowcaseAddDialog } from "./ShowcaseAddDialog.jsx";
 import { ShowcaseBreadcrumb } from "./ShowcaseBreadcrumb.jsx";
-import { ShowcaseCatalogCard } from "./ShowcaseCatalogCard.jsx";
 import { ShowcaseCatalogShellForm } from "./ShowcaseCatalogShellForm.jsx";
 import { ShowcaseDialog } from "./ShowcaseDialog.jsx";
 import { ShowcaseItemsGrid } from "./ShowcaseItemsGrid.jsx";
@@ -104,23 +101,19 @@ const CARD_FILTERS = [
   {
     value: "owned",
     label: "Owned",
-    emptyText:
-      "Mark a seen note owned, or add a placeholder, to start the checklist.",
-    noteEmptyText: "Mark a seen note owned to see it here.",
+    emptyText: "Mark a seen card owned to see it here.",
     emptyTitle: "No owned cards.",
   },
   {
     value: "seen",
     label: "Seen",
-    emptyText: "Every card here is owned or still a placeholder.",
-    noteEmptyText: "Every note here is owned.",
+    emptyText: "Every card here is owned or unseen.",
     emptyTitle: "No seen cards.",
   },
   {
     value: "unseen",
     label: "Unseen",
-    emptyText: "Every placeholder here already has a note.",
-    noteEmptyText: "This Showcase has no placeholders.",
+    emptyText: "No unseen cards here.",
     emptyTitle: "No unseen cards.",
   },
 ];
@@ -1027,12 +1020,10 @@ function ShowcaseScreen() {
   const currentNode = currentPath.length
     ? currentPath[currentPath.length - 1]
     : null;
-  const catalogMode = hasCatalogEntries(nodes);
-  // The view toolbar belongs to every Showcase, not just a catalog one: the
-  // ownership filters, owned meter, card layout, photo size, and Slideshow stay
-  // through loading and for a presentation-only Showcase. Note leaves carry an
-  // owned flag too, so the filters read the same states either way, and every
-  // card type honours the two layouts. Only a failed load suppresses the row.
+  // The view toolbar belongs to every Showcase, and every note leaf reads as a
+  // catalog card, whether or not the tree has placeholders. Note leaves carry an
+  // owned flag too, so the filters, meter, and Complete chip read the same
+  // states either way.
   const showViewToolbar = !loadError;
   const displayNode =
     currentNode?.node_type === "category" ? null : currentNode;
@@ -1052,9 +1043,7 @@ function ShowcaseScreen() {
   const activeFilter =
     CARD_FILTERS.find((filter) => filter.value === cardFilter) ??
     CARD_FILTERS[0];
-  const filterEmptyText = catalogMode
-    ? activeFilter.emptyText
-    : activeFilter.noteEmptyText;
+  const filterEmptyText = activeFilter.emptyText;
   // One slide per owned card: a catalog entry uses its primary, a note leaf
   // its own Note. Seen and unseen cards are skipped. A presentation-only
   // Showcase reads note leaves through the same owned flag.
@@ -1659,12 +1648,10 @@ function ShowcaseScreen() {
       !placedCategoryIds.has(category.id) &&
       !placedCategoryNames.has(String(category.name ?? "").toLowerCase()),
   );
-  const noteCount = loading ? (showcase?.note_count ?? 0) : countNoteNodes(nodes);
   const reorderEnabled = !filterActive;
 
   const gridProps = {
     catalogLayout,
-    catalogMode,
     onAdd: (parent) => openAdd(parent, null, "notes"),
     onAddGroupingAfter: openAddAfter,
     onAddNoteAfter: openAddAfter,
@@ -1775,11 +1762,6 @@ function ShowcaseScreen() {
                 ) : null}
               </div>
             )}
-            {catalogMode ? null : (
-              <p className="muted showcase-note-count">
-                {noteCount === 1 ? "1 note" : `${noteCount} notes`}
-              </p>
-            )}
             {nameError ? (
               <p className="error-text" role="alert">
                 {nameError}
@@ -1878,7 +1860,7 @@ function ShowcaseScreen() {
               <span aria-hidden="true" className="showcase-progress-pct">
                 {`${ownedPercent}%`}
               </span>
-              {catalogMode && levelTotals.complete ? (
+              {levelTotals.complete ? (
                 <span className="showcase-complete-chip">
                   <span
                     aria-hidden="true"

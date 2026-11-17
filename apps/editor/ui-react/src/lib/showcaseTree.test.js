@@ -9,14 +9,12 @@ import {
   catalogEntryState,
   catalogMergeKey,
   catalogPresentationNotes,
-  categoryCardCount,
   countNoteNodes,
   filterCatalogTree,
   findNodeById,
   findNodeIdForNote,
   findNodeIdPath,
   findNodePath,
-  hasCatalogEntries,
   hasSeenPrimary,
   nodeCatalogState,
   normalizeCatalogEntry,
@@ -479,16 +477,6 @@ describe("catalogCounts", () => {
   });
 });
 
-describe("hasCatalogEntries", () => {
-  test("finds an entry at any depth", () => {
-    expect(hasCatalogEntries(catalogTree())).toBe(true);
-  });
-
-  test("is false for a presentation of note leaves", () => {
-    expect(hasCatalogEntries([category(1, [noteNode(3)])])).toBe(false);
-  });
-});
-
 describe("filterCatalogTree", () => {
   test("all hands the tree back untouched", () => {
     const tree = catalogTree();
@@ -787,18 +775,6 @@ describe("showcaseCountLabel", () => {
   test("a payload without counts falls back", () => {
     expect(showcaseCountLabel({ name: "Draft" })).toBeNull();
     expect(showcaseCountLabel(null)).toBeNull();
-  });
-});
-
-describe("categoryCardCount", () => {
-  test("counts entries and note leaves in a catalog, notes only otherwise", () => {
-    const section = category(1, [
-      entryNode(20, []),
-      noteLeaf(3, true),
-    ]);
-
-    expect(categoryCardCount(section, true)).toBe(2);
-    expect(categoryCardCount(section, false)).toBe(1);
   });
 });
 
