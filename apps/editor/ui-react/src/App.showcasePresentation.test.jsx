@@ -739,7 +739,7 @@ describe("the note card in view mode", () => {
     await waitFor(() => expect(currentHash()).toBe(""));
     expect(screen.queryByText("Note editor screen")).not.toBeInTheDocument();
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "1 leu, 1917" })).toHaveFocus(),
+      expect(screen.getByRole("button", { name: "1917 · 1 leu" })).toHaveFocus(),
     );
   });
 
