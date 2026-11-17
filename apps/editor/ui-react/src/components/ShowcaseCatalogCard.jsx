@@ -33,9 +33,9 @@ import { ShowcaseFlipControl } from "./ShowcaseFlipControl.jsx";
 //
 // - `labels` (Library label): the rail sits at the top with the grip and the
 //   compact catalog code, the photo keeps a hairline well, and a metadata row
-//   carries the date, denomination and grade.
+//   carries the denomination, date and grade.
 // - `rail` (Auction rail): the photo takes the left width while the identity
-//   rail stacks catalog code, date, denomination and grade on the right.
+//   rail stacks catalog code, denomination, date and grade on the right.
 //
 // Both put ownership in a quiet full-width footer action, so Seen and Owned
 // read the same in either layout. The state label is the ownership toggle and
@@ -240,7 +240,7 @@ function ShowcaseCatalogCard({
   const code = noteLabel(source);
   const date = text(source?.issue_date);
   const denomination = text(source?.denomination);
-  const metaLine = [date, denomination].filter(Boolean).join(" · ");
+  const metaLine = [denomination, date].filter(Boolean).join(" · ");
   const grade = gradeOf(note);
   const notes = text(note?.notes);
   const notesDescriptionId = notes ? notesId : undefined;
@@ -339,10 +339,10 @@ function ShowcaseCatalogCard({
                 <span className="showcase-catalog-railtop">{grip}</span>
                 <span className="showcase-catalog-kicker">Catalog</span>
                 {code ? <span className="showcase-catalog-code">{code}</span> : null}
-                {date ? <span className="showcase-catalog-date">{date}</span> : null}
                 {denomination ? (
                   <span className="showcase-catalog-denom">{denomination}</span>
                 ) : null}
+                {date ? <span className="showcase-catalog-date">{date}</span> : null}
                 <span className="showcase-catalog-empty">
                   No specimen recorded yet.
                 </span>
@@ -429,10 +429,10 @@ function ShowcaseCatalogCard({
               <span className="showcase-catalog-railtop">{grip}</span>
               <span className="showcase-catalog-kicker">Catalog</span>
               {code ? <span className="showcase-catalog-code">{code}</span> : null}
-              {date ? <span className="showcase-catalog-date">{date}</span> : null}
               {denomination ? (
                 <span className="showcase-catalog-denom">{denomination}</span>
               ) : null}
+              {date ? <span className="showcase-catalog-date">{date}</span> : null}
               <ShowcaseCardNotes
                 id={notesDescriptionId}
                 layout="rail"

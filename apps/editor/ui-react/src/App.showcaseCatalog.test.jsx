@@ -967,7 +967,7 @@ describe("the catalog checklist", () => {
     expect(screen.queryByText(/Add notes/)).not.toBeInTheDocument();
     // The identity lives on the card's rail, not in the cell's old window bar:
     // the compact catalog code leads the photo and the metadata row carries
-    // date · denomination. The default grid is Small, which always uses the
+    // denomination · date. The default grid is Small, which always uses the
     // compact `P22a` catalog prefix.
     expect(
       [...container.querySelectorAll(".showcase-catalog-code")].map(
@@ -979,10 +979,10 @@ describe("the catalog checklist", () => {
         (line) => line.textContent,
       ),
     ).toEqual([
-      "1917 · 1 leu",
-      "1920 · 5 lei",
-      "1921 · 10 lei",
-      "1919 · 2 lei",
+      "1 leu · 1917",
+      "5 lei · 1920",
+      "10 lei · 1921",
+      "2 lei · 1919",
     ]);
     expect(
       container.querySelector(".showcase-catalog-cell .showcase-card-caption"),
@@ -1614,7 +1614,7 @@ describe("placeholders in the one view", () => {
     );
     await waitFor(() =>
       expect(container.querySelector(".showcase-catalog-line")).toHaveTextContent(
-        "1921 · 100 lei",
+        "100 lei · 1921",
       ),
     );
   });

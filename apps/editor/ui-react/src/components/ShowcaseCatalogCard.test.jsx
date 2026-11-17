@@ -358,6 +358,13 @@ describe("ShowcaseCatalogCard face flip", () => {
     expect(notes).not.toBeNull();
     expect(notes).toHaveTextContent("The upgrade copy.");
     expect(rail).toHaveTextContent("P22a");
+    const identityLines = [
+      ...rail.querySelectorAll(".showcase-catalog-denom, .showcase-catalog-date"),
+    ].map((line) => line.className);
+    expect(identityLines).toEqual([
+      "showcase-catalog-denom",
+      "showcase-catalog-date",
+    ]);
     expect(card).toHaveAccessibleDescription(/The upgrade copy\./);
   });
 
