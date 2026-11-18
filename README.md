@@ -545,6 +545,8 @@ DELETE /api/archive/data
 
 `collectionIds` is optional; omit it to export every collection. The archive contains `banknotes.db` (with its `collections` rows) plus `images/`. Importing an archive replaces the current data directory.
 
+In the desktop app the export button asks the operating system for a destination first (default name `noteharbor-archive-YYYY-MM-DD.zip`, starting in the downloads folder) and writes the zip straight there instead of starting a webview download; dismissing the dialog exports nothing.
+
 ### Scraping
 
 ```

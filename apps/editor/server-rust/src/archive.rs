@@ -1908,6 +1908,16 @@ pub struct ExportOutput {
     pub omitted_names: Vec<String>,
 }
 
+/// The archive's suggested name, `noteharbor-archive-YYYY-MM-DD.zip`. Shared
+/// with the desktop shell so its save dialog opens pre-filled with the same
+/// name the browser download would use.
+pub fn default_archive_filename() -> String {
+    format!(
+        "noteharbor-archive-{}.zip",
+        crate::ops::now_iso8601_utc()[..10].to_owned()
+    )
+}
+
 pub fn run_export(
     pool: &crate::DbPool,
     data_dir: &Path,
@@ -1930,7 +1940,7 @@ pub fn run_export(
     let zip_bytes = build_export_zip(&snapshot_path, &filtered.export_images_dir)?;
     Ok(ExportOutput {
         zip_bytes,
-        filename: format!("noteharbor-archive-{}.zip", crate::ops::now_iso8601_utc()[..10].to_owned()),
+        filename: default_archive_filename(),
         omitted_names: filtered.omitted_showcases.into_iter().map(|(_, name)| name).collect(),
     })
 }
@@ -2005,6 +2015,22 @@ mod tests {
         assert_eq!(parse_selected_ids(None), None);
         assert_eq!(parse_selected_ids(Some("1,2, 2,abc,0,-3,2.5")), Some(vec![1, 2]));
         assert_eq!(parse_selected_ids(Some("nope")), Some(vec![]));
+    }
+
+    #[test]
+    fn default_archive_filename_is_a_dated_zip() {
+        let name = default_archive_filename();
+        let date = name
+            .strip_prefix("noteharbor-archive-")
+            .and_then(|rest| rest.strip_suffix(".zip"))
+            .expect("dated archive name");
+
+        assert_eq!(date.len(), 10, "{name}");
+        assert_eq!(&date[4..5], "-", "{name}");
+        assert_eq!(&date[7..8], "-", "{name}");
+        assert!(date[..4].chars().all(|c| c.is_ascii_digit()), "{name}");
+        assert!(date[5..7].chars().all(|c| c.is_ascii_digit()), "{name}");
+        assert!(date[8..].chars().all(|c| c.is_ascii_digit()), "{name}");
     }
 
     #[test]

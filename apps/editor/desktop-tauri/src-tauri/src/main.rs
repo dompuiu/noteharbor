@@ -20,8 +20,9 @@ use std::{
     },
 };
 
-use editor_desktop_tauri::{chrome, data_dir, paths, prefs, server, urls, window_state};
+use editor_desktop_tauri::{chrome, data_dir, export, paths, prefs, server, urls, window_state};
 use tauri::{Manager, WebviewUrl};
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
 /// JS bridge injected before any page script runs. Defines the
@@ -55,12 +56,16 @@ if (window.__TAURI__ && !window.noteHarborDesktop) {
     setShowcaseCatalogLayout: (catalogLayout) => invoke('set_showcase_catalog_layout', { value: catalogLayout }),
     getLastVisitedRoute: () => invoke('get_last_visited_route'),
     setLastVisitedRoute: (route) => invoke('set_last_visited_route', { value: route }),
+    exportArchive: (collectionIds, showcaseIds) => invoke('export_archive', { collectionIds, showcaseIds }),
   };
 }
 "#;
 
 struct ShellState {
     scrape_launching: AtomicBool,
+    /// The embedded server's state, so shell commands (archive export) use the
+    /// same database pool and operation guard as the HTTP routes.
+    app_state: editor_server_rust::AppState,
 }
 
 fn app_data_file(app: &tauri::AppHandle, filename: &str) -> PathBuf {
@@ -414,6 +419,57 @@ fn set_last_visited_route(app: tauri::AppHandle, value: String) -> Option<String
         .flatten()
 }
 
+/// Saves an archive through a native OS save dialog. The shell owns the file
+/// system, so the export never becomes a silent webview download: the picker
+/// suggests `noteharbor-archive-YYYY-MM-DD.zip`, the user names and places it,
+/// and the zip is written straight to that path under the same
+/// `exporting_archive` guard the HTTP route uses. `None` means the dialog was
+/// dismissed and nothing was written.
+#[tauri::command]
+async fn export_archive(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, Arc<ShellState>>,
+    collection_ids: Option<Vec<i64>>,
+    showcase_ids: Option<Vec<i64>>,
+) -> Result<Option<export::SavedArchive>, String> {
+    let start_dir = export::preferred_archive_directory(&[
+        app.path().download_dir().ok(),
+        app.path().document_dir().ok(),
+        app.path().home_dir().ok(),
+    ]);
+    let mut dialog = app
+        .dialog()
+        .file()
+        .set_title("Save archive")
+        .set_file_name(editor_server_rust::archive::default_archive_filename())
+        .add_filter("Note Harbor archive", &["zip"])
+        .set_parent(&window);
+    if let Some(directory) = start_dir {
+        dialog = dialog.set_directory(directory);
+    }
+
+    // The picker is modal and asynchronous: the command awaits its callback,
+    // so the webview's main thread is never blocked while it is open.
+    let (chosen_tx, chosen_rx) = tokio::sync::oneshot::channel();
+    dialog.save_file(move |path| {
+        let _ = chosen_tx.send(path);
+    });
+    let Some(chosen) = chosen_rx
+        .await
+        .map_err(|_| "The save dialog did not return a location.".to_owned())?
+    else {
+        return Ok(None);
+    };
+    let path = chosen
+        .into_path()
+        .map_err(|error| format!("Cannot save the archive there: {error}"))?;
+
+    export::export_archive_to_path(&state.app_state, collection_ids, showcase_ids, path)
+        .await
+        .map(Some)
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -426,7 +482,8 @@ pub fn run() {
             get_showcase_catalog_layout,
             set_showcase_catalog_layout,
             get_last_visited_route,
-            set_last_visited_route
+            set_last_visited_route,
+            export_archive
         ])
         .setup(|app| {
             let resource_dir = app.path().resource_dir().ok();
@@ -440,15 +497,20 @@ pub fn run() {
             )
             .map_err(|error| format!("cannot prepare data dir: {error}"))?;
             let web_dist_dir = resolve_web_dist_dir(resource_dir.as_deref());
-            let (app_url, _server) =
-                tauri::async_runtime::block_on(server::start_embedded_server(data_dir, web_dist_dir))
-                    .map_err(|error| error.to_string())?;
+            let embedded = tauri::async_runtime::block_on(server::start_embedded_server(
+                data_dir,
+                web_dist_dir,
+            ))
+            .map_err(|error| error.to_string())?;
+            let app_url = embedded.app_url.clone();
+            let _server = embedded.task;
             // Dev-only: in release `windows_subsystem = "windows"` detaches
             // the console, so logging here would open a cmd window on Windows.
             #[cfg(debug_assertions)]
             eprintln!("Note Harbor Editor shell serving at {app_url}");
             app.manage(Arc::new(ShellState {
                 scrape_launching: AtomicBool::new(false),
+                app_state: embedded.state,
             }));
 
             let saved = read_saved_window_state(app.handle());

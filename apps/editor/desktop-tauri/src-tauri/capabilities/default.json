@@ -17,6 +17,7 @@
     "allow-get-showcase-photo-size",
     "allow-set-showcase-photo-size",
     "allow-get-last-visited-route",
-    "allow-set-last-visited-route"
+    "allow-set-last-visited-route",
+    "allow-export-archive"
   ]
 }

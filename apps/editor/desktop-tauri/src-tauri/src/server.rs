@@ -10,12 +10,20 @@ use std::path::PathBuf;
 
 pub const APP_URL_HOST: &str = "127.0.0.1";
 
-/// Starts the embedded Axum server on an ephemeral port and returns the app
-/// URL plus the server task. The caller owns shutdown (abort the handle).
+/// The embedded server's URL, task handle, and the state the shell shares with
+/// its own commands (archive export writes through the same pool and operation
+/// guard the HTTP routes use). The caller owns shutdown (abort the handle).
+pub struct EmbeddedServer {
+    pub app_url: String,
+    pub task: tokio::task::JoinHandle<()>,
+    pub state: editor_server_rust::AppState,
+}
+
+/// Starts the embedded Axum server on an ephemeral port.
 pub async fn start_embedded_server(
     data_dir: PathBuf,
     web_dist_dir: PathBuf,
-) -> Result<(String, tokio::task::JoinHandle<()>), String> {
+) -> Result<EmbeddedServer, String> {
     std::env::set_var("NOTE_HARBOR_DATA_DIR", &data_dir);
     std::env::set_var("NOTE_HARBOR_WEB_DIST_DIR", &web_dist_dir);
     std::env::set_var("NOTE_HARBOR_SERVE_WEB_DIST", "true");
@@ -31,7 +39,7 @@ pub async fn start_embedded_server(
         .map_err(|error| format!("migration task failed: {error}"))?
         .map_err(|error| format!("cannot open database: {error}"))?;
     let app_state = editor_server_rust::AppState::new(static_root, data_dir, pool);
-    let router = editor_server_rust::create_app(app_state);
+    let router = editor_server_rust::create_app(app_state.clone());
     let listener = tokio::net::TcpListener::bind((APP_URL_HOST, 0))
         .await
         .map_err(|error| format!("cannot bind embedded server: {error}"))?;
@@ -42,7 +50,11 @@ pub async fn start_embedded_server(
     let handle = tokio::spawn(async move {
         let _ = axum::serve(listener, router).await;
     });
-    Ok((format!("http://{APP_URL_HOST}:{port}"), handle))
+    Ok(EmbeddedServer {
+        app_url: format!("http://{APP_URL_HOST}:{port}"),
+        task: handle,
+        state: app_state,
+    })
 }
 
 #[cfg(test)]
@@ -55,11 +67,14 @@ mod tests {
         let data_dir = dir.path().join("data");
         let web_dist = dir.path().join("empty-dist");
         std::fs::create_dir_all(&web_dist).unwrap();
-        let (app_url, server) = start_embedded_server(data_dir, web_dist).await.unwrap();
+        let embedded = start_embedded_server(data_dir, web_dist).await.unwrap();
+        let app_url = embedded.app_url.clone();
         assert!(
             app_url.starts_with("http://127.0.0.1:"),
             "unexpected url {app_url}"
         );
+        // The shell's own commands export through this shared state.
+        assert!(embedded.state.pool.get().is_ok());
 
         let client = reqwest::Client::new();
         let body = client
@@ -80,6 +95,6 @@ mod tests {
             .unwrap();
         assert_eq!(not_found.status().as_u16(), 404);
 
-        server.abort();
+        embedded.task.abort();
     }
 }
