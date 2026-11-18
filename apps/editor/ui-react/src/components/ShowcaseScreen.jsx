@@ -497,27 +497,22 @@ function ShowcaseScreen() {
       throw new Error("This category is already in the showcase.");
     }
 
+    const { node } = await createShowcaseNode(showcaseId, {
+      ...(match
+        ? { type: "category", category_id: match.id }
+        : { type: "category", name: trimmed }),
+    });
+    setNodes((current) => [...current, node]);
+    setActionError("");
+
     try {
-      const { node } = await createShowcaseNode(showcaseId, {
-        ...(match
-          ? { type: "category", category_id: match.id }
-          : { type: "category", name: trimmed }),
-      });
-      setNodes((current) => [...current, node]);
-      setActionError("");
-
-      try {
-        const pool = await getCategories();
-        setCategories(pool.categories ?? []);
-      } catch {
-        // The new placement is already on the canvas; suggestions can lag.
-      }
-
-      refreshShowcases?.().catch(() => {});
-    } catch (error) {
-      reportActionError(error, "Could not add the category.");
-      throw error;
+      const pool = await getCategories();
+      setCategories(pool.categories ?? []);
+    } catch {
+      // The new placement is already on the canvas; suggestions can lag.
     }
+
+    refreshShowcases?.().catch(() => {});
   }
 
   async function handleReorder(parentId, orderedIds) {
@@ -640,18 +635,13 @@ function ShowcaseScreen() {
       throw new Error("A grouping needs a category or grouping.");
     }
 
-    try {
-      const { node } = await createShowcaseNode(showcaseId, {
-        type: "grouping",
-        parent_id: addTarget.parent.id,
-        name,
-      });
-      await placeCreated(addTarget.parent.id, addTarget.afterId, [node]);
-      setActionError("");
-    } catch (error) {
-      reportActionError(error, "Could not add the grouping.");
-      throw error;
-    }
+    const { node } = await createShowcaseNode(showcaseId, {
+      type: "grouping",
+      parent_id: addTarget.parent.id,
+      name,
+    });
+    await placeCreated(addTarget.parent.id, addTarget.afterId, [node]);
+    setActionError("");
   }
 
   async function submitNameDialog(trimmed) {
@@ -685,31 +675,37 @@ function ShowcaseScreen() {
       return;
     }
 
-    try {
-      const { node } = await updateNode(target.id, { name: trimmed });
-      replaceServerNode(node);
-      setActionError("");
+    // The dialog owns the error line for a failed rename; adding a banner or
+    // toast here would show the same message twice.
+    const { node } = await updateNode(target.id, { name: trimmed });
+    replaceServerNode(node);
+    setActionError("");
 
-      if (target.node_type === "category") {
+    if (target.node_type === "category") {
+      // The rename is already committed; a lagging pool must not read as one.
+      try {
         const pool = await getCategories();
         setCategories(pool.categories ?? []);
-        refreshShowcases?.().catch(() => {});
+      } catch {
+        // The canvas shows the new label; suggestions can lag.
       }
-    } catch (error) {
-      reportActionError(error, "Could not rename the item.");
-      throw error;
+      refreshShowcases?.().catch(() => {});
     }
   }
 
   function openRename(node) {
+    const isCategory = node.node_type === "category";
     setNameDialog({
       kind: "rename",
       node,
-      title: `Rename ${node.node_type === "category" ? "category" : "grouping"}`,
-      subtitle: "The new name is saved immediately.",
+      title: `Rename ${isCategory ? "category" : "grouping"}`,
+      subtitle: isCategory
+        ? "Pick a category from the pool or type a new name. Only this showcase changes."
+        : "The new name is saved immediately.",
       label: "Name",
       initialValue: node.name ?? "",
       submitLabel: "Save name",
+      suggestionsLabel: isCategory ? "Category suggestions" : undefined,
     });
   }
 
@@ -1738,6 +1734,15 @@ function ShowcaseScreen() {
       !placedCategoryIds.has(category.id) &&
       !placedCategoryNames.has(String(category.name ?? "").toLowerCase()),
   );
+  // A category name field is a pool picker, whether it creates or renames; a
+  // grouping name field has no pool. Read live so the delete action updates it.
+  const nameDialogSuggestions = !nameDialog
+    ? []
+    : nameDialog.kind === "add-category" ||
+        (nameDialog.kind === "rename" &&
+          nameDialog.node?.node_type === "category")
+      ? availableCategories
+      : (nameDialog.suggestions ?? []);
   const reorderEnabled = !filterActive;
 
   function openReplaceFinder(node) {
@@ -2107,11 +2112,7 @@ function ShowcaseScreen() {
           onSubmit={submitNameDialog}
           submitLabel={nameDialog.submitLabel}
           subtitle={nameDialog.subtitle}
-          suggestions={
-            nameDialog.kind === "add-category"
-              ? availableCategories
-              : (nameDialog.suggestions ?? [])
-          }
+          suggestions={nameDialogSuggestions}
           suggestionsLabel={nameDialog.suggestionsLabel}
           title={nameDialog.title}
         />

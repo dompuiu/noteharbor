@@ -428,7 +428,9 @@ describe("the showcase category canvas", () => {
     await user.click(
       await screen.findByRole("button", { name: "Actions for Summer" }),
     );
-    await user.click(screen.getByRole("menuitem", { name: "Rename category…" }));
+    await user.click(
+      screen.getByRole("menuitem", { name: "Rename category…" }),
+    );
     const input = screen.getByLabelText("Name");
     await user.clear(input);
     await user.type(input, "Monsoon");
@@ -440,6 +442,67 @@ describe("the showcase category canvas", () => {
     expect(
       await screen.findByRole("heading", { name: "Monsoon" }),
     ).toBeInTheDocument();
+  });
+
+  test("the rename dialog offers the category pool and adopts a picked label", async () => {
+    const user = userEvent.setup();
+    updateNode.mockResolvedValueOnce({
+      node: { ...SUMMER_NODE, name: "Vienna", category_id: 2 },
+    });
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for Summer" }),
+    );
+    await user.click(
+      screen.getByRole("menuitem", { name: "Rename category…" }),
+    );
+    await user.click(screen.getByLabelText("Name"));
+
+    // The pool is the same list the New category dialog offers; the label this
+    // showcase already places is not a choice.
+    expect(
+      await screen.findByRole("option", { name: "Vienna" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: /^Summer/ }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("option", { name: "Vienna" }));
+    await user.click(screen.getByRole("button", { name: "Save name" }));
+
+    await waitFor(() => {
+      expect(updateNode).toHaveBeenCalledWith(10, { name: "Vienna" });
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Vienna" }),
+    ).toBeInTheDocument();
+  });
+
+  test("a rename failure shows once, inside the dialog", async () => {
+    const user = userEvent.setup();
+    updateNode.mockRejectedValueOnce(
+      new Error("This category is already in the showcase."),
+    );
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for Summer" }),
+    );
+    await user.click(
+      screen.getByRole("menuitem", { name: "Rename category…" }),
+    );
+    const input = screen.getByLabelText("Name");
+    await user.clear(input);
+    await user.type(input, "Winter");
+    await user.click(screen.getByRole("button", { name: "Save name" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByText("This category is already in the showcase."),
+      ).toHaveLength(1);
+    });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
   test("removing a category confirms and deletes immediately", async () => {

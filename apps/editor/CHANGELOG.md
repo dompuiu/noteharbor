@@ -8,6 +8,14 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 - Showcase: a note card's `⋯` menu now offers **Replace with a note…**, the same finder a placeholder uses. Picking a library note swaps the card's note in place, keeping the card's id, parent, and position.
 
+### Changed
+
+- Showcase: a category's `⋯` menu now offers **Rename category…**, and its name field is a combobox over the category pool. Picking a label adopts it for this Showcase; typing a new name creates a label and uses it here. The label left behind is pruned once no Showcase places it. Renaming no longer changes every Showcase that used the label, and a name clash inside the same Showcase reads "This category is already in the showcase."
+
+### Fixed
+
+- Showcase: a name dialog's failure now shows once, inside the dialog, instead of repeating as a banner and a toast as well.
+
 ## [2.18.0] - 2026-11-17
 
 ### Fixed

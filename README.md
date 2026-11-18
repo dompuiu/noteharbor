@@ -460,9 +460,11 @@ Body: { showcase_id, parent_node_id, node_ids: [id, ...] }   // parent_node_id n
 -> { nodes }
 
 PUT /api/nodes/:nodeId
-Body: { name? }                     // a Grouping or Category Placement
+Body: { name? }                     // a Grouping's name, or a Category Placement's label
     | { cover_note_id: id | null }  // set / clear a Grouping's manual cover
--> { node }
+-> { node }   // for a Category Placement, name sets this Showcase's label:
+              // reusing a pool name adopts that label, a new name creates one,
+              // and the label left behind is pruned when it has no placements.
 
 DELETE /api/nodes/:nodeId
 -> { success: true }   // removes the node and its subtree; a Category label stays in the pool
@@ -473,6 +475,8 @@ DELETE /api/nodes/:nodeId
 ### Categories
 
 The shared Category label pool. Creating a name that already exists (ignoring case) returns the existing label.
+
+A Showcase changes the label on its own Category Placement through `PUT /api/nodes/:nodeId`; that affects only that Showcase. `PUT /api/categories/:id` renames the label itself everywhere it is placed, and refuses a name another label already holds.
 
 ```
 GET /api/categories

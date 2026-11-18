@@ -458,6 +458,19 @@ fn list_categories(conn: &Connection) -> Result<Vec<Category>, DbError> {
     Ok(rows)
 }
 
+fn find_category_by_name(conn: &Connection, name: &str) -> Result<Option<Category>, DbError> {
+    let mut stmt = conn
+        .prepare(&format!(
+            "{CATEGORY_SELECT} WHERE categories.name = ?1 COLLATE NOCASE"
+        ))
+        .map_err(classify)?;
+    match stmt.query_row(params![name], map_category) {
+        Ok(category) => Ok(Some(category)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(error) => Err(classify(error)),
+    }
+}
+
 fn get_category(conn: &Connection, id: i64) -> Result<Option<Category>, DbError> {
     let mut stmt = conn
         .prepare(&format!("{CATEGORY_SELECT} WHERE categories.id = ?1"))
@@ -469,27 +482,35 @@ fn get_category(conn: &Connection, id: i64) -> Result<Option<Category>, DbError>
     }
 }
 
-pub fn create_category(conn: &mut Connection, name: &str) -> Result<Category, DbError> {
+/// Resolve a pool label by name, inserting it when the name is new. An existing
+/// label wins on a case-insensitive match and keeps its own spelling.
+fn get_or_create_category(conn: &Connection, name: &str) -> Result<Category, DbError> {
     let normalized = normalize_name(name);
     if normalized.is_empty() {
         return Err(DbError::Failed("Category name is required.".to_owned()));
     }
-    let mut stmt = conn
-        .prepare(&format!(
-            "{CATEGORY_SELECT} WHERE categories.name = ?1 COLLATE NOCASE"
-        ))
-        .map_err(classify)?;
-    if let Ok(existing) = stmt.query_row(params![normalized], map_category) {
+    if let Some(existing) = find_category_by_name(conn, &normalized)? {
         return Ok(existing);
     }
-    conn.execute(
+    match conn.execute(
         "INSERT INTO categories (name, created_at, updated_at)
          VALUES (?1, datetime('now'), datetime('now'))",
         params![normalized],
-    )
-    .map_err(classify)?;
-    let id = conn.last_insert_rowid();
-    get_category(conn, id)?.ok_or_else(|| DbError::Failed("Category not found.".to_owned()))
+    ) {
+        Ok(_) => {
+            let id = conn.last_insert_rowid();
+            get_category(conn, id)?
+                .ok_or_else(|| DbError::Failed("Category not found.".to_owned()))
+        }
+        // Another writer created the same name first: adopt its label.
+        Err(error) if is_unique_violation(&error) => find_category_by_name(conn, &normalized)?
+            .ok_or_else(|| DbError::Failed("Category not found.".to_owned())),
+        Err(error) => Err(classify(error)),
+    }
+}
+
+pub fn create_category(conn: &mut Connection, name: &str) -> Result<Category, DbError> {
+    get_or_create_category(conn, name)
 }
 
 pub fn rename_category(
@@ -515,6 +536,48 @@ pub fn rename_category(
     }
     // The route checks existence first; a missing row surfaces as not found.
     get_category(conn, id)?.ok_or_else(|| DbError::Failed("Category not found.".to_owned()))
+}
+
+/// Point one Category Placement at a pool label. Only this Showcase changes:
+/// a new name creates a label, an existing name reuses it, and the label left
+/// behind is pruned when this was its last placement. A label the Showcase
+/// already places is refused, since one Showcase places each label once.
+fn set_category_placement_label(
+    conn: &mut Connection,
+    existing: &NodeRow,
+    name: &str,
+) -> Result<(), DbError> {
+    let tx = conn.transaction().map_err(classify)?;
+    let target = get_or_create_category(&tx, name)?;
+    if existing.category_id == Some(target.id) {
+        tx.commit().map_err(classify)?;
+        return Ok(());
+    }
+    // The partial unique index on (showcase_id, category_id) enforces "one
+    // placement per label per Showcase"; its violation reads as a clash.
+    match tx.execute(
+        "UPDATE showcase_nodes SET category_id = ?1, updated_at = datetime('now') WHERE id = ?2",
+        params![target.id, existing.id],
+    ) {
+        Ok(_) => {}
+        Err(error) if is_unique_violation(&error) => {
+            return Err(DbError::Failed(
+                "This category is already in the showcase.".to_owned(),
+            ));
+        }
+        Err(error) => return Err(classify(error)),
+    }
+    if let Some(old_category_id) = existing.category_id {
+        tx.execute(
+            "DELETE FROM categories
+             WHERE id = ?1
+               AND NOT EXISTS (SELECT 1 FROM showcase_nodes WHERE category_id = ?1)",
+            params![old_category_id],
+        )
+        .map_err(classify)?;
+    }
+    tx.commit().map_err(classify)?;
+    Ok(())
 }
 
 /// Delete a label only while no Showcase places it. A used label stays in the
@@ -1286,10 +1349,7 @@ fn update_showcase_node(
         }
     }
     if existing.node_type == "category" {
-        let Some(category_id) = existing.category_id else {
-            return Err(DbError::Failed("Category not found.".to_owned()));
-        };
-        rename_category(conn, category_id, &route_name(body.get("name")))?;
+        set_category_placement_label(conn, &existing, &route_name(body.get("name")))?;
     } else if existing.node_type == "grouping" {
         if let Some(raw_name) = body.get("name") {
             if !raw_name.is_null() || body.get("name").is_some() {

@@ -447,31 +447,18 @@ async fn category_placement_by_name_and_id_with_top_level_rule() {
 }
 
 #[tokio::test]
-async fn category_rename_through_node_placement_updates_every_showcase() {
+async fn category_rename_rebinds_only_this_placement_and_keeps_the_old_label() {
     let (_dir, state) = fresh_state();
     let app = create_app(state);
     let first = create_showcase(app.clone(), Some("Rename A")).await;
     let second = create_showcase(app.clone(), Some("Rename B")).await;
-    let (_, created) =
-        call(app.clone(), "POST", "/api/categories", Some(json!({ "name": "Before" }))).await;
-    let category_id = created["category"]["id"].clone();
-    let payload = json!({ "type": "category", "category_id": category_id });
-    let (_, placed) = call(
-        app.clone(),
-        "POST",
-        &format!("/api/showcases/{}/nodes", first["id"]),
-        Some(payload.clone()),
-    )
-    .await;
-    call(
-        app.clone(),
-        "POST",
-        &format!("/api/showcases/{}/nodes", second["id"]),
-        Some(payload),
-    )
-    .await;
+    let first_id = first["id"].as_i64().unwrap();
+    let second_id = second["id"].as_i64().unwrap();
+    let placed = place_category(app.clone(), first_id, "Before").await;
+    let before_id = placed["category_id"].as_i64().unwrap();
+    place_category(app.clone(), second_id, "Before").await;
 
-    let node_id = placed["node"]["id"].as_i64().unwrap();
+    let node_id = placed["id"].as_i64().unwrap();
     let (status, body) = call(
         app.clone(),
         "PUT",
@@ -481,6 +468,100 @@ async fn category_rename_through_node_placement_updates_every_showcase() {
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["node"]["name"], json!("After"));
+    assert_ne!(body["node"]["category_id"], json!(before_id));
+
+    // The other showcase keeps its placement of the old label.
+    let (_, tree) = call(
+        app.clone(),
+        "GET",
+        &format!("/api/showcases/{second_id}/tree"),
+        None,
+    )
+    .await;
+    assert_eq!(tree["nodes"][0]["name"], json!("Before"));
+
+    let (_, pool) = call(app.clone(), "GET", "/api/categories", None).await;
+    let categories = pool["categories"].as_array().unwrap();
+    assert_eq!(categories.len(), 2);
+    for (name, count) in [("After", 1), ("Before", 1)] {
+        let row = categories
+            .iter()
+            .find(|row| row["name"] == json!(name))
+            .unwrap_or_else(|| panic!("{name} missing from the pool"));
+        assert_eq!(row["showcase_count"], json!(count));
+    }
+}
+
+#[tokio::test]
+async fn category_rename_adopts_an_existing_pool_label_and_prunes_the_old_one() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let first = create_showcase(app.clone(), Some("Adopt A")).await;
+    let second = create_showcase(app.clone(), Some("Adopt B")).await;
+    let first_id = first["id"].as_i64().unwrap();
+    let kingdom = place_category(app.clone(), second["id"].as_i64().unwrap(), "Kingdom").await;
+    let kingdom_id = kingdom["category_id"].as_i64().unwrap();
+    let country = place_category(app.clone(), first_id, "Country").await;
+
+    let node_id = country["id"].as_i64().unwrap();
+    let (status, body) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/nodes/{node_id}"),
+        Some(json!({ "name": "kingdom" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["node"]["category_id"], json!(kingdom_id));
+    // The pool keeps its own spelling, not the typed one.
+    assert_eq!(body["node"]["name"], json!("Kingdom"));
+
+    // The old label had no other placement, so the pool drops it.
+    let (_, pool) = call(app.clone(), "GET", "/api/categories", None).await;
+    let categories = pool["categories"].as_array().unwrap();
+    assert_eq!(categories.len(), 1);
+    assert_eq!(categories[0]["id"], json!(kingdom_id));
+    assert_eq!(categories[0]["name"], json!("Kingdom"));
+    assert_eq!(categories[0]["showcase_count"], json!(2));
+}
+
+#[tokio::test]
+async fn category_rename_refuses_a_label_already_placed_in_the_showcase() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let showcase = create_showcase(app.clone(), Some("Clash")).await;
+    let showcase_id = showcase["id"].as_i64().unwrap();
+    let summer = place_category(app.clone(), showcase_id, "Summer").await;
+    place_category(app.clone(), showcase_id, "Winter").await;
+
+    let node_id = summer["id"].as_i64().unwrap();
+    let (status, body) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/nodes/{node_id}"),
+        Some(json!({ "name": "winter" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body,
+        json!({ "error": "This category is already in the showcase." })
+    );
+
+    let (_, tree) = call(
+        app.clone(),
+        "GET",
+        &format!("/api/showcases/{showcase_id}/tree"),
+        None,
+    )
+    .await;
+    let names: Vec<&str> = tree["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|node| node["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, vec!["Summer", "Winter"]);
 }
 
 #[tokio::test]

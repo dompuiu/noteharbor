@@ -20,6 +20,10 @@ Supersedes the node type list above: `node_type` gains `catalog_entry`, a planne
 
 An older build stored zero-or-more specimens per entry in `showcase_catalog_notes`. Those rows are legacy: schema initialization collapses each entry with specimens into a note node using its primary (or first) specimen, then drops the extra links. Archive export/import still understands the join so old archives load, but the editor no longer authors or displays specimen sets.
 
+## Extension: re-binding a Category Placement to another label
+
+Supersedes the clause above that renaming a label updates every Showcase. `PUT /api/nodes/:id` with a `name` now sets the label on that one Category Placement: a name already in the pool adopts that label, and a new name creates one. Other Showcases keep the label they place, so the edit is local to the Showcase being edited. When the Placement was the last user of the label it left behind, that label is pruned in the same transaction; a label still placed elsewhere stays in the pool. A label the Showcase already places is refused, since each Showcase places a label once. `PUT /api/categories/:id` remains the way to rename the shared label everywhere it is placed.
+
 ## Extension: replacing a note card's note
 
 A note card's `note_id` is mutable: `PUT /api/nodes/:id` with a new `note_id` swaps the note it presents, keeping the row's id, parent, and position. A Grouping that had manually chosen that card's note as its cover follows the swap. The note node still holds exactly one note; it never becomes a container.
