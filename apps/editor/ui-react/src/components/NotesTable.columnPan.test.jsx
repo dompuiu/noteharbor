@@ -1,5 +1,5 @@
 import { MemoryRouter } from "react-router-dom";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
@@ -267,8 +267,7 @@ describe("NotesTable column keyboard panning", () => {
     expect(keys().textContent).not.toContain("to pan");
   });
 
-  test("column keys are left for the platform when the columns fit the window", async () => {
-    renderTable();
+  test("column keys are left for the platform when the columns fit the window", async () => {    renderTable();
     await screen.findByText("ZZTEST");
 
     // The mocked scroller reports no horizontal overflow, so the edge jump
@@ -441,5 +440,90 @@ describe("NotesTable column panning", () => {
     await waitFor(() => {
       expect(scroller.scrollLeft).toBe(150);
     });
+  });
+
+  test("pins the row actions to the right edge, header and body", async () => {
+    const { container } = renderTable();
+
+    await screen.findByText("ZZTEST");
+
+    const header = container.querySelector(
+      "thead th.table-sticky-cell--end.table-sticky-end-right",
+    );
+    expect(header).not.toBeNull();
+    expect(header.style.getPropertyValue("--table-sticky-right")).toBe("0px");
+    // The header cell stays anonymous: the row menu explains itself.
+    expect(header.textContent).toBe("");
+
+    const body = container.querySelector("tbody td.table-sticky-cell--end");
+    expect(body).not.toBeNull();
+    expect(body.className).toContain("table-actions-cell");
+    // It is still the row's last cell, so the row's focus ring and selection
+    // edge keep landing on it.
+    expect(body.cellIndex).toBe(body.parentElement.cells.length - 1);
+  });
+
+  test("shows the right pin's shadow only while content is panned under it", async () => {
+    const { container } = renderTable();
+
+    await screen.findByText("ZZTEST");
+
+    const scroller = armHorizontalOverflow(container);
+    fireEvent.scroll(scroller);
+
+    expect(scroller.classList.contains("is-overflowing")).toBe(true);
+    expect(scroller.classList.contains("is-scrolled-end")).toBe(false);
+
+    scroller.scrollLeft = 600;
+    fireEvent.scroll(scroller);
+
+    expect(scroller.classList.contains("is-scrolled-end")).toBe(true);
+  });
+
+  test("reserves the bulk pill's height in the scroll range", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+
+    await screen.findByText("ZZTEST");
+
+    const content = container.querySelector(".table-scroll-content");
+    expect(content.classList.contains("has-bulk-bar")).toBe(false);
+
+    await user.click(screen.getByRole("checkbox", { name: "Select ZZTEST" }));
+
+    expect(
+      container
+        .querySelector(".table-scroll-content")
+        .classList.contains("has-bulk-bar"),
+    ).toBe(true);
+  });
+
+  test("folds the view controls into one menu on a narrow card", async () => {
+    HTMLElement.prototype.getBoundingClientRect.mockReturnValue({
+      width: 900,
+      height: 600,
+      top: 0,
+      left: 0,
+      right: 900,
+      bottom: 600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    const user = userEvent.setup();
+    const { container } = renderTable();
+
+    await screen.findByText("ZZTEST");
+
+    const overflow = screen.getByRole("button", { name: "View options" });
+    expect(
+      container.querySelector(".table-rail-actions .table-overflow-toggle"),
+    ).not.toBeNull();
+
+    await user.click(overflow);
+    const menu = screen.getByRole("dialog", { name: "View options" });
+    // The same column choices the wide rail shows, inside the one menu.
+    expect(within(menu).getByRole("checkbox", { name: "Tags" })).toBeInTheDocument();
+    expect(within(menu).getByRole("checkbox", { name: "Serial" })).toBeInTheDocument();
   });
 });

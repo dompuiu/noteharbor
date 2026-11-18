@@ -32,17 +32,39 @@ export function useColumnPan({ measureDeps = [], onPanEnd, scrollRef }) {
     return scroller;
   }
 
-  // The pinned block's edge shadow and the pan's grabbing cursor are painted
-  // on the scroller itself (see .is-scrolled-x and .is-panning in styles.css).
-  // They are pure scroll and gesture state, so writing the class directly
-  // keeps a pan from rebuilding the note rows or the header. The class is
-  // also kept in sync from the scroller's scroll event, because a scroll can
-  // arrive from a wheel, a trackpad or a keyboard pan without passing
-  // through here.
+  // The pinned blocks' edge shadows and the pan's grabbing cursor are painted
+  // on the scroller itself (see .is-scrolled-x, .is-scrolled-end and .is-panning
+  // in styles.css). `is-scrolled-x` marks content hidden under the left pin;
+  // `is-scrolled-end` marks the far edge, where the right pin has no content
+  // left to cover. `is-overflowing` lets the right pin's shadow stay off when
+  // the columns fit and nothing scrolls under it. They are pure scroll and
+  // gesture state, so writing the class directly keeps a pan from rebuilding
+  // the note rows or the header. They are also kept in sync from the scroller's
+  // scroll event, because a scroll can arrive from a wheel, a trackpad or a
+  // keyboard pan without passing through here.
   function syncColumnScroll(scroller = scrollRef.current) {
-    scroller?.classList.toggle(
+    if (!scroller) {
+      return;
+    }
+
+    const scrollLeft = scroller.scrollLeft ?? 0;
+    const maxScrollLeft = Math.max(
+      0,
+      scroller.scrollWidth - scroller.clientWidth,
+    );
+    const overflow = maxScrollLeft > 1;
+
+    scroller.classList.toggle(
+      "is-overflowing",
+      overflow,
+    );
+    scroller.classList.toggle(
       "is-scrolled-x",
-      isColumnPanShadowVisible(scroller.scrollLeft ?? 0),
+      isColumnPanShadowVisible(scrollLeft),
+    );
+    scroller.classList.toggle(
+      "is-scrolled-end",
+      overflow && scrollLeft >= maxScrollLeft - 1,
     );
   }
 
@@ -235,6 +257,10 @@ export function useColumnPan({ measureDeps = [], onPanEnd, scrollRef }) {
     setColumnPanAvailable((current) =>
       current === overflows ? current : overflows,
     );
+    // The right pin's shadow reads the same overflow fact, and it has to be
+    // right before the first scroll (the initial paint shows content under
+    // the pin).
+    syncColumnScroll(scroller);
     // `measureDeps` is the caller's list of width-changing values.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollRef, ...measureDeps]);

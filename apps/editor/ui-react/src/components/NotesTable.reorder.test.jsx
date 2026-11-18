@@ -399,7 +399,7 @@ describe("NotesTable row reordering", () => {
     const announcer = container.querySelector(".table-announcer");
     expect(announcer).toHaveAttribute("aria-live", "polite");
     expect(announcer).toHaveAttribute("aria-atomic", "true");
-    expect(container.querySelector(".table-footer-status")).toHaveTextContent(
+    expect(container.querySelector(".table-rail-status-text")).toHaveTextContent(
       "Moved to position 3",
     );
 
@@ -432,7 +432,7 @@ describe("NotesTable row reordering", () => {
         "Moved to position 2 of 3",
       );
     });
-    expect(container.querySelector(".table-footer-status")).toHaveTextContent(
+    expect(container.querySelector(".table-rail-status-text")).toHaveTextContent(
       "Moved to position 2",
     );
     expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
@@ -458,7 +458,7 @@ describe("NotesTable row reordering", () => {
       expect(reorderNotes).toHaveBeenLastCalledWith([2, 3, 1], 1);
     });
     await waitFor(() => {
-      expect(container.querySelector(".table-footer-status")).toHaveTextContent(
+      expect(container.querySelector(".table-rail-status-text")).toHaveTextContent(
         "Moved to position 3",
       );
     });
@@ -493,7 +493,7 @@ describe("NotesTable row reordering", () => {
     await waitFor(() => {
       expect(rowDenominations(container)).toEqual(["BBBB", "AAAA", "CCCC"]);
     });
-    expect(container.querySelector(".table-footer-status")).toHaveTextContent(
+    expect(container.querySelector(".table-rail-status-text")).toHaveTextContent(
       "Moved to position 2",
     );
 
@@ -547,7 +547,7 @@ describe("NotesTable row reordering", () => {
       expect(rowDenominations(container)).toEqual(["BBBB", "AAAA", "CCCC"]);
     });
     // The undo did not land, so the offer it came from is still valid.
-    expect(container.querySelector(".table-footer-status")).toHaveTextContent(
+    expect(container.querySelector(".table-rail-status-text")).toHaveTextContent(
       "Moved to position 2",
     );
     expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();

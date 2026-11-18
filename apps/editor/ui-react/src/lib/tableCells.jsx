@@ -30,7 +30,25 @@ export function escapeRegExp(value) {
 // under it carry the shadow that marks the end of that block. The row model
 // needs the class alone, a header needs the class and the offset together, and
 // both read the same pinning data, so the composition lives in one place.
-export function stickyCellClass(column, baseClassName, lastStickyColumnKey) {
+// Columns pinned to the end (`pin: "end"`, the row actions) read the mirrored
+// names so the stylesheet can treat the two edges separately.
+export function stickyCellClass(
+  column,
+  baseClassName,
+  lastStickyColumnKey,
+  firstPinnedEndColumnKey,
+) {
+  if (column.pin === "end") {
+    return [
+      baseClassName,
+      "table-sticky-cell",
+      "table-sticky-cell--end",
+      column.key === firstPinnedEndColumnKey ? "table-sticky-end-right" : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
   if (!column.sticky) {
     return baseClassName;
   }
@@ -44,7 +62,17 @@ export function stickyCellClass(column, baseClassName, lastStickyColumnKey) {
     .join(" ");
 }
 
-export function stickyCellStyle(column, stickyLeftByColumn) {
+export function stickyCellStyle(
+  column,
+  stickyLeftByColumn,
+  stickyRightByColumn = null,
+) {
+  if (column.pin === "end") {
+    return {
+      "--table-sticky-right": `${stickyRightByColumn?.[column.key] ?? 0}px`,
+    };
+  }
+
   if (!column.sticky) {
     return undefined;
   }
@@ -57,17 +85,25 @@ export function stickyCellStyle(column, stickyLeftByColumn) {
 export function stickyCellAttributes(
   column,
   baseClassName,
-  { lastStickyColumnKey, stickyLeftByColumn },
+  {
+    firstPinnedEndColumnKey = null,
+    lastStickyColumnKey,
+    stickyLeftByColumn,
+    stickyRightByColumn = null,
+  },
 ) {
-  const className = stickyCellClass(column, baseClassName, lastStickyColumnKey);
-
-  if (!column.sticky) {
-    return baseClassName ? { className } : {};
+  if (column.pin !== "end" && !column.sticky) {
+    return baseClassName ? { className: baseClassName } : {};
   }
 
   return {
-    className,
-    style: stickyCellStyle(column, stickyLeftByColumn),
+    className: stickyCellClass(
+      column,
+      baseClassName,
+      lastStickyColumnKey,
+      firstPinnedEndColumnKey,
+    ),
+    style: stickyCellStyle(column, stickyLeftByColumn, stickyRightByColumn),
   };
 }
 

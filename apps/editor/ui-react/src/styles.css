@@ -1,3 +1,11 @@
+/* Hallmark · checked: 2026-11-18 · scope: app · genre: modern-minimal (inferred)
+ * built: the project (DESIGN.md locked) · redesign: restructure · v2.0.0
+ * floor: table region clean except 67 · the 44 remaining 67 findings are the
+   locked system's uppercase tracked labels (DESIGN.md § Table, § Typography,
+   § Sidebar), and floor 67 cannot be waived without breaking that system
+ * open: 53 non-67 findings outside the table (sidebar width transitions,
+   showcase/import literals, slideshow plates) — take A's material sweep
+ */
 /* One local variable family across every role. Inter is a close stand-in for
    the brand's display face and ships with the app, so the type does not depend
    on what the host OS happens to install. */
@@ -50,6 +58,13 @@
      now belongs to the rail and to dark surfaces only. */
   --accent: var(--accent-strong);
   --accent-soft: rgba(184, 0, 0, 0.07);
+  /* The search highlight and text selection inside the table: two steps above
+     the hover wash, still light enough for ink to clear AA on top. */
+  --accent-wash: rgba(184, 0, 0, 0.12);
+  --accent-wash-strong: rgba(184, 0, 0, 0.14);
+  /* The checkbox's focus halo: one step stronger than selection so it reads
+     over a selected row's tint. */
+  --accent-halo: rgba(184, 0, 0, 0.24);
   --row-zebra: rgba(37, 40, 43, 0.035);
   /* A selected row sits a shade stronger than hover. The red edge and the
      checked box carry selection; the extra tint keeps selected rows distinct
@@ -63,10 +78,26 @@
   --success-bg: rgba(49, 162, 76, 0.12);
   --danger: #a30000;
   --danger-bg: rgba(163, 0, 0, 0.08);
+  --danger-hover: #7d0000;
+  --danger-border-soft: rgba(163, 0, 0, 0.3);
+  --danger-wash: rgba(163, 0, 0, 0.14);
   --warning: #7a4f00;
   --warning-bg: rgba(247, 185, 40, 0.16);
   --info: #29597a;
   --info-bg: rgba(41, 89, 122, 0.12);
+  /* The grade pill's ring: the catalogue's three bands, each one step stronger
+     than its status wash so the ring reads on the softened fill. */
+  --grade-ring-unc: rgba(49, 162, 76, 0.24);
+  --grade-ring-choice: rgba(247, 185, 40, 0.3);
+  /* Chrome that floats over the table: the pinned blocks' edge shadow, and the
+     fills the bulk pill's white-on-red controls paint over the accent. */
+  --pin-shadow: rgba(37, 40, 43, 0.28);
+  --on-accent-fill: rgba(255, 255, 255, 0.12);
+  --on-accent-fill-hover: rgba(255, 255, 255, 0.22);
+  --on-accent-fill-quiet: rgba(255, 255, 255, 0.06);
+  --on-accent-line: rgba(255, 255, 255, 0.3);
+  --on-accent-line-quiet: rgba(255, 255, 255, 0.18);
+  --on-accent-ink-quiet: rgba(255, 255, 255, 0.62);
   /* ── Tag family ────────────────────────────────────────────────
      Tags are labels, not state, so they carry their own warm family and
      leave red to the action and selection voice. The values are opaque on
@@ -81,6 +112,8 @@
   --tag-border-hover: #9c8418;
   --tag-text: #7a4f00;
   --tag-text-muted: #8a6a2c;
+  /* The remove cross's disc on a warmed chip: the label tone at 14%. */
+  --tag-wash: rgba(122, 79, 0, 0.14);
   /* Controls keep the app's calibrated 10px step: buttons, fields, and
      selects share it, so no one control reads rounder than its neighbour.
      Small chrome sits one step under at 8px; cards stay flat at 6px. */
@@ -170,13 +203,19 @@ body:has(
   .slideshow-screen--overlay,
   .image-popover-overlay
 ) {
-  overflow-x: hidden;
+  /* `clip`, never `hidden`: a hidden overflow makes the body a scroll
+     container, which breaks the table's sticky header and pinned columns
+     while the note editor is open. */
+  overflow-x: clip;
 }
 
 html,
 body,
 #root {
   height: 100%;
+  /* The Floor's horizontal lock: nothing may scroll the page sideways, and
+     `clip` keeps sticky positioning working. */
+  overflow-x: clip;
 }
 
 a {
@@ -239,7 +278,7 @@ input[type="radio"] {
   width: 21px;
   height: 21px;
   border-radius: 7px;
-  background: rgba(184, 0, 0, 0.24);
+  background: var(--accent-halo);
   content: "";
   pointer-events: none;
   transform: translate(-50%, -50%);
@@ -3510,17 +3549,9 @@ input[type="radio"] {
   min-width: 240px;
 }
 
-.showcase-picker-toolbar .table-filter-hint,
 .showcase-picker-toolbar .table-filter-chips {
   order: 2;
   flex: 1 1 100%;
-}
-
-/* The picker is a quick finder, not the Table's teaching surface: the field's
-   own Replace/Add control already names the commit mode, so the idle hint row
-   would only push the list down. Active chips still take their row. */
-.showcase-picker-toolbar .table-filter-hint {
-  display: none;
 }
 
 .showcase-picker-note {
@@ -4417,19 +4448,19 @@ input[type="radio"] {
 }
 
 .button-danger:hover {
-  background: #7d0000;
-  border-color: #7d0000;
+  background: var(--danger-hover);
+  border-color: var(--danger-hover);
   color: var(--accent-ink);
 }
 
 .button-danger-soft {
   background: var(--danger-bg);
   color: var(--danger);
-  border-color: rgba(163, 0, 0, 0.3);
+  border-color: var(--danger-border-soft);
 }
 
 .button-danger-soft:hover {
-  background: rgba(163, 0, 0, 0.14);
+  background: var(--danger-wash);
   color: var(--danger);
 }
 
@@ -4734,12 +4765,12 @@ input[type="radio"] {
    showcase field is 18px with 8px of vertical padding, which made the form
    taller than the heading and shoved the table down on every edit. Matching
    the line box and filling it keeps the header — and the table below — still. */
-.panel-heading-copy .collection-rename-form {
-  height: 1.5em;
+.table-rail-title .collection-rename-form {
+  height: 36px;
   font-size: 1.3125rem;
 }
 
-.panel-heading-copy .collection-rename-form .showcase-name-field {
+.table-rail-title .collection-rename-form .showcase-name-field {
   height: 100%;
   /* The title button overhangs by 4px and pads 4px back, so its glyphs start
      at the content edge. The field's 1px border and 4px padding would push
@@ -4756,7 +4787,7 @@ input[type="radio"] {
    It fills the form's title line box instead of the shared button's 36px
    height, so adding the buttons never makes the heading — and the table
    below — taller. */
-.panel-heading-copy .collection-rename-form .button {
+.table-rail-title .collection-rename-form .button {
   height: 100%;
   min-height: 0;
   padding: 0 12px;
@@ -4766,24 +4797,24 @@ input[type="radio"] {
 
 /* Keep "Saving…" from widening the primary button and stealing room from the
    name field mid-commit. */
-.panel-heading-copy .collection-rename-form .button-primary {
+.table-rail-title .collection-rename-form .button-primary {
   min-width: 4.9rem;
 }
 
 /* On a narrow screen the pair drops under the field instead of squeezing the
    name down to a few characters. The heading grows there, which is fine. */
 @media (max-width: 560px) {
-  .panel-heading-copy .collection-rename-form {
+  .table-rail-title .collection-rename-form {
     height: auto;
     flex-wrap: wrap;
   }
 
-  .panel-heading-copy .collection-rename-form .showcase-name-field {
+  .table-rail-title .collection-rename-form .showcase-name-field {
     flex: 1 1 100%;
     height: auto;
   }
 
-  .panel-heading-copy .collection-rename-form .button {
+  .table-rail-title .collection-rename-form .button {
     height: auto;
     min-height: 30px;
   }
@@ -4831,7 +4862,7 @@ input[type="radio"] {
 .table-shell mark {
   padding: 0 1px;
   border-radius: 2px;
-  background: rgba(184, 0, 0, 0.12);
+  background: var(--accent-wash);
   box-shadow: none;
   color: inherit;
   font-weight: inherit;
@@ -4863,7 +4894,7 @@ input[type="radio"] {
    blue is the one cold surface left in the card. Tint the highlight from the
    deep red, light enough that ink still clears 4.5:1 on top. */
 .table-shell ::selection {
-  background: rgba(184, 0, 0, 0.14);
+  background: var(--accent-wash-strong);
   color: var(--text);
 }
 
@@ -4878,25 +4909,23 @@ input[type="radio"] {
   min-height: 0;
 }
 
-/* The transient find bar floats over the rows area, so opening it never takes
-   a band out of the table or reflows the columns. It sits above the sticky
-   header (z-index 4), and its own height is not reserved anywhere. */
+/* Find is a mode of the rail's entry, not an overlay: it takes the field's own
+   slot and size, so the header and the first row stay uncovered, and chips
+   keep their line beneath it. */
 .table-find-bar {
-  position: absolute;
-  top: 7px;
-  right: 12px;
-  z-index: 6;
+  position: static;
   display: flex;
-  flex-wrap: wrap;
+  flex: 0 1 400px;
+  min-width: 280px;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 6px;
-  width: min(560px, calc(100% - 24px));
-  min-height: 44px;
-  padding: 0 8px 0 12px;
+  height: 36px;
+  padding: 0 6px 0 11px;
   border: 1px solid var(--border-control);
   border-radius: var(--radius-control);
   background: var(--surface);
-  box-shadow: var(--shadow-md);
+  order: 1;
 }
 
 .table-find-icon {
@@ -4906,8 +4935,8 @@ input[type="radio"] {
 
 .table-find-input {
   flex: 1 1 170px;
-  min-width: 130px;
-  height: 40px;
+  min-width: 110px;
+  height: 100%;
   padding: 0;
   border: 0;
   outline: none;
@@ -4917,7 +4946,7 @@ input[type="radio"] {
 }
 
 .table-find-bar:focus-within {
-  border-color: var(--text-muted);
+  border-color: var(--accent);
 }
 
 .table-find-input::-webkit-search-cancel-button {
@@ -4948,7 +4977,7 @@ input[type="radio"] {
 }
 
 .table-find-all:hover {
-  background: rgba(184, 0, 0, 0.12);
+  background: var(--accent-wash);
 }
 
 .table-find-actions {
@@ -5020,7 +5049,7 @@ input[type="radio"] {
   flex: none;
   width: 1px;
   height: 20px;
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--on-accent-line);
 }
 
 .table-bulk-bar button {
@@ -5028,9 +5057,9 @@ input[type="radio"] {
   align-items: center;
   height: 30px;
   padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid var(--on-accent-line);
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--on-accent-fill);
   color: inherit;
   font: inherit;
   /* Same control size as the rail's buttons: the pill is a floating copy of
@@ -5041,7 +5070,7 @@ input[type="radio"] {
 }
 
 .table-bulk-bar button:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--on-accent-fill-hover);
 }
 
 .table-bulk-bar button:focus-visible {
@@ -5049,19 +5078,25 @@ input[type="radio"] {
   outline-offset: 2px;
 }
 
+/* Unavailable is not in-flight. A disabled control states its three channels
+   (fill, ink, cursor) instead of fading the live one; the bar carries
+   `aria-busy` while a save runs, so progress is announced by state rather
+   than by a cursor that looks like work. */
 .table-bulk-bar button:disabled {
-  cursor: progress;
-  opacity: 0.6;
+  border-color: var(--on-accent-line-quiet);
+  background: var(--on-accent-fill-quiet);
+  color: var(--on-accent-ink-quiet);
+  cursor: default;
 }
 
 .table-bulk-bar .table-bulk-bar-delete {
   border-color: transparent;
-  background: #ffffff;
+  background: var(--surface);
   color: var(--danger);
 }
 
 .table-bulk-bar .table-bulk-bar-delete:hover {
-  background: #ffffff;
+  background: var(--surface);
 }
 
 .table-bulk-bar .table-bulk-bar-clear {
@@ -5099,12 +5134,12 @@ input[type="radio"] {
    pill would otherwise look unchanged while a surface floats above it. */
 .table-bulk-bar button[aria-expanded="true"] {
   border-color: transparent;
-  background: #ffffff;
+  background: var(--surface);
   color: var(--accent-strong);
 }
 
 .table-bulk-bar button[aria-expanded="true"]:hover {
-  background: #ffffff;
+  background: var(--surface);
 }
 
 /* The panels the selection bar opens (Tags, Ownership) hang above it as
@@ -5455,6 +5490,14 @@ input[type="radio"] {
   min-width: 100%;
 }
 
+/* The bulk pill floats over the bottom of the rows and reserves no layout, so
+   the scroll range grows by the pill's height plus its 16px inset: every row
+   can be scrolled clear of it instead of the last one ending underneath. Only
+   the range changes, never the columns. */
+.table-scroll-content.has-bulk-bar {
+  padding-bottom: 64px;
+}
+
 /* An empty view is a message, not a missing page: while the table has no rows
    at all, it takes the scrollport's height so the cell can centre the message
    in the rows region instead of leaving a tall void under the header. The
@@ -5709,7 +5752,6 @@ tbody td {
 .table-load-error {
   align-items: center;
   justify-content: center;
-  padding: 32px 16px;
 }
 
 .table-load-error-body {
@@ -5718,6 +5760,8 @@ tbody td {
   align-items: center;
   gap: 12px;
   max-width: 52ch;
+  margin: auto;
+  padding: 32px 16px;
   text-align: center;
 }
 
@@ -5749,7 +5793,6 @@ tbody td {
 .table-loading {
   align-items: center;
   justify-content: center;
-  padding: 32px 16px;
 }
 
 .table-loading-body {
@@ -5758,6 +5801,8 @@ tbody td {
   align-items: center;
   gap: 6px;
   max-width: 52ch;
+  margin: auto;
+  padding: 32px 16px;
   text-align: center;
 }
 
@@ -5802,7 +5847,7 @@ tbody td {
   height: 32px;
   object-fit: contain;
   border-radius: 3px;
-  background: #fff;
+  background: var(--surface);
   /* The prototype rings each note so a pale scan still reads as one object
      against the row tint. */
   box-shadow: 0 0 0 1px var(--border-soft);
@@ -5899,13 +5944,13 @@ td.table-col-serial {
 .table-grade--unc {
   color: var(--success);
   background: var(--success-bg);
-  box-shadow: inset 0 0 0 1px rgba(49, 162, 76, 0.24);
+  box-shadow: inset 0 0 0 1px var(--grade-ring-unc);
 }
 
 .table-grade--choice {
   color: var(--warning);
   background: var(--warning-bg);
-  box-shadow: inset 0 0 0 1px rgba(247, 185, 40, 0.3);
+  box-shadow: inset 0 0 0 1px var(--grade-ring-choice);
 }
 
 .table-grade--circulated {
@@ -6238,7 +6283,44 @@ thead .table-sticky-cell {
    mark. */
 .table-scroll-x.is-scrolled-x .table-sticky-end::after {
   background: var(--border);
-  box-shadow: 6px 0 10px -6px rgba(37, 40, 43, 0.28);
+  box-shadow: 6px 0 10px -6px var(--pin-shadow);
+}
+
+/* The row actions pin to the card's right edge, the mirror of the identity
+   block: opaque surface, a hairline on the edge the data slides under, and a
+   shadow in the opposite direction. The `left` reset outranks the shared
+   `.table-sticky-cell` rule, which always writes a left offset. The shadow
+   only shows while there is content to the right of the pin: the scroller
+   carries `is-overflowing` when the columns exceed the card, and
+   `is-scrolled-end` once it reaches the far edge. The row tints need no new
+   rules: the shared `.table-row-link--* > .table-sticky-cell` selectors match
+   this cell too. */
+.table-sticky-cell--end {
+  left: auto;
+  right: var(--table-sticky-right, 0px);
+  background-color: var(--surface);
+}
+
+thead .table-sticky-cell--end {
+  z-index: 5;
+  background-color: var(--surface-3);
+}
+
+.table-sticky-cell--end.table-sticky-end-right::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  background: var(--border-soft);
+  pointer-events: none;
+}
+
+.table-scroll-x.is-overflowing:not(.is-scrolled-end)
+  .table-sticky-end-right::before {
+  background: var(--border);
+  box-shadow: -6px 0 10px -6px var(--pin-shadow);
 }
 
 thead {
@@ -6737,10 +6819,11 @@ th[aria-sort="descending"] .sort-chevron {
 }
 
 /* The filters belong to the table, not to a band above it: the rail is the
-   card's own chrome, sitting inside the shell above the scrollport so it
-   neither pans with the columns nor scrolls away with the rows. It wraps
-   internally instead of competing for the head's width. The 6px padding also
-   keeps the field's 3px focus glow clear of the shell's `overflow: hidden`. */
+   card's own head, holding the collection's name, the view's controls and the
+   status on one line, with a single chip line beneath when a view has
+   conditions. It wraps internally instead of competing for the head's width.
+   The 6px padding also keeps the field's focus glow clear of the shell's
+   `overflow: hidden`. */
 .table-rail {
   display: flex;
   flex-wrap: wrap;
@@ -6752,14 +6835,113 @@ th[aria-sort="descending"] .sort-chevron {
   background: var(--surface-2);
 }
 
-/* The rail's trailing cluster keeps Add note, Reset view and Columns on the
-   right edge however many lines the field and chips take. */
+/* The identity is the card's head: the collection name (or its rename form),
+   the collection menu and the compact status. It is the one item allowed to
+   give way, so the search and the trailing controls keep their sizes. */
+.table-rail-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+  order: 0;
+}
+
+.table-rail-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.table-rail-title h1 {
+  min-width: 0;
+  max-width: 28ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-rail-title .collection-title-button {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The compact count and sort line. The full sentence sits beside it as the
+   live region (visually hidden), so the announcement is unchanged while the
+   eye gets one quiet segment. */
+.table-rail-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.table-rail-status-visible {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.table-rail-status-text {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* The rail's trailing cluster keeps Add note, Find, Reset view and Columns on
+   the right edge. It comes before the chip line in the visual order and after
+   the field in the DOM, so Tab still walks field → chips → controls. */
 .table-rail-actions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex: 0 0 auto;
   margin-left: auto;
+  order: 2;
+}
+
+/* The error a collection form owns sits under the rail as a short strip, not
+   inside it: the rail's height stays one line while a name is being fixed. */
+.table-rail-notice {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.table-rail-notice:empty {
+  display: none;
+}
+
+.table-rail-notice .error-text {
+  margin: 4px 0;
+  font-size: 0.78rem;
+}
+
+/* A 36px control keeps a 44px hit area without growing: the pad is the
+   pseudo-element, inside the button so a press anywhere on it lands. */
+.table-find-toggle,
+.table-reset-toggle,
+.table-columns-toggle,
+.table-overflow-toggle {
+  position: relative;
+}
+
+.table-find-toggle::before,
+.table-reset-toggle::before,
+.table-columns-toggle::before,
+.table-overflow-toggle::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
 }
 
 /* Every pill in the trailing cluster pairs its icon to its label at the same
@@ -6807,9 +6989,9 @@ th[aria-sort="descending"] .sort-chevron {
    at every width; its min-width is what a value still needs to stay readable
    if a future container is narrower than this. */
 .table-search--scoped {
-  flex: 0 0 400px;
+  flex: 0 1 400px;
   width: min(400px, 100%);
-  min-width: 240px;
+  min-width: 280px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -6819,6 +7001,7 @@ th[aria-sort="descending"] .sort-chevron {
   border-radius: var(--radius-control);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
+  order: 1;
 }
 
 .table-search--scoped:focus-within {
@@ -7077,57 +7260,67 @@ th[aria-sort="descending"] .sort-chevron {
   color: var(--text-muted);
 }
 
-/* The idle rail states the field/Enter model in the chips' own slot: the
-   sentence sits beside the field it explains, and the first chip replaces it
-   without reserving a separate line. Active chips teach nothing here; the
-   empty-match state still spells out OR/AND when it matters. This is the only
-   place the model is explained, so it uses the readable faint tone (4.96:1 on
-   the rail) rather than the hint tone the field's placeholder can afford. The
-   24px row is the chip line's own height, so committing the first chip swaps
-   one row for another instead of moving the table. */
-.table-filter-hint {
-  display: flex;
-  align-items: center;
-  flex: 1 1 240px;
-  min-width: 0;
-  min-height: 24px;
-  margin: 0;
-  color: var(--text-faint);
-  font-size: 0.75rem;
-}
-
-/* A key named inside the sentence wears the same keycap as the field's own
-   hint, so "press ⏎" reads as a key and not as a glyph that happens to be in
-   the sentence. */
-.table-filter-hint kbd {
-  min-width: 0;
-  height: auto;
-  /* Tight on the right so the sentence's full stop stays attached to the key
-     it follows, as it would to a word. */
-  margin: 0 1px 0 3px;
-  padding: 2px 5px;
-  border-bottom-width: 2px;
-  border-radius: 5px;
-  box-shadow: none;
-  color: var(--text-muted);
-  font-size: 0.6875rem;
-  font-weight: 650;
-}
-
-/* Active filters share the rail with the field as removable chips, so a
-   filtered view is visible without opening a row. They take the middle of the
-   rail and wrap there; nothing reserves a line for them, so the first chip
-   only grows the card's own chrome. The 8px row-gap gives a wrapped chip line
-   the same rhythm as the rail's own rows (24px chip + 8px = 32px). */
+/* Active filters take one line under the field, never a second row: the plan
+   in tableFilterChips.js keeps whole units that fit and gives the rest to the
+   `+N` chip. The line is 24px, so a view with conditions is 32px taller than
+   an idle one and that is the rail's only height change. */
 .table-filter-chips {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px 4px;
-  flex: 1 1 240px;
+  flex: 1 1 100%;
   min-width: 0;
   margin: 0;
+  order: 3;
 }
+
+/* The overflow count is a chip-sized control with the tag family's dashed
+   ghost: it names how many conditions the line cannot show and opens them.
+   The panel below is the same chip list, one per row, so a chip edits and
+   removes exactly as it does on the line. */
+.table-filter-more {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px dashed var(--tag-border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--tag-text-muted);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.table-filter-more:hover,
+.table-filter-more--open {
+  border-color: var(--tag-border-hover);
+  background: var(--tag-bg);
+  color: var(--tag-text);
+}
+
+.table-filter-more:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.table-filter-chips--popover {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 240px;
+  max-width: 340px;
+  padding: 8px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+
 
 /* One chip plus the prefix that names it: the field label for a field's first
    chip, "or" after it, and "and" ahead of a new field. The prefix travels with
@@ -7205,7 +7398,7 @@ th[aria-sort="descending"] .sort-chevron {
 }
 
 .table-filter-chip--negated {
-  border-color: rgba(163, 0, 0, 0.3);
+  border-color: var(--danger-border-soft);
   background: var(--danger-bg);
   color: var(--danger);
 }
@@ -7316,7 +7509,7 @@ th[aria-sort="descending"] .sort-chevron {
    visible on top of the warmed chip ground. */
 .table-filter-chip-remove:hover,
 .table-filter-chip-remove:focus-visible {
-  background: rgba(122, 79, 0, 0.14);
+  background: var(--tag-wash);
   color: var(--tag-text);
 }
 
@@ -7390,6 +7583,44 @@ th[aria-sort="descending"] .sort-chevron {
   color: var(--text-faint);
 }
 
+/* The compact rail's one menu: Reset view as a menu row above the same column
+   choices, so the two controls share the panel the Columns button opens when
+   there is room for words. */
+.table-overflow-menu {
+  min-width: 220px;
+}
+
+.table-overflow-reset {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.table-overflow-reset:hover {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.table-overflow-reset:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.table-overflow-menu .table-columns-menu-heading:not(:first-child) {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-soft);
+}
+
 .table-filter-clear-all {
   margin-left: 6px;
   padding: 0;
@@ -7407,34 +7638,44 @@ th[aria-sort="descending"] .sort-chevron {
   color: var(--accent-strong);
 }
 
-/* A cramped card stops negotiating for width. Above this budget the field, the
-   chips and the trailing controls share one line, which is the rail's normal
-   look. Below it the chips would keep shrinking beside the field and the
-   actions, and the same set of filters would wrap into a different — and
-   differently ragged — shape at every width, so they take a row of their own
-   instead: field and actions first, chips underneath at full width. The idle
-   hint takes that same row for the same reason: it is shorter than a chip row
-   but long enough to push the trailing cluster onto a line of its own, which
-   would leave the field's width and the rail's height depending on the filter
-   state. One narrow shape for both states, so the rail only changes height at
-   the breakpoint — and the field keeps its 400px whatever the hint says.
-   `order` moves the two only visually; the DOM keeps the chips before
-   Add note / Reset view / Columns, so Tab still walks them in that order. */
-@container table-shell (max-width: 1120px) {
-  .table-rail-actions {
-    order: 1;
-  }
-
-  /* The find control joins a crowded trailing cluster, so below the rail's
-     breakpoint it drops its word and keeps the icon and accessible name. */
+/* The rail holds its one line at every working width. The trailing controls
+   shed words first, then fold into the one overflow menu; the status sheds its
+   count before its sort. The chip line is outside these queries: it is always
+   its own row when a view has conditions. */
+@container table-shell (max-width: 1279px) {
   .table-find-toggle-label {
     display: none;
   }
 
-  .table-filter-chips,
-  .table-filter-hint {
-    order: 2;
-    flex: 1 1 100%;
+  .table-find-toggle {
+    width: 36px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
+@container table-shell (max-width: 1079px) {
+  .table-status-count {
+    display: none;
+  }
+}
+
+@container table-shell (max-width: 959px) {
+  /* Add note keeps its red but loses its word, and the two view controls
+     travel in the overflow menu the caller renders at this width. */
+  .table-rail-button-label {
+    display: none;
+  }
+
+  .table-rail-actions .button {
+    width: 36px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .table-reset-toggle,
+  .table-columns-toggle {
+    display: none;
   }
 }
 
@@ -7449,14 +7690,14 @@ th[aria-sort="descending"] .sort-chevron {
 }
 
 /* The footer sits below the table card as its own band, outside the shell's
-   border, with the view summary at the left and the keyboard hint at the
-   right. */
+   border. It carries the keyboard hints only now: the count, the sort and the
+   reorder undo live in the rail above. */
 .table-footer-hint {
   display: flex;
   flex: 0 0 auto;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 2px 16px;
   margin: 8px 0 0;
   padding: 0;
@@ -7469,18 +7710,19 @@ th[aria-sort="descending"] .sort-chevron {
   white-space: nowrap;
 }
 
+/* The full "Showing … · sorted by …" sentence stays the live region, so the
+   announcement is unchanged; the eye reads the compact line beside it in the
+   rail. Visually hidden rather than removed: no reflow, same words. */
 .table-footer-summary {
-  /* A zero basis keeps the count from forcing the hint block onto its own
-     line: it shrinks first and only the hints themselves wrap when even they
-     cannot fit. */
-  flex: 1 1 0;
-  min-width: 0;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  clip: rect(0 0 0 0);
   white-space: nowrap;
-  /* The counts change on every keystroke in the filter field; tabular digits
-     keep the summary from shuffling its words as the result set narrows. */
-  font-variant-numeric: tabular-nums;
+  border: 0;
 }
 
 .table-footer-right {
@@ -9286,7 +9528,7 @@ button.tag {
   height: 54px;
   object-fit: contain;
   border-radius: 4px;
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 0 0 1px var(--border-soft);
 }
 
@@ -9927,7 +10169,7 @@ button.tag {
    than the platform blue. */
 .slideshow-screen--overlay ::selection,
 .image-popover-overlay ::selection {
-  background: rgba(184, 0, 0, 0.14);
+  background: var(--accent-wash-strong);
   color: var(--text);
 }
 

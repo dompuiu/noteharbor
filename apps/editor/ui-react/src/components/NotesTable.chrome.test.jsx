@@ -171,7 +171,9 @@ describe("NotesTable chrome", () => {
     // its own node so a narrow window can stack them without clipping.
     const keys = hint.closest(".table-footer-keys");
     expect(keys).not.toBeNull();
-    expect(keys).toHaveTextContent("to browse");
+    // The browse hint left with the view summary: the footer is now the pan
+    // pair and the shortcuts key, the row keys are in the `?` dialog.
+    expect(keys).not.toHaveTextContent("to browse");
     expect(keys).toHaveTextContent("shortcuts");
     expect(within(keys).getByText("?")).toBeInTheDocument();
   });
@@ -197,7 +199,7 @@ describe("NotesTable chrome", () => {
     expect(within(keys).getByText("?")).toBeInTheDocument();
   });
 
-  test("the footer shows the view summary before the reorder hint", async () => {
+  test("the rail carries the view summary and the footer only the keys", async () => {
     const { container } = renderTable();
 
     await screen.findByText("AAAA");
@@ -207,15 +209,17 @@ describe("NotesTable chrome", () => {
       "Showing 3 of 3 notes · sorted by # ascending",
     );
 
-    // The footer lives below the table card, not inside its border.
+    // The status rides in the card's own rail now; the band below the card is
+    // only the keyboard hints.
     const shell = container.querySelector(".table-shell");
     expect(shell).not.toBeNull();
-    expect(shell.contains(summary)).toBe(false);
+    expect(shell.contains(summary)).toBe(true);
+    expect(
+      container.querySelector(".table-rail").contains(summary),
+    ).toBe(true);
 
     const hint = screen.getByText(/Drag the handle or press Alt\+Up\/Down to reorder/);
-    expect(
-      summary.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(shell.contains(hint)).toBe(false);
   });
 
   test("the footer summary follows the filter and the sort", async () => {
@@ -544,15 +548,17 @@ describe("NotesTable chrome", () => {
     );
     renderTable();
 
-    // The table's own shape is on screen from the first frame: a bare status
-    // line would collapse the screen and then rebuild it a moment later.
+    // The table's own shape is on screen from the first frame: the card and
+    // its rail identity are mounted, and the controls that need rows stay off.
     const card = document.querySelector(".table-shell.table-loading");
     expect(card).not.toBeNull();
     expect(within(card).getByRole("status")).toHaveTextContent(
       "Loading notes…",
     );
+    expect(within(card).getByRole("heading", { name: "Test" })).toBeInTheDocument();
     // Nothing that belongs to a loaded table is painted yet.
-    expect(document.querySelector(".table-rail")).toBeNull();
+    expect(document.querySelector(".table-search")).toBeNull();
+    expect(document.querySelector(".table-rail-actions")).toBeNull();
     expect(document.querySelector(".table-footer-hint")).toBeNull();
 
     await act(async () => {

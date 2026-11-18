@@ -134,11 +134,11 @@ components:
 
 **Creative North Star: "The Campaign Poster, Set to Work."**
 
-The Editor takes a poster-scale brand language — red, near-black ink, white content bands, uppercase weight-800 display type, and pill controls — and turns it into a dense working surface for cataloguing banknotes. It is not a marketing page, so the poster voice appears where the app speaks to the user (screen titles, eyebrows, primary actions) and then gives way to white data bands, hairline grids, and quiet grey chrome.
+The Editor takes a poster-scale brand language — red, near-black ink, white content bands, uppercase weight-800 display type, and pill controls — and turns it into a dense working surface for cataloguing banknotes. It is not a marketing page, so the poster voice appears where the app speaks to the user (screen titles and primary actions) and then gives way to white data bands, hairline grids, and quiet grey chrome.
 
 Three materials carry the whole system: **slate ink** (#2c3a45) as the navigation rail, **ink** (#25282b) as the default overlay world, **white** (#ffffff) as the content and table surface, and **deep red** (#b80000) as the single accent. The Note slideshow and Image popover are the one **presentation room**: they float a light panel on the same near-black scrim, wearing the app's own Canvas Soft ground, white cards and mats, ink type and deep-red actions, so the presentation moment reads as a room in the app rather than a second product. Red never becomes a background wash on the page; it marks the primary action, the active navigation edge, selection, focus, and the tags that need attention. The rail keeps the brighter **brand red** (#e60000), where the deep step would go muddy on slate. Everything else is a neutral step on the white-to-grey ladder.
 
-Structure stays dense and quiet. The Table screen is the centre of gravity: one bordered white card filling the viewport, a fixed 64px slate rail that expands on hover, compact 40px headers, and 12px cell padding tuned for scanning hundreds of rows. Capture and Showcase screens reuse the same card, field, and pill vocabulary at a lower density. The Import screen is the one two-direction surface: equal *Bring data in* and *Take data out* cards, the catalog's collections, showcases and archive format stated above them, and the destructive reset kept apart from the ordinary actions at the foot.
+Structure stays dense and quiet. The Table screen is the centre of gravity: one bordered white card filling the viewport, a fixed 64px slate rail that expands on hover, the collection name and the view controls in one rail at the card's top edge, compact 40px headers, and 12px cell padding tuned for scanning hundreds of rows. Capture and Showcase screens reuse the same card, field, and pill vocabulary at a lower density. The Import screen is the one two-direction surface: equal *Bring data in* and *Take data out* cards, the catalog's collections, showcases and archive format stated above them, and the destructive reset kept apart from the ordinary actions at the foot.
 
 **Key Characteristics:**
 - One accent: `{colors.brand-red-deep}` (#b80000). Filled pills, focus rings, selection, search and the bulk bar all wear it; the rail keeps the brighter `{colors.brand-red}`, and outline pills stay neutral. Red text for links and active state, including the slideshow's image plates.
@@ -215,7 +215,7 @@ Tags are labels, not state, so they left the accent family for their own warm Oc
 - **Meta** (400, 0.75rem/1.5, tabular): the table's summary and status lines.
 
 ### Named Rules
-**The Shout Then Speak Rule.** Screen titles and eyebrows shout — uppercase, weight 800, tight tracking. Supporting headings and running copy speak in sentence case. Never set body copy in the display voice.
+**The Shout Then Speak Rule.** Screen titles shout — uppercase, weight 800, tight tracking. Supporting headings and running copy speak in sentence case. Never set body copy in the display voice. The Table screen has no eyebrow: the sidebar already names the section, and a caption above the collection name only pushes the rows down. Other screens keep theirs.
 
 **The Tabular Rule.** Any number that changes in place — counters, positions, sizes — is set in `tabular-nums` so it never jitters.
 
@@ -223,9 +223,9 @@ Tags are labels, not state, so they left the accent family for their own warm Oc
 
 A fixed, non-scrolling app shell: a slate ink left rail plus a main column that fills the remaining width and height. The dock is a 64px rail whose contents expand over the content to a fixed 288px on hover or keyboard focus; it never becomes a drawer and, while unpinned, never pushes the main column. Pinning holds the rail open at 288px and takes that width in flow, so the table reflows beside it. Main padding is 16px vertical and 24px horizontal; screens stack with 24px gaps. The Viewer's table screen keeps a 12px page inset so the filter and grid stay roomy at 400px.
 
-The Table screen is one card that consumes the whole remaining area: a bordered `.table-shell`, a grey header band, a scrolling viewport, and a floating bulk-action pill. The card is its own query container. Headers are 40px tall with 12px horizontal padding; rows are 45px with 12px cell padding and a faint neutral zebra stripe. Long content truncates; the layout never wraps a row. The Viewer's read-only table is the same card at 56px rows with a 40×24 thumbnail, and its text columns share spare width so the row content reaches the card's right edge instead of ending in an empty gutter.
+The Table screen is one card that consumes the whole remaining area: a bordered `.table-shell`, a grey header band, a scrolling viewport, and a floating bulk-action pill. Its head is that card's own rail: the collection name, its menu, the view controls and a compact count/sort status share one 48px line at the card's top edge, with the filter chips as a single line beneath when a view has conditions. Nothing sits between the page and the card. The card is its own query container. Headers are 40px tall with 12px horizontal padding; rows are 45px with 12px cell padding and a faint neutral zebra stripe. Long content truncates; the layout never wraps a row. The Viewer's read-only table is the same card at 56px rows with a 40×24 thumbnail, and its text columns share spare width so the row content reaches the card's right edge instead of ending in an empty gutter.
 
-Spacing follows a 4px base with 8/12/16/24/32 as the working steps. Density is deliberate: the Table is tight, Showcases and note editing get 16–32px breathing room, and marketing-style whitespace is never used inside the Editor.
+The rail is one line at every working width. Below 1280px in the card the trailing controls drop their words; below 960px they collapse to icons and one menu that holds Reset view and the column choices. Spacing follows a 4px base with 8/12/16/24/32 as the working steps. Density is deliberate: the Table is tight, Showcases and note editing get 16–32px breathing room, and marketing-style whitespace is never used inside the Editor.
 
 ## Elevation & Depth
 
@@ -258,7 +258,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Style:** white ground, 1px control border, 10px radius, 34px minimum height, 0.86rem text.
 - **Focus:** border becomes red with the standard 2px red hairline halo; no glow.
 - **Disabled / Error:** errors use the danger text and border; disabled controls keep their shape and drop to Body Faint.
-- **Search and filters:** the same field at 34–36px; the active-filter state adds a red border rather than a fill. The Viewer's unified table filter bar is a 40px field: a scope select measured to its longest option plus padding (so a longer scope label widens it on its own), a hairline divider, and the text input taking the rest of a 560px cap. When the bar is too narrow for both, the input keeps its 120px minimum and the scope label ellipsizes.
+- **Search and filters:** the same field at 34–36px; the active-filter state adds a red border rather than a fill. On the Table screen the filter entry is the rail's primary control and states its condition count as a `+N` chip when the line overflows; Find is a mode of the same entry, not an overlay: Ctrl/Cmd+F swaps the field for find-in-view, Enter and Shift+Enter walk the matches, Esc restores the field. The Viewer's unified table filter bar is a 40px field: a scope select measured to its longest option plus padding (so a longer scope label widens it on its own), a hairline divider, and the text input taking the rest of a 560px cap. When the bar is too narrow for both, the input keeps its 120px minimum and the scope label ellipsizes.
 - **Note editor:** the one larger instance — the wider editing column gives the toolbar room and its fields stand 44px tall at 0.95rem so the two-column grid keeps its proportions. The column is a ceiling rather than a floor: at 900px and below the field and image grids stack into one column, so the fields stay readable and Save stays reachable instead of the overlay scrolling sideways.
 
 ### Table
@@ -268,8 +268,8 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Rows:** neutral zebra at 3.5% ink; hover at 7% red; selected at 9% red with a red edge and a checked box carrying the state. Text truncates, never wraps.
 - **Empty values:** a muted dash in every cell that can be empty, so one absence never reads as two different things across a row.
 - **Empty view:** the message sits where the rows would be, as a named title, its recovery, and one hint line.
-- **Pinned cells:** the checkbox and thumbnail columns stay pinned; the checkbox focus halo is a 21px red-tinted rounded square behind a clipped native control.
-- **Horizontal pan:** the horizontal scrollbar is hidden; when columns overflow, the footer names the `←` `→` pan pair.
+- **Pinned cells:** the drag handle, checkbox, display order, thumbnail and catalog number stay pinned at the left; the row actions column is pinned at the right, behind the same hairline and a mirrored pan shadow, so Open, Edit, Copy, Insert and Delete never leave the card. The checkbox focus halo is a 21px red-tinted rounded square behind a clipped native control.
+- **Horizontal pan:** the horizontal scrollbar is hidden; when columns overflow, the footer names the `←` `→` pan pair, and the row count and sort ride in the card's rail.
 - **Selection:** text selected inside the card takes a 14% red wash instead of the platform blue.
 
 ### Chips & Tags
@@ -285,7 +285,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Brand mark:** the red square with the banknote glyph is the rail's only solid red element.
 
 ### Bulk Action Bar
-- **Style:** a pill floating 16px above the bottom of the table, Deep Red ground, white text, floating shadow. It overlays the rows instead of reserving space, so showing it never reflows the table.
+- **Style:** a pill floating 16px above the bottom of the table, Deep Red ground, white text, floating shadow. It overlays the rows instead of reserving space, so showing it never reflows the table, and the card reserves the pill's height in its scroll range so the last row can always be scrolled clear of it.
 
 ### Load-Error / Loading Cards
 - **Style:** replace the table in place at the table's height, inside the same card shell. A 700-weight title, a muted detail line, a reassurance line, and one primary Try again pill; only the copy block is a live region so the button is not announced twice.
@@ -310,7 +310,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 
 ### Do:
 - **Do** give every primary pill the same Deep Red ramp (`#b80000` rest → `#cc0000` hover → `#990000` active), and keep the app's focus rings, selection, search and bulk bar in that same deep red, including the slideshow's image plates. Brand Red is the rail's and the dark surfaces' alone. The tag family carries values, in rows and in the filter rail.
-- **Do** set screen titles and eyebrows in uppercase weight 800 with tight tracking; that stencil contrast is the brand voice.
+- **Do** set screen titles in uppercase weight 800 with tight tracking; that stencil contrast is the brand voice.
 - **Do** use pills for buttons and counters, 10px corners for fields and selects, 7px for chips, and 6px for cards and panels.
 - **Do** cycle the page: slate rail → white content → ink for overlays. The Note slideshow and Image popover float a light neutral room on the scrim instead; its grey ground and white cards are the same ladder, so polarity still reads.
 - **Do** keep the Table compact (40px headers, 45px rows, 12px cell padding, truncation) and let Showcases be the looser surface. The Viewer's read-only table keeps the same chrome at 56px rows.

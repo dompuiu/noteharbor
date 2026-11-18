@@ -26,10 +26,12 @@ export function noteRowLabel(note) {
 export function buildNoteRowModel({
   columnWidths,
   columns,
+  firstPinnedEndColumnKey = null,
   lastStickyColumnKey,
   marks,
   note,
   stickyLeftByColumn,
+  stickyRightByColumn = null,
 }) {
   const cells = new Map();
   const tagsWidth = columnWidths[tagsColumnKey] ?? 0;
@@ -44,8 +46,17 @@ export function buildNoteRowModel({
   for (const column of columns) {
     const baseClassName = cellClass(column);
     cells.set(column.key, {
-      className: stickyCellClass(column, baseClassName, lastStickyColumnKey),
-      style: stickyCellStyle(column, stickyLeftByColumn),
+      className: stickyCellClass(
+        column,
+        baseClassName,
+        lastStickyColumnKey,
+        firstPinnedEndColumnKey,
+      ),
+      style: stickyCellStyle(
+        column,
+        stickyLeftByColumn,
+        stickyRightByColumn,
+      ),
     });
   }
 

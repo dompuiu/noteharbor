@@ -4411,6 +4411,195 @@ function NotesTable({
     onToggleSelection: toggleNote,
   };
 
+  // The collection's name (or its rename form) is the card's head, not a band
+  // above it: the identity, the collection menu and the view's controls share
+  // the rail. The error the form owns stays just under that rail so the rail
+  // itself keeps one height in every state.
+  const collectionHeading = isCollectionEditing ? (
+    <form
+      className="collection-rename-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSaveCollectionEdit?.();
+      }}
+    >
+      <input
+        aria-label="Collection name"
+        className="showcase-name-field"
+        disabled={savingCollectionEdit}
+        onBlur={onCollectionEditNameBlur}
+        onChange={(event) =>
+          onCollectionEditNameChange?.(event.target.value)
+        }
+        onKeyDown={onCollectionEditNameKeyDown}
+        ref={collectionEditFieldRef}
+        value={collectionEditName}
+      />
+      <CollectionCommitPair
+        cancelDisabled={savingCollectionEdit}
+        onCancel={onCancelCollectionEdit}
+        saveDisabled={
+          !canSaveCollectionEdit || savingCollectionEdit || loadingCollections
+        }
+        saving={savingCollectionEdit}
+      />
+    </form>
+  ) : showingNewCollectionForm ? (
+    <form
+      className="collection-rename-form"
+      onSubmit={handleNewCollectionSubmit}
+    >
+      <input
+        aria-label="Collection name"
+        className="showcase-name-field"
+        disabled={savingNewCollection}
+        onChange={(event) => {
+          onNewCollectionNameChange?.(event.target.value);
+        }}
+        onKeyDown={handleNewCollectionNameKeyDown}
+        ref={collectionNameFieldRef}
+        value={newCollectionName}
+      />
+      <CollectionCommitPair
+        cancelDisabled={savingNewCollection}
+        onCancel={onCancelNewCollection}
+        saveDisabled={savingNewCollection}
+        saving={savingNewCollection}
+      />
+    </form>
+  ) : renamingCollection ? (
+    <form className="collection-rename-form" onSubmit={submitCollectionRename}>
+      <input
+        aria-describedby={
+          collectionActionError ? collectionRenameErrorId : undefined
+        }
+        aria-invalid={collectionActionError ? true : undefined}
+        aria-label="Collection name"
+        className="showcase-name-field"
+        disabled={savingCollectionRename}
+        onChange={(event) => {
+          setCollectionRenameDraft(event.target.value);
+          setCollectionActionError("");
+        }}
+        onKeyDown={handleCollectionRenameKeyDown}
+        ref={collectionRenameFieldRef}
+        value={collectionRenameDraft}
+      />
+      <CollectionCommitPair
+        cancelDisabled={savingCollectionRename}
+        onCancel={cancelCollectionRename}
+        saveDisabled={savingCollectionRename}
+        saving={savingCollectionRename}
+      />
+    </form>
+  ) : (
+    <div className="collection-title-row">
+      {collection && onRenameCollection && !isNewCollection ? (
+        // The heading keeps the plain collection name; the button inside it
+        // owns the rename action and its fuller label.
+        <h1 aria-label={collection.name}>
+          <button
+            aria-label={`Rename collection: ${collection.name}`}
+            className="collection-title-button"
+            onClick={startCollectionRename}
+            ref={collectionTitleButtonRef}
+            title="Rename collection (e)"
+            type="button"
+          >
+            {collection.name}
+          </button>
+        </h1>
+      ) : (
+        <h1>{collection?.name ?? "Notes"}</h1>
+      )}
+      {collection &&
+      !isNewCollection &&
+      (onRenameCollection || onDeleteCollection) ? (
+        <ActionsMenu items={collectionActionItems} label="Collection actions" />
+      ) : null}
+    </div>
+  );
+
+  const railIdentity = (
+    <div className="table-rail-title">
+      {collectionHeading}
+      {isCollectionEditing ? (
+        <div className="inline-actions">
+          <button
+            className="button button-danger"
+            disabled={deletingCollectionEdit}
+            onClick={onDeleteCollectionEdit}
+            type="button"
+          >
+            Delete collection
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+
+  const railNotice = (
+    <>
+      {isCollectionEditing && collectionEditDialog
+        ? collectionEditDialog
+        : null}
+      {showingNewCollectionForm ? (
+        newCollectionError ? (
+          <p className="error-text" role="alert">
+            {newCollectionError}
+          </p>
+        ) : null
+      ) : isCollectionEditing ? (
+        collectionEditError ? (
+          <p className="error-text" role="alert">
+            {collectionEditError}
+          </p>
+        ) : null
+      ) : collectionActionError ? (
+        <p className="error-text" id={collectionRenameErrorId} role="alert">
+          {collectionActionError}
+        </p>
+      ) : null}
+    </>
+  );
+
+  // One card in every state: the rail and the collection's name stay mounted
+  // while the rows load or fail, so a collection switch never swaps the head
+  // out from under the reader (or under a pointer already on it).
+  const loadingNotes = loading || loadingCollections;
+  const tableBody = loadingNotes ? (
+    <div className="table-loading-body" role="status">
+      <p className="table-loading-title">Loading notes…</p>
+      <p className="table-loading-detail">
+        Reading the notes stored on this device.
+      </p>
+    </div>
+  ) : loadError ? (
+    <div className="table-load-error-body">
+      <div className="table-load-error-copy" role="alert">
+        <h2 className="table-load-error-title">
+          Couldn't load this collection's notes.
+        </h2>
+        <p className="table-load-error-detail">{loadError}</p>
+      </div>
+      <p className="table-load-error-note">
+        Your notes stay on this device and aren't affected.
+      </p>
+      <button
+        className="button button-primary"
+        onClick={retryNotesLoad}
+        type="button"
+      >
+        Try again
+      </button>
+    </div>
+  ) : null;
+  const tableBodyClassName = loadingNotes
+    ? "table-loading"
+    : loadError
+      ? "table-load-error"
+      : "";
+
   return (
     <section className="screen-stack" ref={tableScreenRef}>
       {confirmDialog}
@@ -4500,172 +4689,7 @@ function NotesTable({
         className="screen-body"
         inert={editorOverlayOpen || slideshowOpen}
       >
-        <div className="panel-heading panel-heading--compact">
-          <div className="panel-heading-copy">
-            <p className="eyebrow collection-eyebrow">Catalog</p>
-            {isCollectionEditing ? (
-              <form
-                className="collection-rename-form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  onSaveCollectionEdit?.();
-                }}
-              >
-                <input
-                  aria-label="Collection name"
-                  className="showcase-name-field"
-                  disabled={savingCollectionEdit}
-                  onBlur={onCollectionEditNameBlur}
-                  onChange={(event) => onCollectionEditNameChange?.(event.target.value)}
-                  onKeyDown={onCollectionEditNameKeyDown}
-                  ref={collectionEditFieldRef}
-                  value={collectionEditName}
-                />
-                <CollectionCommitPair
-                  cancelDisabled={savingCollectionEdit}
-                  onCancel={onCancelCollectionEdit}
-                  saveDisabled={
-                    !canSaveCollectionEdit ||
-                    savingCollectionEdit ||
-                    loadingCollections
-                  }
-                  saving={savingCollectionEdit}
-                />
-              </form>
-            ) : showingNewCollectionForm ? (
-              <form
-                className="collection-rename-form"
-                onSubmit={handleNewCollectionSubmit}
-              >
-                <input
-                  aria-label="Collection name"
-                  className="showcase-name-field"
-                  disabled={savingNewCollection}
-                  onChange={(event) => {
-                    onNewCollectionNameChange?.(event.target.value);
-                  }}
-                  onKeyDown={handleNewCollectionNameKeyDown}
-                  ref={collectionNameFieldRef}
-                  value={newCollectionName}
-                />
-                <CollectionCommitPair
-                  cancelDisabled={savingNewCollection}
-                  onCancel={onCancelNewCollection}
-                  saveDisabled={savingNewCollection}
-                  saving={savingNewCollection}
-                />
-              </form>
-            ) : renamingCollection ? (
-              <form
-                className="collection-rename-form"
-                onSubmit={submitCollectionRename}
-              >
-                <input
-                  aria-describedby={
-                    collectionActionError ? collectionRenameErrorId : undefined
-                  }
-                  aria-invalid={
-                    collectionActionError ? true : undefined
-                  }
-                  aria-label="Collection name"
-                  className="showcase-name-field"
-                  disabled={savingCollectionRename}
-                  onChange={(event) => {
-                    setCollectionRenameDraft(event.target.value);
-                    setCollectionActionError("");
-                  }}
-                  onKeyDown={handleCollectionRenameKeyDown}
-                  ref={collectionRenameFieldRef}
-                  value={collectionRenameDraft}
-                />
-                <CollectionCommitPair
-                  cancelDisabled={savingCollectionRename}
-                  onCancel={cancelCollectionRename}
-                  saveDisabled={savingCollectionRename}
-                  saving={savingCollectionRename}
-                />
-              </form>
-            ) : (
-              <div className="collection-title-row">
-                {collection && onRenameCollection && !isNewCollection ? (
-                  // The heading keeps the plain collection name; the button
-                  // inside it owns the rename action and its fuller label.
-                  <h1 aria-label={collection.name}>
-                    <button
-                      aria-label={`Rename collection: ${collection.name}`}
-                      className="collection-title-button"
-                      onClick={startCollectionRename}
-                      ref={collectionTitleButtonRef}
-                      title="Rename collection (e)"
-                      type="button"
-                    >
-                      {collection.name}
-                    </button>
-                  </h1>
-                ) : (
-                  <h1>{collection?.name ?? "Notes"}</h1>
-                )}
-                {collection &&
-                !isNewCollection &&
-                (onRenameCollection || onDeleteCollection) ? (
-                  <ActionsMenu
-                    items={collectionActionItems}
-                    label="Collection actions"
-                  />
-                ) : null}
-              </div>
-            )}
-            {isCollectionEditing && collectionEditDialog ? collectionEditDialog : null}
-            {showingNewCollectionForm ? (
-              newCollectionError ? (
-                <p className="error-text" role="alert">
-                  {newCollectionError}
-                </p>
-              ) : null
-            ) : isCollectionEditing ? (
-              collectionEditError ? (
-                <p className="error-text" role="alert">
-                  {collectionEditError}
-                </p>
-              ) : null
-            ) : collectionActionError ? (
-              <p
-                className="error-text"
-                id={collectionRenameErrorId}
-                role="alert"
-              >
-                {collectionActionError}
-              </p>
-            ) : null}
-          </div>
-          {isCollectionEditing ? (
-            <div className="inline-actions">
-              <button
-                className="button button-danger"
-                disabled={deletingCollectionEdit}
-                onClick={onDeleteCollectionEdit}
-                type="button"
-              >
-                Delete collection
-              </button>
-            </div>
-          ) : null}
-        </div>
 
-        {/* The table's shape holds while the rows are on their way: the card
-            stays on screen with the status where the rows will be, so a
-            collection switch never collapses the screen and rebuilds it a
-            moment later. */}
-        {loading || loadingCollections ? (
-          <div className="table-shell table-loading">
-            <div className="table-loading-body" role="status">
-              <p className="table-loading-title">Loading notes…</p>
-              <p className="table-loading-detail">
-                Reading the notes stored on this device.
-              </p>
-            </div>
-          </div>
-        ) : null}
         {collectionsError ? (
           <p className="error-text" role="alert">
             {collectionsError}
@@ -4724,37 +4748,10 @@ function NotesTable({
           />
         ) : null}
 
-        {loadError ? (
-          // A failed load replaces the table with a card the height of the
-          // table it stands in for: the screen keeps its shape, the failure
-          // names itself, and the recovery is one button away instead of a
-          // reload. The live region wraps the copy only, so Try again is not
-          // announced as part of the alert.
-          <div className="table-shell table-load-error">
-            <div className="table-load-error-body">
-              <div className="table-load-error-copy" role="alert">
-                <h2 className="table-load-error-title">
-                  Couldn't load this collection's notes.
-                </h2>
-                <p className="table-load-error-detail">{loadError}</p>
-              </div>
-              <p className="table-load-error-note">
-                Your notes stay on this device and aren't affected.
-              </p>
-              <button
-                className="button button-primary"
-                onClick={retryNotesLoad}
-                type="button"
-              >
-                Try again
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        {!loading && !loadError ? (
-          <NotesTableView
-            bulkBar={
+        <NotesTableView
+          body={tableBody}
+          bodyClassName={tableBodyClassName}
+          bulkBar={
               selectedIds.length ? (
                 <TableBulkBar
                   barRef={bulkBarRef}
@@ -4816,13 +4813,42 @@ function NotesTable({
                 <span className="table-footer-segment">{reorderHint}</span>
               ) : null
             }
-            footerStatus={
+            footerSummary={
+              <>
+                Showing {deferredOrderedNotes.length} of {notes.length}{" "}
+                {notes.length === 1 ? "note" : "notes"} · sorted by{" "}
+                {getTableColumn(sortKey)?.label ?? "#"}{" "}
+                {sortDirection === "asc" ? "ascending" : "descending"}
+                {find.status}
+                {selectedIds.length
+                  ? ` · ${selectedIds.length} selected`
+                  : ""}
+              </>
+            }
+            statusSummary={
+              <>
+                <span className="table-status-count">
+                  {deferredOrderedNotes.length} of {notes.length}{" "}
+                  {notes.length === 1 ? "note" : "notes"}
+                </span>
+                <span aria-hidden="true"> · </span>
+                {getTableColumn(sortKey)?.label ?? "#"}{" "}
+                {sortDirection === "asc" ? "ascending" : "descending"}
+                {selectedIds.length ? (
+                  <>
+                    <span aria-hidden="true"> · </span>
+                    {selectedIds.length} selected
+                  </>
+                ) : null}
+              </>
+            }
+            railStatus={
               reorderLoading ? (
-                <span className="table-footer-status">
+                <span className="table-rail-status-text">
                   Saving manual order...
                 </span>
               ) : reorderUndoAvailable ? (
-                <span className="table-footer-status">
+                <span className="table-rail-status-text">
                   Moved to position {reorderUndo.position}
                   <span aria-hidden="true"> · </span>
                   <button
@@ -4836,18 +4862,8 @@ function NotesTable({
                 </span>
               ) : null
             }
-            footerSummary={
-              <>
-                Showing {deferredOrderedNotes.length} of {notes.length}{" "}
-                {notes.length === 1 ? "note" : "notes"} · sorted by{" "}
-                {getTableColumn(sortKey)?.label ?? "#"}{" "}
-                {sortDirection === "asc" ? "ascending" : "descending"}
-                {find.status}
-                {selectedIds.length
-                  ? ` · ${selectedIds.length} selected`
-                  : ""}
-              </>
-            }
+            railIdentity={railIdentity}
+            railNotice={railNotice}
             handlers={rowHandlers}
             hideableColumns={hideableColumns}
             lastVisibleDataColumnKey={lastVisibleDataColumnKey}
@@ -4878,7 +4894,7 @@ function NotesTable({
                   >
                     <path d="M12 5v14M5 12h14" />
                   </svg>
-                  Add note
+                  <span className="table-rail-button-label">Add note</span>
                 </button>
               ) : null
             }
@@ -4886,6 +4902,7 @@ function NotesTable({
             rows={deferredOrderedNotes}
             shellRef={tableShellRef}
             showShortcutsHelp={showShortcutsHelp}
+            showToolbar={!tableBody}
             surface={{
               allVisibleSelected,
               ariaBusy: rowsPending,
@@ -4905,7 +4922,6 @@ function NotesTable({
             table={table}
             visibleColumnKeys={visibleColumnKeys}
           />
-        ) : null}
       </div>
     </section>
   );

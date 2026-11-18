@@ -152,12 +152,10 @@ describe("NotesTable filter chips", () => {
       screen.getByRole("searchbox", { name: "Filter Catalog" }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Clear all" })).toBeNull();
-    // No chips, and no reserved line for them: the idle hint sits in their
-    // slot, beside the field it explains.
+    // No chips and no hint line: the idle rail is one row, and the model the
+    // hint used to teach is stated by the mode control and the `?` dialog.
     expect(document.querySelector(".table-filter-chips")).toBeNull();
-    expect(document.querySelector(".table-filter-hint")).toHaveTextContent(
-      "New values replace that field; other fields stay",
-    );
+    expect(document.querySelector(".table-filter-hint")).toBeNull();
   });
 
   test("the field menu marks the current field and focuses the input after a pick", async () => {
@@ -848,6 +846,7 @@ describe("NotesTable filter chips", () => {
     const user = userEvent.setup();
 
     await screen.findByText("AAAA");
+    await commitChip(user, "Company", "PMG");
     await user.keyboard("{Control>}f{/Control}");
     const input = screen.getByRole("searchbox", {
       name: "Find notes in this view",
@@ -856,21 +855,11 @@ describe("NotesTable filter chips", () => {
     await user.type(input, "SER-");
 
     await waitFor(() => {
-      expect(screen.getByText("1 of 3")).toBeInTheDocument();
-    });
-
-    await commitChip(user, "Company", "PMG");
-
-    // The query stays put and is re-run over the narrower view; the filter
-    // chips are find's input, not something find edits.
-    await waitFor(() => {
       expect(screen.getByText("1 of 2")).toBeInTheDocument();
     });
-    expect(input).toHaveValue("SER-");
-    expect(
-      screen.getByRole("button", { name: "Edit Company filter PMG" }),
-    ).toBeInTheDocument();
 
+    // The chips stay on their line while find holds the field: find is scoped
+    // to the current view, and clearing a condition re-runs the query.
     await user.click(screen.getByRole("button", { name: "Clear all" }));
 
     await waitFor(() => {
@@ -1303,45 +1292,30 @@ describe("NotesTable filter commit mode", () => {
 
 
 describe("NotesTable filter hint", () => {
-  const replaceHint = "New values replace that field; other fields stay";
-  const addHint =
-    "Pick a field, type, press ⏎. Same field ORs, different fields AND.";
-
   function filterHint() {
     return document.querySelector(".table-filter-hint");
   }
 
-  test("the idle rail states the Replace default beside the field", async () => {
+  test("the idle rail states the Replace default through the mode control", async () => {
     renderTable();
 
     await screen.findByText("AAAA");
 
-    const hint = filterHint();
-    const rail = document.querySelector(".table-rail");
-
-    expect(hint).toHaveTextContent(replaceHint);
-    expect(rail).toContainElement(hint);
-    expect(hint).toHaveClass("table-filter-hint");
-    // The Replace sentence names no key: the field's own hint carries ⏎.
-    expect(hint.querySelector("kbd")).toBeNull();
-    // The hint replaced the ? trigger rather than joining it.
+    // The sentences that taught Replace/Add left the rail with the second
+    // row; the field's mode control still names the latch and the `?` dialog
+    // documents it in full.
+    expect(filterHint()).toBeNull();
+    expect(
+      screen.getByRole("button", {
+        name: "Switch commit mode to Add (currently Replace)",
+      }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "How filters combine" }),
     ).toBeNull();
   });
 
-  test("Add mode restores the OR/AND sentence", async () => {
-    renderTable();
-    const user = userEvent.setup();
-
-    await screen.findByText("AAAA");
-    await user.click(filterModeButton("Add"));
-
-    expect(filterHint()).toHaveTextContent(addHint);
-    expect(filterHint().querySelector("kbd")).toHaveTextContent("⏎");
-  });
-
-  test("the first chip replaces the hint", async () => {
+  test("the first chip takes the chips line, and Clear all puts the rail back", async () => {
     renderTable();
     const user = userEvent.setup();
 
@@ -1352,17 +1326,13 @@ describe("NotesTable filter hint", () => {
     expect(
       screen.getByRole("button", { name: "Edit Company filter PMG" }),
     ).toBeInTheDocument();
-  });
 
-  test("clearing every chip brings the hint back", async () => {
-    renderTable();
-    const user = userEvent.setup();
-
-    await screen.findByText("AAAA");
-    await commitChip(user, "Company", "PMG");
     await user.click(screen.getByRole("button", { name: "Clear all" }));
 
-    await waitFor(() => expect(filterHint()).toHaveTextContent(replaceHint));
+    await waitFor(() => {
+      expect(document.querySelector(".table-filter-chips")).toBeNull();
+    });
+    expect(filterHint()).toBeNull();
   });
 });
 

@@ -3,8 +3,10 @@ import { buildNoteRowModel } from "./noteRowModel.js";
 import { marksForNote } from "./noteView.js";
 import { cellClass, stickyCellAttributes } from "./tableCells.jsx";
 import {
+  firstPinnedEndKey,
   lastStickyKey,
   stickyOffsets,
+  stickyRightOffsets,
   tableColumnWidths,
 } from "./tableColumns.js";
 import { useColumnPan } from "./useColumnPan.js";
@@ -63,8 +65,16 @@ export function useNotesTable({
     [columns, tableWidth, vScrollVisible],
   );
   const lastStickyColumnKey = useMemo(() => lastStickyKey(columns), [columns]);
+  const firstPinnedEndColumnKey = useMemo(
+    () => firstPinnedEndKey(columns),
+    [columns],
+  );
   const stickyLeftByColumn = useMemo(
     () => stickyOffsets(columns, columnWidths),
+    [columnWidths, columns],
+  );
+  const stickyRightByColumn = useMemo(
+    () => stickyRightOffsets(columns, columnWidths),
     [columnWidths, columns],
   );
   const totalColumnCount = columns.length + (vScrollVisible ? 1 : 0);
@@ -130,12 +140,14 @@ export function useNotesTable({
         const model = buildNoteRowModel({
           columnWidths,
           columns,
+          firstPinnedEndColumnKey,
           lastStickyColumnKey,
           marks: conditions.length
             ? marksForNote(note, conditions, searchColumns)
             : null,
           note,
           stickyLeftByColumn,
+          stickyRightByColumn,
         });
 
         models.set(noteId, model);
@@ -146,16 +158,20 @@ export function useNotesTable({
     columnWidths,
     columns,
     conditions,
+    firstPinnedEndColumnKey,
     lastStickyColumnKey,
     notesById,
     searchColumns,
     stickyLeftByColumn,
+    stickyRightByColumn,
   ]);
 
   function tableCellAttributes(column) {
     return stickyCellAttributes(column, cellClass(column), {
+      firstPinnedEndColumnKey,
       lastStickyColumnKey,
       stickyLeftByColumn,
+      stickyRightByColumn,
     });
   }
 
@@ -167,6 +183,7 @@ export function useNotesTable({
     rowModelsByNoteId,
     setVScrollVisible,
     tableCellAttributes,
+    tableWidth,
     totalColumnCount,
     vScrollVisible,
   };

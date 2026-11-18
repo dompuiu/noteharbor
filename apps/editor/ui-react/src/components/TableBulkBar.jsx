@@ -117,6 +117,7 @@ export function TableBulkBar({
 
   return (
     <div
+      aria-busy={busy || undefined}
       aria-label="Selection actions"
       className="table-bulk-bar"
       onKeyDown={handleKeyDown}

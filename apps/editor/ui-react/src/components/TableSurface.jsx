@@ -12,6 +12,7 @@ export function TableSurface({
   ariaBusy,
   ariaLabel,
   bottomSpacerHeight,
+  bulkBarOpen = false,
   canMove,
   canReorder,
   columnWidths,
@@ -19,7 +20,6 @@ export function TableSurface({
   dragStateRef,
   emptyContent,
   emptyView,
-  findBar,
   findCurrentNoteId,
   findMarksByNoteId,
   gutterWidth,
@@ -53,7 +53,6 @@ export function TableSurface({
 }) {
   return (
     <div className="table-viewport">
-      {findBar}
       <div
         aria-label={ariaLabel}
         className="table-scroll-x"
@@ -63,7 +62,9 @@ export function TableSurface({
         ref={scrollRef}
       >
         <div
-          className={`table-scroll-content${emptyView ? " is-empty-view" : ""}`}
+          className={`table-scroll-content${emptyView ? " is-empty-view" : ""}${
+            bulkBarOpen ? " has-bulk-bar" : ""
+          }`}
         >
           <table aria-busy={ariaBusy || undefined}>
             <colgroup>

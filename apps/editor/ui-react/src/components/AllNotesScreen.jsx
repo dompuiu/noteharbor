@@ -23,6 +23,7 @@ import { CATALOG_ROUTES } from "../lib/routes.js";
 import { collectTagNames } from "../lib/tagNames.js";
 import { dataColumns, validSortKeys } from "../lib/tableColumns.js";
 import { AllNotesTable } from "./AllNotesTable.jsx";
+import { TableCard } from "./TableCard.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 
 const slideshowHashPattern =
@@ -248,7 +249,6 @@ export function AllNotesScreen() {
   // filters: the empty state must not claim the filters hid things that never
   // existed.
   const emptyLibrary = totalCount === 0;
-
   const countText = hasActiveFilters
     ? `${shownCount} of ${noteCountLabel(totalCount)}`
     : noteCountLabel(totalCount);
@@ -256,9 +256,9 @@ export function AllNotesScreen() {
     collectionCount === 1
       ? "in 1 collection"
       : `across ${collectionCountLabel(collectionCount)}`;
-  const subtitle = loading
-    ? "Reading every collection."
-    : `${countText} ${scopeText}`;
+  // The All notes rail's status: the same sentence the subtitle carried, now
+  // on the card's own head instead of a band above it.
+  const statusSummary = `${countText} ${scopeText}`;
   const canResetView = hasActiveFilters || sortKey != null;
   const lastVisibleDataColumnKey = lastVisibleAllNotesDataColumnKey(
     visibleColumnKeys,
@@ -700,21 +700,20 @@ export function AllNotesScreen() {
     );
   }
 
+  const railIdentity = (
+    <div className="table-rail-title">
+      <h1>All notes</h1>
+    </div>
+  );
+
   return (
     <section className="screen-stack all-notes-screen">
       <div className="screen-body" inert={slideshowOpen}>
-        <div className="panel-heading panel-heading--compact">
-          <div className="panel-heading-copy">
-            <p className="eyebrow collection-eyebrow">Catalog</p>
-            <h1>All notes</h1>
-            {displayError ? null : (
-              <p className="muted all-notes-subtitle">{subtitle}</p>
-            )}
-          </div>
-        </div>
-
         {displayError ? (
-          <div className="table-shell table-load-error">
+          <TableCard
+            bodyClassName="table-load-error"
+            railIdentity={railIdentity}
+          >
             <div className="table-load-error-body">
               <div className="table-load-error-copy" role="alert">
                 <h2 className="table-load-error-title">
@@ -733,16 +732,16 @@ export function AllNotesScreen() {
                 Try again
               </button>
             </div>
-          </div>
+          </TableCard>
         ) : loading ? (
-          <div className="table-shell table-loading">
+          <TableCard bodyClassName="table-loading" railIdentity={railIdentity}>
             <div className="table-loading-body" role="status">
               <p className="table-loading-title">Loading notes…</p>
               <p className="table-loading-detail">
                 Reading every collection on this device.
               </p>
             </div>
-          </div>
+          </TableCard>
         ) : (
           <AllNotesTable
             allNotes={notes}
@@ -756,6 +755,7 @@ export function AllNotesScreen() {
             hasActiveFilters={hasActiveFilters}
             hideableColumns={hideableAllNotesColumns}
             notes={visibleNotes}
+            railIdentity={railIdentity}
             rowsPending={rowsPending}
             onApplyTagFilter={handleApplyTagFilter}
             onClearFilters={handleClearFilters}
@@ -772,6 +772,7 @@ export function AllNotesScreen() {
             slideshowActive={slideshowActive}
             sortDirection={sortDirection}
             sortKey={sortKey}
+            statusSummary={statusSummary}
             tagNames={tagNames}
             totalCount={totalCount}
             visibleColumnKeys={visibleColumnKeys}

@@ -169,6 +169,38 @@ function currentFindRow(container) {
   return container.querySelector("tbody tr.table-row-link--find-current");
 }
 
+test("find takes the rail's entry and gives it back on Escape", async () => {
+  const user = userEvent.setup();
+  const { container } = renderTable();
+
+  await screen.findByText("Fr. 2,300 Alpha");
+
+  const rail = container.querySelector(".table-rail");
+  const filterField = () =>
+    screen.queryByRole("searchbox", { name: /^Filter / });
+
+  expect(filterField()).not.toBeNull();
+
+  await openFind(user);
+
+  // Find is a mode of the rail's entry, not a card over the rows: the field
+  // gives its slot away, and the scrollport holds no find surface.
+  const bar = findBar();
+  expect(rail.contains(bar)).toBe(true);
+  expect(container.querySelector(".table-viewport").contains(bar)).toBe(false);
+  expect(filterField()).toBeNull();
+
+  await user.keyboard("{Escape}");
+
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("search", { name: "Find in this view" }),
+    ).toBeNull(),
+  );
+  expect(filterField()).not.toBeNull();
+  expect(rail.contains(filterField())).toBe(true);
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   virtualizerCalls.windowed = null;
@@ -456,19 +488,16 @@ describe("NotesTable find", () => {
     await expectFindCount("No notes match");
   });
 
-  test("falls back to the first match when filters remove the current one", async () => {
+  test("narrows to the committed filter and finds again inside it", async () => {
     const user = userEvent.setup();
     const { container } = renderTable();
 
     await screen.findByText("Fr. 2,300 Alpha");
+
+    // SER-3 keeps only the third note; find opens on the narrowed view.
+    await commitChip(user, "Serial", "SER-3");
     await openFind(user);
     await user.type(findInput(), "2300");
-
-    await expectFindCount("1 of 3");
-    expect(currentFindRow(container)?.textContent).toContain("Fr. 2,300 Alpha");
-
-    // SER-3 keeps only the third match, so the stored current note is gone.
-    await commitChip(user, "Serial", "SER-3");
 
     await expectFindCount("1 of 1");
     expect(currentFindRow(container)?.textContent).toContain("Fr. 2,300 Gamma");

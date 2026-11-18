@@ -306,7 +306,12 @@ export const tableColumns = [
     width: 54,
     align: "center",
     sortable: false,
+    // The row menu is the row's only way to Open, Edit, Copy, Insert or
+    // Delete, so it pins to the card's right edge: panning the data columns
+    // must never take it off screen. `pin` is the end-pinned twin of
+    // `sticky`; a column never has both.
     sticky: false,
+    pin: "end",
     hideable: false,
     filterable: false,
     matchMode: null,
@@ -475,6 +480,40 @@ export function lastStickyKey(visibleColumns = tableColumns) {
   for (let index = visibleColumns.length - 1; index >= 0; index -= 1) {
     if (visibleColumns[index].sticky) {
       return visibleColumns[index].key;
+    }
+  }
+
+  return null;
+}
+
+// Pinned-end columns stay put against the card's right edge while the data
+// columns pan underneath them. Each needs the sum of the declared widths of
+// the end-pinned columns *after* it, so the block stacks from the right.
+export function stickyRightOffsets(visibleColumns = tableColumns, widths = null) {
+  const offsets = {};
+  let right = 0;
+
+  for (let index = visibleColumns.length - 1; index >= 0; index -= 1) {
+    const column = visibleColumns[index];
+
+    if (column.pin !== "end") {
+      continue;
+    }
+
+    offsets[column.key] = right;
+    right += widths?.[column.key] ?? column.width ?? 0;
+  }
+
+  return offsets;
+}
+
+// The left-most end-pinned column carries the mirrored pan shadow: it is the
+// edge the panned data slides under. With one pinned-end column this is that
+// column; the helper keeps the rule honest if the model ever pins two.
+export function firstPinnedEndKey(visibleColumns = tableColumns) {
+  for (const column of visibleColumns) {
+    if (column.pin === "end") {
+      return column.key;
     }
   }
 

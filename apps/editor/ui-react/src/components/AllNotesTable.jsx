@@ -43,6 +43,7 @@ export function AllNotesTable({
   onSort,
   onToggleColumn,
   paintedConditions: paintedConditionsProp,
+  railIdentity = null,
   rowsPending = false,
   searchColumns,
   selectedCollectionId,
@@ -50,6 +51,7 @@ export function AllNotesTable({
   slideshowActive,
   sortDirection,
   sortKey,
+  statusSummary = null,
   tagNames,
   totalCount,
   visibleColumnKeys,
@@ -345,6 +347,18 @@ export function AllNotesTable({
     ? ` · sorted by ${sortLabel} ${sortDirection === "asc" ? "ascending" : "descending"}`
     : "";
   const summary = `Showing ${notes.length} of ${noteCountLabel(totalCount)} across ${collectionCountLabel(collectionCount)}${sortStatus}${find.status}`;
+  const compactStatus = (
+    <>
+      {notes.length} of {noteCountLabel(totalCount)}
+      {sortKey ? (
+        <>
+          <span aria-hidden="true"> · </span>
+          {sortLabel} {sortDirection === "asc" ? "ascending" : "descending"}
+        </>
+      ) : null}
+      {find.status ? <> {find.status}</> : null}
+    </>
+  );
 
   const selectedIdSet = useMemo(() => new Set(), []);
   const collectionPicker = (
@@ -381,10 +395,12 @@ export function AllNotesTable({
       onResetView={onResetView}
       onToggleColumn={onToggleColumn}
       railStart={collectionPicker}
+      railIdentity={railIdentity}
       resetTitle="Clears the collection scope, filters and sort — keeps your columns"
       rows={notes}
       showShortcutsHelp={showShortcutsHelp}
       showToolbar={showToolbar}
+      statusSummary={statusSummary ?? compactStatus}
       surface={{
         allVisibleSelected: false,
         ariaBusy: rowsPending,

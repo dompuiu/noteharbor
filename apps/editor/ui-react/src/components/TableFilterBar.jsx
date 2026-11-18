@@ -8,11 +8,13 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { AnchoredPopover } from "./AnchoredPopover.jsx";
 import { ChipRemoveButton } from "./ChipRemoveButton.jsx";
 import { FilterFieldMenu } from "./FilterFieldMenu.jsx";
 import { HighlightMatch, rankTagSuggestions } from "./TagsField.jsx";
 import { TagSuggestionsToggle } from "./TagSuggestionsToggle.jsx";
 import { tagsColumnKey } from "../lib/tableColumns.js";
+import { computeFilterChipPlan } from "../lib/tableFilterChips.js";
 import {
   commitModeLabel,
   loadFilterCommitMode,
@@ -35,8 +37,10 @@ import {
 // `onConditionsChange`.
 export const TableFilterBar = forwardRef(function TableFilterBar(
   {
+    availableWidth = null,
     conditions,
     defaultField = defaultFilterField,
+    entry = null,
     hasRows,
     onConditionsChange,
     onEscape = null,
@@ -75,6 +79,32 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
     () => groupConditions(conditions),
     [conditions],
   );
+  // The rail shows one line of chips. Each unit is one connector (or field
+  // label) plus its chip, in table order; the plan decides how many whole
+  // units fit before the `+N` count takes over.
+  const chipUnits = useMemo(() => {
+    const units = [];
+
+    conditionGroups.forEach(({ field, items }, groupIndex) => {
+      items.forEach((condition, index) => {
+        units.push({
+          condition,
+          field,
+          groupIndex,
+          index,
+          label: filterFieldLabel(field),
+        });
+      });
+    });
+
+    return units;
+  }, [conditionGroups]);
+  const chipPlan = useMemo(
+    () => computeFilterChipPlan(chipUnits, availableWidth),
+    [availableWidth, chipUnits],
+  );
+  const visibleChipUnits = chipUnits.slice(0, chipPlan.visibleCount);
+  const hiddenChipUnits = chipUnits.slice(chipPlan.visibleCount);
 
   useImperativeHandle(ref, () => ({
     focus() {
@@ -393,9 +423,76 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
     type: "button",
   };
 
+  // One chip plus the prefix that names it: the field label for a field's
+  // first chip, "or" after it, and "and" ahead of a new field. The prefix
+  // travels with the chip, so the popover's list still reads as groups and a
+  // chip is never separated from the word that introduces it.
+  function renderChipUnit({ condition, field, groupIndex, index }) {
+    return (
+      <span className="table-filter-unit" key={condition.id}>
+        {groupIndex > 0 && index === 0 ? (
+          <span className="table-filter-and">and</span>
+        ) : null}
+        {index > 0 ? (
+          <span className="table-filter-or">or</span>
+        ) : (
+          <span className="table-filter-facet-label">
+            {filterFieldLabel(field)}
+          </span>
+        )}
+        <span
+          className={`table-filter-chip${condition.negated ? " table-filter-chip--negated" : ""}`}
+        >
+          {editingConditionId === condition.id ? (
+            <input
+              aria-label={`Edit ${filterFieldLabel(field)} filter`}
+              autoFocus
+              className="table-filter-chip-input"
+              onBlur={commitConditionEdit}
+              onChange={(event) => setConditionDraft(event.target.value)}
+              onFocus={(event) => event.currentTarget.select()}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  commitConditionEdit();
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  cancelConditionEdit();
+                }
+              }}
+              value={conditionDraft}
+            />
+          ) : (
+            <>
+              {/* The chip clips a long value, so its tooltip carries the whole
+                  of it — and still says the chip is a control, which a bare
+                  value does not. */}
+              <button
+                aria-label={`Edit ${filterFieldLabel(field)} filter ${condition.value}`}
+                className="table-filter-chip-value"
+                onClick={() => startConditionEdit(condition)}
+                title={`Edit ${filterFieldLabel(field)} filter: ${condition.value}`}
+                type="button"
+              >
+                {condition.negated ? "!" : ""}
+                {condition.value}
+              </button>
+              <ChipRemoveButton
+                label={`Remove ${filterFieldLabel(field)} ${condition.negated ? "not " : ""}${condition.value}`}
+                onClick={() => removeCondition(condition.id)}
+              />
+            </>
+          )}
+        </span>
+      </span>
+    );
+  }
+
   return (
     <Fragment>
-      <div className="table-search table-search--scoped" ref={fieldRef}>
+      {entry ?? (
+        <div className="table-search table-search--scoped" ref={fieldRef}>
         <svg
           aria-hidden="true"
           className="table-search-icon"
@@ -515,6 +612,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
           </Fragment>
         )}
       </div>
+      )}
       {/* A mode flip moves focus back to the input, so the change needs its
           own polite announcement: the page never re-reads the button. */}
       <p
@@ -569,91 +667,30 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
             document.body,
           )
         : null}
-      {conditionGroups.length ? null : (
-        <p className="table-filter-hint">
-          {commitMode === "add" ? (
-            <span>
-              Pick a field, type, press <kbd>⏎</kbd>. Same field ORs, different
-              fields AND.
-            </span>
-          ) : (
-            // Replace is the default, so the idle rail states the swap instead
-            // of the OR/AND rule it would contradict.
-            <span>New values replace that field; other fields stay</span>
-          )}
-        </p>
-      )}
       {conditionGroups.length ? (
         <div className="table-filter-chips">
-          {conditionGroups.map(({ field, items }, groupIndex) =>
-            items.map((condition, index) => (
-              // One chip plus the prefix that names it: the connector and the
-              // field label travel with their chip, so a wrapped line may
-              // start with "AND Company PM" or "or 29" but never ends on a
-              // bare connector. Because the chip is the wrapping unit, a long
-              // run of ORed values wraps inside the block instead of running
-              // under the rail's trailing controls.
-              <span className="table-filter-unit" key={condition.id}>
-                {groupIndex > 0 && index === 0 ? (
-                  <span className="table-filter-and">and</span>
-                ) : null}
-                {index > 0 ? (
-                  <span className="table-filter-or">or</span>
-                ) : (
-                  <span className="table-filter-facet-label">
-                    {filterFieldLabel(field)}
-                  </span>
-                )}
-                <span
-                  className={`table-filter-chip${condition.negated ? " table-filter-chip--negated" : ""}`}
+          {visibleChipUnits.map(renderChipUnit)}
+          {hiddenChipUnits.length ? (
+            <AnchoredPopover
+              className="table-filter-chips table-filter-chips--popover"
+              initialFocus={(panel) =>
+                panel.querySelector("button:not([disabled])")
+              }
+              panelLabel="More filters"
+              renderTrigger={({ open, triggerProps }) => (
+                <button
+                  {...triggerProps}
+                  className={`table-filter-more${open ? " table-filter-more--open" : ""}`}
+                  title={`Show the other ${hiddenChipUnits.length} filter${hiddenChipUnits.length === 1 ? "" : "s"}`}
+                  type="button"
                 >
-                  {editingConditionId === condition.id ? (
-                    <input
-                      aria-label={`Edit ${filterFieldLabel(field)} filter`}
-                      autoFocus
-                      className="table-filter-chip-input"
-                      onBlur={commitConditionEdit}
-                      onChange={(event) =>
-                        setConditionDraft(event.target.value)
-                      }
-                      onFocus={(event) => event.currentTarget.select()}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          commitConditionEdit();
-                        } else if (event.key === "Escape") {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          cancelConditionEdit();
-                        }
-                      }}
-                      value={conditionDraft}
-                    />
-                  ) : (
-                    <>
-                      {/* The chip clips a long value, so its tooltip carries
-                          the whole of it — and still says the chip is a
-                          control, which a bare value does not. */}
-                      <button
-                        aria-label={`Edit ${filterFieldLabel(field)} filter ${condition.value}`}
-                        className="table-filter-chip-value"
-                        onClick={() => startConditionEdit(condition)}
-                        title={`Edit ${filterFieldLabel(field)} filter: ${condition.value}`}
-                        type="button"
-                      >
-                        {condition.negated ? "!" : ""}
-                        {condition.value}
-                      </button>
-                      <ChipRemoveButton
-                        label={`Remove ${filterFieldLabel(field)} ${condition.negated ? "not " : ""}${condition.value}`}
-                        onClick={() => removeCondition(condition.id)}
-                      />
-                    </>
-                  )}
-                </span>
-              </span>
-            )),
-          )}
+                  +{hiddenChipUnits.length}
+                </button>
+              )}
+            >
+              {hiddenChipUnits.map(renderChipUnit)}
+            </AnchoredPopover>
+          ) : null}
           <button
             className="table-filter-clear-all"
             onClick={clearAllFilters}

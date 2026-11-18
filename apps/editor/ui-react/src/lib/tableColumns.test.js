@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   defaultSortKey,
   filterColumnKeys,
+  firstPinnedEndKey,
   getTableColumn,
   hideableColumnKeys,
   hideableColumns,
@@ -13,6 +14,7 @@ import {
   slideshowFilterKeys,
   sortableColumnKeys,
   stickyOffsets,
+  stickyRightOffsets,
   tableColumns,
   tableColumnWidths,
   validSortKeys,
@@ -51,6 +53,9 @@ describe("table column model", () => {
     expect(new Set(tableColumns.map((column) => column.key)).size).toBe(
       tableColumns.length,
     );
+    expect(
+      tableColumns.filter((column) => column.pin === "end").map((c) => c.key),
+    ).toEqual(["actions"]);
   });
 
   test("keeps today's filter columns and their match modes", () => {
@@ -101,8 +106,7 @@ describe("table column model", () => {
     }
   });
 
-  test("sorts by the display-order id plus the data columns", () => {
-    expect(sortableColumnKeys).toEqual([
+  test("sorts by the display-order id plus the data columns", () => {    expect(sortableColumnKeys).toEqual([
       "id",
       "catalog_number",
       "denomination",
@@ -321,6 +325,47 @@ describe("lastStickyKey", () => {
 
   test("has no end marker when nothing pins", () => {
     expect(lastStickyKey([])).toBeNull();
+  });
+});
+
+describe("stickyRightOffsets", () => {
+  test("pins the row actions to the right edge", () => {
+    expect(stickyRightOffsets()).toEqual({ actions: 0 });
+  });
+
+  test("stacks end-pinned columns from the right", () => {
+    const columns = [
+      { key: "actions", pin: "end", width: 54 },
+      { key: "trailing", pin: "end", width: 20 },
+    ];
+
+    expect(stickyRightOffsets(columns)).toEqual({ actions: 20, trailing: 0 });
+  });
+
+  test("ignores left-pinned and scrolling columns", () => {
+    const offsets = stickyRightOffsets(tableColumns);
+
+    expect(offsets.reorder).toBeUndefined();
+    expect(offsets.selection).toBeUndefined();
+    expect(offsets.tags).toBeUndefined();
+  });
+
+  test("uses rendered widths when the end pin flexes", () => {
+    expect(stickyRightOffsets(tableColumns, { actions: 44 })).toEqual({
+      actions: 0,
+    });
+  });
+});
+
+describe("firstPinnedEndKey", () => {
+  test("marks the left edge of the right-pinned block", () => {
+    expect(firstPinnedEndKey(tableColumns)).toBe("actions");
+  });
+
+  test("has no right-pinned edge when nothing pins to the end", () => {
+    expect(
+      firstPinnedEndKey(tableColumns.filter((column) => column.pin !== "end")),
+    ).toBeNull();
   });
 });
 
