@@ -4679,6 +4679,14 @@ input[type="radio"] {
   margin-bottom: 20px;
 }
 
+/* The table screens' heading: one line of title beside its actions, with the
+   card directly under it. */
+.panel-heading--compact {
+  gap: 16px;
+  margin-bottom: 14px;
+  align-items: center;
+}
+
 .panel-heading-copy {
   display: grid;
   gap: 4px;
@@ -4759,12 +4767,12 @@ input[type="radio"] {
    showcase field is 18px with 8px of vertical padding, which made the form
    taller than the heading and shoved the table down on every edit. Matching
    the line box and filling it keeps the header — and the table below — still. */
-.table-rail-title .collection-rename-form {
-  height: 36px;
+.panel-heading-copy .collection-rename-form {
+  height: 1.5em;
   font-size: 1.3125rem;
 }
 
-.table-rail-title .collection-rename-form .showcase-name-field {
+.panel-heading-copy .collection-rename-form .showcase-name-field {
   height: 100%;
   /* The title button overhangs by 4px and pads 4px back, so its glyphs start
      at the content edge. The field's 1px border and 4px padding would push
@@ -4781,7 +4789,7 @@ input[type="radio"] {
    It fills the form's title line box instead of the shared button's 36px
    height, so adding the buttons never makes the heading — and the table
    below — taller. */
-.table-rail-title .collection-rename-form .button {
+.panel-heading-copy .collection-rename-form .button {
   height: 100%;
   min-height: 0;
   padding: 0 12px;
@@ -4791,24 +4799,24 @@ input[type="radio"] {
 
 /* Keep "Saving…" from widening the primary button and stealing room from the
    name field mid-commit. */
-.table-rail-title .collection-rename-form .button-primary {
+.panel-heading-copy .collection-rename-form .button-primary {
   min-width: 4.9rem;
 }
 
 /* On a narrow screen the pair drops under the field instead of squeezing the
    name down to a few characters. The heading grows there, which is fine. */
 @media (max-width: 560px) {
-  .table-rail-title .collection-rename-form {
+  .panel-heading-copy .collection-rename-form {
     height: auto;
     flex-wrap: wrap;
   }
 
-  .table-rail-title .collection-rename-form .showcase-name-field {
+  .panel-heading-copy .collection-rename-form .showcase-name-field {
     flex: 1 1 100%;
     height: auto;
   }
 
-  .table-rail-title .collection-rename-form .button {
+  .panel-heading-copy .collection-rename-form .button {
     height: auto;
     min-height: 30px;
   }
@@ -4903,21 +4911,26 @@ input[type="radio"] {
   min-height: 0;
 }
 
-/* Find is a mode of the rail's entry, not an overlay: it takes the field's own
-   slot and size, so the header and the first row stay uncovered, and chips
-   keep their line beneath it. */
+/* Find floats over the current view: it never reflows the rows, and it only
+   ever moves a cursor over the list — filters, sort, selection and the URL
+   stay exactly where they were. It rides the header band's right corner, over
+   the rows rather than under them. */
 .table-find-bar {
+  position: absolute;
+  top: 7px;
+  right: 12px;
+  z-index: 6;
   display: flex;
-  flex: 0 1 520px;
-  min-width: 400px;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  height: 36px;
-  padding: 0 6px 0 11px;
+  width: min(560px, calc(100% - 24px));
+  min-height: 44px;
+  padding: 0 8px 0 12px;
   border: 1px solid var(--border-control);
   border-radius: var(--radius-control);
   background: var(--surface);
-  order: 1;
+  box-shadow: var(--shadow-md);
 }
 
 .table-find-icon {
@@ -4927,8 +4940,8 @@ input[type="radio"] {
 
 .table-find-input {
   flex: 1 1 170px;
-  min-width: 90px;
-  height: 100%;
+  min-width: 130px;
+  height: 40px;
   padding: 0;
   border: 0;
   outline: none;
@@ -4938,7 +4951,7 @@ input[type="radio"] {
 }
 
 .table-find-bar:focus-within {
-  border-color: var(--accent);
+  border-color: var(--text-muted);
 }
 
 .table-find-input::-webkit-search-cancel-button {
@@ -4946,25 +4959,16 @@ input[type="radio"] {
 }
 
 .table-find-count {
-  /* The longest count ("No matches in this view") must give way before the
-     actions do, or the close button would paint over the cluster. */
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
+  flex: none;
   color: var(--text-muted);
   font-size: 0.69rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .table-find-all {
-  /* It gives way before the close controls do; the count and the bar's border
-     still say why the action is there. */
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
+  flex: none;
   height: 26px;
   padding: 0 9px;
   border: 0;
@@ -4973,7 +4977,6 @@ input[type="radio"] {
   color: var(--accent);
   font-size: 0.66rem;
   font-weight: 800;
-  text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -6827,89 +6830,8 @@ th[aria-sort="descending"] .sort-chevron {
   background: var(--surface-2);
 }
 
-/* The identity is the card's head: the collection name (or its rename form),
-   the collection menu and the compact status. It is the one item allowed to
-   give way, so the search and the trailing controls keep their sizes. */
-.table-rail-identity {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 1 auto;
-  min-width: 0;
-}
-
-.table-rail-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.table-rail-title h1 {
-  min-width: 0;
-  max-width: 28ch;
-}
-
-/* The All notes screen's h1 sits directly in the title slot; it wears the same
-   Display voice as a collection name so the rail keeps one 36px line. */
-.table-rail-title > h1 {
-  margin: 0;
-  font-size: 1.3125rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.table-rail-title .collection-title-button {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* The rail's quiet status slot: the compact count and sort line, the reorder
-   report, and the reorder undo. The full sentence sits beside the compact line
-   as the live region, so the announcement is unchanged. */
-.table-rail-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 1 auto;
-  min-width: 0;
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  line-height: 1.5;
-}
-
-.table-rail-status-visible {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.table-rail-status-text {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  white-space: nowrap;
-}
-
-/* The position message gives way; Undo is the action and always shows. */
-.table-rail-status-message {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* The rail's trailing cluster keeps Add note, Find, Reset view and Columns on
-   the right edge. It comes before the chip line in the visual order and after
+   the right edge. It comes after the chip line in the visual order and after
    the field in the DOM, so Tab still walks field → chips → controls. */
 .table-rail-actions {
   display: flex;
@@ -6917,26 +6839,7 @@ th[aria-sort="descending"] .sort-chevron {
   gap: 8px;
   flex: 0 0 auto;
   margin-left: auto;
-  order: 2;
-}
-
-/* The error a collection form owns sits under the rail as a short strip, not
-   inside it: the rail's height stays one line while a name is being fixed. */
-.table-rail-notice {
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-2);
-}
-
-.table-rail-notice:empty {
-  display: none;
-}
-
-.table-rail-notice .error-text {
-  margin: 4px 0;
-  font-size: 0.78rem;
+  order: 3;
 }
 
 /* A 36px control keeps a 44px hit area without growing: the pad is the
@@ -7277,15 +7180,27 @@ th[aria-sort="descending"] .sort-chevron {
    in tableFilterChips.js keeps whole units that fit and gives the rest to the
    `+N` chip. The line is 24px, so a view with conditions is 32px taller than
    an idle one and that is the rail's only height change. */
+/* The chips take the field's own line while they fit beside it, and drop to a
+   line of their own only when they do not. `flex: 0 0 auto` is what makes the
+   choice CSS's: the block never shrinks under its planned width, so an
+   over-wide line wraps instead of running under the trailing controls. The
+   plan keeps it to one line either way. */
 .table-filter-chips {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
   gap: 4px;
-  flex: 1 1 100%;
-  min-width: 0;
+  flex: 0 0 auto;
+  max-width: 100%;
   margin: 0;
-  order: 3;
+  order: 2;
+}
+
+/* The planner already decided the chips cannot share the field's line; the
+   full basis makes the wrap deliberate instead of leaving it to the content's
+   width, and hands the line the rail's whole width to fill. */
+.table-filter-chips--own-line {
+  flex-basis: 100%;
 }
 
 /* The overflow count is a chip-sized control with the tag family's dashed
@@ -7706,14 +7621,15 @@ th[aria-sort="descending"] .sort-chevron {
 }
 
 /* The footer sits below the table card as its own band, outside the shell's
-   border. It reports the view on the left — the compact count and sort — and
-   names the keyboard hints on the right. The reorder undo lives in the rail. */
+   border. It reports the view on the left and names the keys on the right, so
+   the count, the sort and the reorder undo stay next to the hint that explains
+   them. */
 .table-footer-hint {
   display: flex;
   flex: 0 0 auto;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 2px 16px;
   margin: 8px 0 0;
   padding: 0;
@@ -7726,22 +7642,42 @@ th[aria-sort="descending"] .sort-chevron {
   white-space: nowrap;
 }
 
-/* The full "Showing … · sorted by …" sentence stays the live region, so the
-   announcement is unchanged; the eye reads the compact line beside it.
-   Visually hidden rather than removed: no reflow, same words. */
+/* The summary owns the band's remaining width and gives way first: a zero
+   basis keeps it from forcing the hints onto their own line, and the sentence
+   truncates instead. Its counts change on every keystroke in the filter field,
+   so the digits are tabular and never shuffle the words. */
 .table-footer-summary {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
+  flex: 1 1 0;
+  min-width: 0;
   overflow: hidden;
-  clip: rect(0 0 0 0);
+  text-overflow: ellipsis;
   white-space: nowrap;
-  border: 0;
+  font-variant-numeric: tabular-nums;
 }
 
-.table-rail-undo {
+/* The reorder report and the keys share the right edge; the report sits before
+   the keys so a "Moved to position 4 · Undo" never pushes the pan hint off. */
+.table-footer-right {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 16px;
+  max-width: 100%;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.table-footer-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-footer-undo {
   appearance: none;
   display: inline-flex;
   align-items: center;
@@ -7758,11 +7694,11 @@ th[aria-sort="descending"] .sort-chevron {
   text-underline-offset: 2px;
 }
 
-.table-rail-undo:hover {
+.table-footer-undo:hover {
   text-decoration-thickness: 2px;
 }
 
-.table-rail-undo:focus-visible {
+.table-footer-undo:focus-visible {
   border-radius: 2px;
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -11524,6 +11460,11 @@ kbd {
    A read-only union of every collection. It reuses the Table screen's card,
    rail, header band, row states and cell typography; only the collection
    column and the chrome that names the cross-collection scope are new. */
+.all-notes-screen .all-notes-subtitle {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
 .all-notes-collection-picker {
   max-width: 230px;
 }

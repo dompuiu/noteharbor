@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react";
+import { computeFilterChipLayout } from "../lib/tableFilterChips.js";
 import { ColumnPicker } from "./ColumnPicker.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { TableCard } from "./TableCard.jsx";
@@ -8,19 +10,16 @@ import { TableSurface } from "./TableSurface.jsx";
 
 const rowHeightEstimate = 45;
 const tableGutterWidth = 14;
-// The rail pads 10px on each side; its chip plan and its width checks work on
-// the content box those paddings leave.
-const railInlinePadding = 20;
 // The rail's controls stop trying to keep their words below this card width
 // and slide into the one overflow menu. It mirrors the stylesheet's
 // `@container table-shell (max-width: 959px)` check, the same content box, so
 // the menu mounts exactly when the standalone view controls hide.
 const compactRailWidth = 959;
 
-// The one notes table view: the card, its rail, the virtualized surface and
-// the footer. Both the Table screen and the All notes screen render this; they
-// differ only in the controller data, the identity they put at the rail's
-// leading edge, and the status they report.
+// The one notes table view: the card, its rail, the find bar, the virtualized
+// surface and the footer. Both the Table screen and the All notes screen
+// render this; they differ only in the controller data, the chrome above the
+// card, and the status they report.
 export function NotesTableView({
   ariaLabel,
   body = null,
@@ -35,6 +34,7 @@ export function NotesTableView({
   focusAnchorRef,
   footerAnnouncer = null,
   footerHint = null,
+  footerStatus = null,
   footerSummary = null,
   handlers,
   hideableColumns,
@@ -43,17 +43,15 @@ export function NotesTableView({
   onDragOver,
   onResetView,
   onToggleColumn,
-  railIdentity = null,
-  railNotice = null,
-  railActionStatus = null,
   railStart = null,
   resetTitle = "Clears filters, sort and selection — keeps your columns",
   rows,
   shellRef,
+  showBrowse = true,
+  showPan = true,
   showShortcutsHelp = false,
   showToolbar = true,
   showToolbarShortcuts = true,
-  statusSummary = null,
   surface,
   table,
   visibleColumnKeys,
@@ -62,8 +60,13 @@ export function NotesTableView({
   const railWidth = table.tableWidth ?? null;
   const compactRail = railWidth != null && railWidth <= compactRailWidth;
   // The rail's chrome (field, find, controls) belongs to a loaded table; the
-  // identity and its status always show.
+  // loading and failed states put their own body in the card instead.
   const railChrome = showToolbar && !body;
+  // The trailing cluster's own width decides whether the chips can share the
+  // field's line or have to take one of their own. It changes with the
+  // container query (words, icons, the one menu), so it is measured.
+  const railActionsRef = useRef(null);
+  const [railActionsWidth, setRailActionsWidth] = useState(null);
   const emptyRow = emptyView ? (
     <tr className="table-empty-row">
       <td className="table-empty-cell" colSpan={table.totalColumnCount}>
@@ -71,28 +74,31 @@ export function NotesTableView({
       </td>
     </tr>
   ) : null;
-  // The compact line the eye reads, with the full sentence kept as the live
-  // region so assistive tech still hears the count, the sort and the selection
-  // exactly as before.
-  const status =
-    statusSummary || footerSummary ? (
-      <>
-        {statusSummary ? (
-          <span aria-hidden="true" className="table-rail-status-visible">
-            {statusSummary}
-          </span>
-        ) : null}
-        {footerSummary ? (
-          <span
-            aria-atomic="true"
-            aria-live="polite"
-            className="table-footer-summary"
-          >
-            {footerSummary}
-          </span>
-        ) : null}
-      </>
-    ) : null;
+
+  useEffect(() => {
+    const node = railActionsRef.current;
+
+    if (!node || typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+
+    const measure = () => {
+      const nextWidth = node.getBoundingClientRect().width;
+      setRailActionsWidth((current) =>
+        current === nextWidth ? current : nextWidth,
+      );
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [railChrome]);
+
+  const chipLayout = computeFilterChipLayout({
+    actionsWidth: railActionsWidth,
+    railWidth,
+  });
 
   return (
     <>
@@ -174,17 +180,14 @@ export function NotesTableView({
             </>
           ) : null
         }
+        railActionsRef={railActionsRef}
         railControls={
           railChrome ? (
             <TableFilterBar
-              availableWidth={
-                railWidth == null ? null : railWidth - railInlinePadding
-              }
+              availableWidth={chipLayout.availableWidth}
+              chipsOwnLine={chipLayout.ownLine}
               conditions={filterBar.conditions}
               defaultField={filterBar.defaultField}
-              entry={
-                find.isOpen ? <TableFindBar {...find.barProps} /> : null
-              }
               hasRows={filterBar.hasRows ?? rows.length > 0}
               onConditionsChange={filterBar.onConditionsChange}
               onFirstRow={filterBar.onFirstRow ?? cursor.focusFirstRow}
@@ -192,16 +195,6 @@ export function NotesTableView({
               searchColumns={filterBar.searchColumns}
               tagNames={filterBar.tagNames}
             />
-          ) : null
-        }
-        railIdentity={railIdentity}
-        railNotice={railNotice}
-        railActionStatus={
-          status || railActionStatus ? (
-            <>
-              {status}
-              {railActionStatus}
-            </>
           ) : null
         }
         shellRef={shellRef}
@@ -227,6 +220,9 @@ export function NotesTableView({
               dragStateRef={surface.dragStateRef}
               emptyContent={emptyRow}
               emptyView={emptyView}
+              findBar={
+                find.isOpen ? <TableFindBar {...find.barProps} /> : null
+              }
               findCurrentNoteId={find.currentMatchId}
               findMarksByNoteId={find.marksByNoteId}
               gutterWidth={tableGutterWidth}
@@ -265,18 +261,33 @@ export function NotesTableView({
       {body ? null : (
         <div className="table-footer-hint">
           {footerAnnouncer}
-          <span className="table-footer-keys">
-            {footerHint}
-            {columnPan.columnPanAvailable ? (
-              <span className="table-footer-segment">
-                <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to pan
-              </span>
-            ) : null}
-            {showToolbarShortcuts ? (
-              <span className="table-footer-segment">
-                <kbd>?</kbd> shortcuts
-              </span>
-            ) : null}
+          <span
+            aria-atomic="true"
+            aria-live="polite"
+            className="table-footer-summary"
+          >
+            {footerSummary}
+          </span>
+          <span className="table-footer-right">
+            {footerStatus}
+            <span className="table-footer-keys">
+              {footerHint}
+              {showBrowse && rows.length ? (
+                <span className="table-footer-segment">
+                  <kbd>&uarr;</kbd> <kbd>&darr;</kbd> to browse
+                </span>
+              ) : null}
+              {showPan && columnPan.columnPanAvailable ? (
+                <span className="table-footer-segment">
+                  <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to pan
+                </span>
+              ) : null}
+              {showToolbarShortcuts ? (
+                <span className="table-footer-segment">
+                  <kbd>?</kbd> shortcuts
+                </span>
+              ) : null}
+            </span>
           </span>
         </div>
       )}

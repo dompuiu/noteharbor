@@ -1431,6 +1431,69 @@ describe("NotesTable filter rail", () => {
       within(panel).getByRole("textbox", { name: "Edit Denomination filter" }),
     ).toBeInTheDocument();
   });
+
+  // The chips start on the filter field's own line and take a line of their
+  // own only when that line cannot hold them. The rail's trailing cluster
+  // decides how much room is left, so both tests state its measured width.
+  function mockRailWidths(railWidth, actionsWidth) {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function boundingRect() {
+        const width = this.classList?.contains("table-rail-actions")
+          ? actionsWidth
+          : railWidth;
+
+        return {
+          width,
+          height: 600,
+          top: 0,
+          left: 0,
+          right: width,
+          bottom: 600,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        };
+      },
+    );
+  }
+
+  test("the chips share the field's line while they fit beside it", async () => {
+    // 1200 − 20 of padding − 400 of field − 200 of controls − two 12px gaps
+    // leaves 556px: one short unit fits with its Clear all.
+    mockRailWidths(1200, 200);
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Catalog", "Fr. 2300");
+
+    const chips = document.querySelector(".table-filter-chips");
+    expect(chips).not.toBeNull();
+    expect(chips).not.toHaveClass("table-filter-chips--own-line");
+    // Same line as the field, before the trailing cluster in the DOM.
+    const field = rail().querySelector(".table-search--scoped");
+    expect(field).not.toBeNull();
+    expect(
+      field.compareDocumentPosition(chips) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(chips.nextElementSibling).toHaveClass("table-rail-actions");
+  });
+
+  test("the chips take their own line when the field's line cannot hold them", async () => {
+    // 900 − 20 − 400 of field − 380 of controls − the gaps leaves 76px, less
+    // than one chip: the line wraps and the plan gets the full 880px instead.
+    mockRailWidths(900, 380);
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Catalog", "Fr. 2300");
+
+    const chips = document.querySelector(".table-filter-chips");
+    expect(chips).not.toBeNull();
+    expect(chips).toHaveClass("table-filter-chips--own-line");
+    expect(within(chips).getByRole("button", { name: "Clear all" })).toBeInTheDocument();
+  });
 });
 
 // The chips are the filter field's own continuation: Tab reaches them before

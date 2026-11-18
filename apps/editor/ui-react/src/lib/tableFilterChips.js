@@ -102,6 +102,38 @@ function unitWidth(unit) {
   return measureLabel(unit.label) + labelGap + chipWidth(unit);
 }
 
+// The chips share the filter field's line while they fit beside it and take a
+// line of their own only when they do not. These are the rail's fixed costs:
+// its 10px paddings, the 12px gap between the field, the chips and the
+// trailing controls, and the field's 400px default width.
+const railChipPadding = 20;
+const railChipGap = 12;
+const filterFieldWidth = 400;
+// Below this the inline line could not hold one chip with its field label, so
+// the chips take the whole line instead of squeezing the field.
+const minimumInlineWidth = 140;
+
+// Decides where the chips sit and how much width they may use. The own-line
+// case reports the rail's whole content box, because that is what the chip
+// line gets once it wraps under the field.
+export function computeFilterChipLayout({ actionsWidth = null, railWidth = null }) {
+  if (!Number.isFinite(railWidth) || railWidth <= 0) {
+    return { availableWidth: null, ownLine: false };
+  }
+
+  const innerWidth = railWidth - railChipPadding;
+  const inlineWidth =
+    Number.isFinite(actionsWidth) && actionsWidth > 0
+      ? innerWidth - filterFieldWidth - actionsWidth - railChipGap * 2
+      : null;
+
+  if (inlineWidth != null && inlineWidth >= minimumInlineWidth) {
+    return { availableWidth: inlineWidth, ownLine: false };
+  }
+
+  return { availableWidth: innerWidth, ownLine: true };
+}
+
 // Returns how many units stay on the line. One unit is always visible, even
 // when its chip is wider than the budget: the chip truncates, and a lone
 // condition hidden behind `+1` would say less than the value it names.

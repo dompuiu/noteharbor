@@ -144,10 +144,10 @@ describe("NotesTable hardening: a failed load", () => {
       screen.getByRole("button", { name: "Try again" }),
     );
 
-    // The rail and its identity hold while the body failed: the screen still
+    // The heading above the card holds while the body failed: the screen still
     // names the collection it could not load.
     expect(
-      within(container.querySelector(".table-rail")).getByRole("heading"),
+      within(container.querySelector(".panel-heading")).getByRole("heading"),
     ).toHaveTextContent("Test");
   });
 

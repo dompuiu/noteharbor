@@ -104,7 +104,7 @@ describe("NotesTable header controls", () => {
 
     expect(screen.queryByLabelText("Active collection")).not.toBeInTheDocument();
     expect(rail).toContainElement(addNote);
-    expect(document.querySelector(".table-rail-identity")).not.toContainElement(
+    expect(document.querySelector(".panel-heading")).not.toContainElement(
       addNote,
     );
     expect(addNote).toHaveAttribute("data-shortcut", "a");
@@ -194,18 +194,20 @@ describe("NotesTable header controls", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("heads the card with the collection title and no Catalog eyebrow", async () => {
+  test("heads the screen with the collection title above the card", async () => {
     const { container } = renderTable();
 
     await screen.findByRole("button", { name: "Add note" });
 
-    // The rail's identity is the page head now: the eyebrow left with the
-    // band above the card, and the title sits inside the card it names.
+    // The title is the screen's head, outside the card it names, and the
+    // Catalog eyebrow stays gone: the sidebar already says which section this
+    // is, and a caption above the name only pushes the rows down.
     expect(container.querySelector(".collection-eyebrow")).toBeNull();
-    expect(document.querySelector(".panel-heading")).toBeNull();
 
     const title = screen.getByRole("heading", { name: "Test" });
-    expect(document.querySelector(".table-rail")).toContainElement(title);
+    const heading = document.querySelector(".panel-heading");
+    expect(heading).toContainElement(title);
+    expect(document.querySelector(".table-shell")).not.toContainElement(title);
   });
 
   test("shows the collection title as its rename control", async () => {

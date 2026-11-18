@@ -256,9 +256,9 @@ export function AllNotesScreen() {
     collectionCount === 1
       ? "in 1 collection"
       : `across ${collectionCountLabel(collectionCount)}`;
-  // The All notes rail's status: the same sentence the subtitle carried, now
-  // on the card's own head instead of a band above it.
-  const statusSummary = `${countText} ${scopeText}`;
+  // The heading's subtitle: the counts and the scope, as they read above the
+  // card.
+  const subtitle = `${countText} ${scopeText}`;
   const canResetView = hasActiveFilters || sortKey != null;
   const lastVisibleDataColumnKey = lastVisibleAllNotesDataColumnKey(
     visibleColumnKeys,
@@ -700,16 +700,20 @@ export function AllNotesScreen() {
     );
   }
 
-  const railIdentity = <h1>All notes</h1>;
-
   return (
     <section className="screen-stack all-notes-screen">
       <div className="screen-body" inert={slideshowOpen}>
+        <div className="panel-heading panel-heading--compact">
+          <div className="panel-heading-copy">
+            <h1>All notes</h1>
+            {displayError ? null : (
+              <p className="muted all-notes-subtitle">{subtitle}</p>
+            )}
+          </div>
+        </div>
+
         {displayError ? (
-          <TableCard
-            cardClassName="table-load-error"
-            railIdentity={railIdentity}
-          >
+          <TableCard cardClassName="table-load-error">
             <div className="table-load-error-body">
               <div className="table-load-error-copy" role="alert">
                 <h2 className="table-load-error-title">
@@ -730,7 +734,7 @@ export function AllNotesScreen() {
             </div>
           </TableCard>
         ) : loading ? (
-          <TableCard cardClassName="table-loading" railIdentity={railIdentity}>
+          <TableCard cardClassName="table-loading">
             <div className="table-loading-body" role="status">
               <p className="table-loading-title">Loading notes…</p>
               <p className="table-loading-detail">
@@ -751,7 +755,6 @@ export function AllNotesScreen() {
             hasActiveFilters={hasActiveFilters}
             hideableColumns={hideableAllNotesColumns}
             notes={visibleNotes}
-            railIdentity={railIdentity}
             rowsPending={rowsPending}
             onApplyTagFilter={handleApplyTagFilter}
             onClearFilters={handleClearFilters}
@@ -768,7 +771,6 @@ export function AllNotesScreen() {
             slideshowActive={slideshowActive}
             sortDirection={sortDirection}
             sortKey={sortKey}
-            statusSummary={statusSummary}
             tagNames={tagNames}
             totalCount={totalCount}
             visibleColumnKeys={visibleColumnKeys}

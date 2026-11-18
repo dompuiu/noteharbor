@@ -4411,10 +4411,8 @@ function NotesTable({
     onToggleSelection: toggleNote,
   };
 
-  // The collection's name (or its rename form) is the card's head, not a band
-  // above it: the identity, the collection menu and the view's controls share
-  // the rail. The error the form owns stays just under that rail so the rail
-  // itself keeps one height in every state.
+  // The collection's name (or its rename form) sits above the card, as the
+  // screen's heading; the card's rail carries only the view's controls.
   const collectionHeading = isCollectionEditing ? (
     <form
       className="collection-rename-form"
@@ -4520,45 +4518,40 @@ function NotesTable({
     </div>
   );
 
-  const railIdentity = (
-    <>
-      {collectionHeading}
-      {isCollectionEditing ? (
-        <div className="inline-actions">
-          <button
-            className="button button-danger"
-            disabled={deletingCollectionEdit}
-            onClick={onDeleteCollectionEdit}
-            type="button"
-          >
-            Delete collection
-          </button>
-        </div>
-      ) : null}
-    </>
-  );
+  const collectionHeadingActions = isCollectionEditing ? (
+    <div className="inline-actions">
+      <button
+        className="button button-danger"
+        disabled={deletingCollectionEdit}
+        onClick={onDeleteCollectionEdit}
+        type="button"
+      >
+        Delete collection
+      </button>
+    </div>
+  ) : null;
 
   // The error a collection form owns, computed once: only one of the three
-  // drafts can be open, and the strip under the rail is absent when there is
+  // drafts can be open, and the line under the heading is absent when there is
   // nothing to say.
-  const railErrorText = showingNewCollectionForm
+  const headingErrorText = showingNewCollectionForm
     ? newCollectionError
     : isCollectionEditing
       ? collectionEditError
       : collectionActionError;
-  const railNotice =
-    (isCollectionEditing && collectionEditDialog) || railErrorText ? (
+  const headingNotice =
+    (isCollectionEditing && collectionEditDialog) || headingErrorText ? (
       <>
         {isCollectionEditing && collectionEditDialog
           ? collectionEditDialog
           : null}
-        {railErrorText ? (
+        {headingErrorText ? (
           <p
             className="error-text"
             id={renamingCollection ? collectionRenameErrorId : undefined}
             role="alert"
           >
-            {railErrorText}
+            {headingErrorText}
           </p>
         ) : null}
       </>
@@ -4601,8 +4594,8 @@ function NotesTable({
       ? "table-load-error"
       : "";
 
-  // The view's status, in the two voices the rail needs: the compact line the
-  // eye reads and the full sentence the live region announces.
+  // The footer's two voices: the full sentence the eye reads and the live
+  // region announces, plus the reorder report beside it.
   const shownCount = deferredOrderedNotes.length;
   const noteNoun = notes.length === 1 ? "note" : "notes";
   const sortLabel = getTableColumn(sortKey)?.label ?? "#";
@@ -4755,6 +4748,14 @@ function NotesTable({
           />
         ) : null}
 
+        <div className="panel-heading panel-heading--compact">
+          <div className="panel-heading-copy">
+            {collectionHeading}
+            {headingNotice}
+          </div>
+          {collectionHeadingActions}
+        </div>
+
         <NotesTableView
           body={tableBody}
           cardClassName={tableBodyClassName}
@@ -4830,34 +4831,17 @@ function NotesTable({
                 : ""}
             </>
           }
-          statusSummary={
-            <>
-              <span className="table-status-count">
-                {shownCount} of {notes.length} {noteNoun}
-              </span>
-              <span aria-hidden="true"> · </span>
-              {sortLabel} {sortWord}
-              {selectedIds.length ? (
-                <>
-                  <span aria-hidden="true"> · </span>
-                  {selectedIds.length} selected
-                </>
-              ) : null}
-            </>
-          }
-          railActionStatus={
+          footerStatus={
             reorderLoading ? (
-              <span className="table-rail-status-text">
+              <span className="table-footer-status">
                 Saving manual order...
               </span>
             ) : reorderUndoAvailable ? (
-              <span className="table-rail-status-text">
-                <span className="table-rail-status-message">
-                  Moved to position {reorderUndo.position}
-                </span>
+              <span className="table-footer-status">
+                Moved to position {reorderUndo.position}
                 <span aria-hidden="true"> · </span>
                 <button
-                  className="table-rail-undo"
+                  className="table-footer-undo"
                   onClick={handleUndoReorder}
                   title="Restore the order from before the last move"
                   type="button"
@@ -4867,8 +4851,6 @@ function NotesTable({
               </span>
             ) : null
           }
-          railIdentity={railIdentity}
-          railNotice={railNotice}
           handlers={rowHandlers}
           hideableColumns={hideableColumns}
           lastVisibleDataColumnKey={lastVisibleDataColumnKey}

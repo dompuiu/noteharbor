@@ -38,9 +38,9 @@ import {
 export const TableFilterBar = forwardRef(function TableFilterBar(
   {
     availableWidth = null,
+    chipsOwnLine = false,
     conditions,
     defaultField = defaultFilterField,
-    entry = null,
     hasRows,
     onConditionsChange,
     onEscape = null,
@@ -487,8 +487,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
 
   return (
     <Fragment>
-      {entry ?? (
-        <div className="table-search table-search--scoped" ref={fieldRef}>
+      <div className="table-search table-search--scoped" ref={fieldRef}>
           <svg
             aria-hidden="true"
             className="table-search-icon"
@@ -608,7 +607,6 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
             </Fragment>
           )}
         </div>
-      )}
       {/* A mode flip moves focus back to the input, so the change needs its
           own polite announcement: the page never re-reads the button. */}
       <p
@@ -664,7 +662,9 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
           )
         : null}
       {conditionGroups.length ? (
-        <div className="table-filter-chips">
+        <div
+          className={`table-filter-chips${chipsOwnLine ? " table-filter-chips--own-line" : ""}`}
+        >
           {visibleChipUnits.map(renderChipUnit)}
           {hiddenChipUnits.length ? (
             <AnchoredPopover

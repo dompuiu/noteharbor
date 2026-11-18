@@ -169,13 +169,14 @@ function currentFindRow(container) {
   return container.querySelector("tbody tr.table-row-link--find-current");
 }
 
-test("find takes the rail's entry and gives it back on Escape", async () => {
+test("find floats over the view and leaves the field in place", async () => {
   const user = userEvent.setup();
   const { container } = renderTable();
 
   await screen.findByText("Fr. 2,300 Alpha");
 
   const rail = container.querySelector(".table-rail");
+  const viewport = container.querySelector(".table-viewport");
   const filterField = () =>
     screen.queryByRole("searchbox", { name: /^Filter / });
 
@@ -183,12 +184,12 @@ test("find takes the rail's entry and gives it back on Escape", async () => {
 
   await openFind(user);
 
-  // Find is a mode of the rail's entry, not a card over the rows: the field
-  // gives its slot away, and the scrollport holds no find surface.
+  // Find is a card over the rows, not a rail mode: the field keeps its slot
+  // and the bar rides the viewport's own corner.
   const bar = findBar();
-  expect(rail.contains(bar)).toBe(true);
-  expect(container.querySelector(".table-viewport").contains(bar)).toBe(false);
-  expect(filterField()).toBeNull();
+  expect(viewport.contains(bar)).toBe(true);
+  expect(rail.contains(bar)).toBe(false);
+  expect(filterField()).not.toBeNull();
 
   await user.keyboard("{Escape}");
 
@@ -198,7 +199,6 @@ test("find takes the rail's entry and gives it back on Escape", async () => {
     ).toBeNull(),
   );
   expect(filterField()).not.toBeNull();
-  expect(rail.contains(filterField())).toBe(true);
 });
 
 beforeEach(() => {

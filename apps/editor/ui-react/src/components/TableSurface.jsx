@@ -20,6 +20,7 @@ export function TableSurface({
   dragStateRef,
   emptyContent,
   emptyView,
+  findBar = null,
   findCurrentNoteId,
   findMarksByNoteId,
   gutterWidth,
@@ -53,6 +54,7 @@ export function TableSurface({
 }) {
   return (
     <div className="table-viewport">
+      {findBar}
       <div
         aria-label={ariaLabel}
         className="table-scroll-x"

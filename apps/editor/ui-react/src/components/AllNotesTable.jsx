@@ -43,7 +43,6 @@ export function AllNotesTable({
   onSort,
   onToggleColumn,
   paintedConditions: paintedConditionsProp,
-  railIdentity = null,
   rowsPending = false,
   searchColumns,
   selectedCollectionId,
@@ -51,7 +50,6 @@ export function AllNotesTable({
   slideshowActive,
   sortDirection,
   sortKey,
-  statusSummary = null,
   tagNames,
   totalCount,
   visibleColumnKeys,
@@ -383,12 +381,10 @@ export function AllNotesTable({
       onResetView={onResetView}
       onToggleColumn={onToggleColumn}
       railStart={collectionPicker}
-      railIdentity={railIdentity}
       resetTitle="Clears the collection scope, filters and sort — keeps your columns"
       rows={notes}
       showShortcutsHelp={showShortcutsHelp}
       showToolbar={showToolbar}
-      statusSummary={statusSummary}
       surface={{
         allVisibleSelected: false,
         ariaBusy: rowsPending,

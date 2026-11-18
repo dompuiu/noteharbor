@@ -279,21 +279,25 @@ describe("table styles", () => {
     expect(hint[1]).not.toMatch(/position:\s*absolute/);
     expect(hint[1]).not.toMatch(/border-top/);
     expect(hint[1]).toMatch(/white-space:\s*nowrap/);
-    // The keys keep the right edge; the view status lives in the rail above.
-    expect(hint[1]).toMatch(/justify-content:\s*flex-end/);
+    // The summary keeps the left edge and the keys the right one.
+    expect(hint[1]).toMatch(/justify-content:\s*space-between/);
 
-    // The compact count and sort line gives way before the keys do.
-    const status = styles.match(
-      /^\.table-rail-status-visible\s*\{([^}]*)\}/m,
-    );
-    expect(status).not.toBeNull();
-    expect(status[1]).toMatch(/overflow:\s*hidden/);
-    expect(status[1]).toMatch(/min-width:\s*0/);
-    expect(status[1]).toMatch(/text-overflow:\s*ellipsis/);
-    expect(status[1]).toMatch(/font-variant-numeric:\s*tabular-nums/);
+    // The sentence owns the band's spare width and gives way first, so the
+    // keys never wrap under it.
+    const summary = styles.match(/^\.table-footer-summary\s*\{([^}]*)\}/m);
+    expect(summary).not.toBeNull();
+    expect(summary[1]).toMatch(/flex:\s*1\s+1\s+0/);
+    expect(summary[1]).toMatch(/min-width:\s*0/);
+    expect(summary[1]).toMatch(/text-overflow:\s*ellipsis/);
+    expect(summary[1]).toMatch(/font-variant-numeric:\s*tabular-nums/);
+    expect(summary[1]).not.toMatch(/clip:\s*rect/);
 
-    // The full sentence stays the live region beside it.
-    expect(styles).toMatch(/^\.table-footer-summary\s*\{[^}]*clip:\s*rect/m);
+    // The reorder report and the keys share the right edge.
+    const right = styles.match(/^\.table-footer-right\s*\{([^}]*)\}/m);
+    expect(right).not.toBeNull();
+    expect(right[1]).toMatch(/display:\s*flex/);
+    expect(right[1]).toMatch(/flex:\s*0\s+0\s+auto/);
+    expect(right[1]).toMatch(/margin-left:\s*auto/);
   });
 
   test("sort buttons tint with accent-soft on hover", () => {
@@ -524,18 +528,11 @@ describe("table styles", () => {
     expect(rail[1]).toMatch(/background:\s*var\(--surface-2\)/);
     expect(rail[1]).not.toMatch(/overflow:\s*hidden/);
 
-    // The identity is the head, and the one item allowed to give way: the
-    // title truncates before the field or the controls shrink.
-    const identity = styles.match(/^\.table-rail-identity\s*\{([^}]*)\}/m);
-    expect(identity).not.toBeNull();
-    expect(identity[1]).toMatch(/display:\s*flex/);
-    expect(identity[1]).toMatch(/flex:\s*0 1 auto/);
-    expect(identity[1]).toMatch(/min-width:\s*0/);
-
-    const status = styles.match(/^\.table-rail-status\s*\{([^}]*)\}/m);
-    expect(status).not.toBeNull();
-    expect(status[1]).toMatch(/min-width:\s*0/);
-    expect(status[1]).toMatch(/color:\s*var\(--text-muted\)/);
+    // The title and the status left the rail for the heading and the footer:
+    // the rail is the view's controls only.
+    expect(styles).not.toMatch(/^\.table-rail-identity/m);
+    expect(styles).not.toMatch(/^\.table-rail-title/m);
+    expect(styles).not.toMatch(/^\.table-rail-status/m);
 
     const actions = styles.match(/^\.table-rail-actions\s*\{([^}]*)\}/m);
     expect(actions).not.toBeNull();
@@ -543,9 +540,9 @@ describe("table styles", () => {
     expect(actions[1]).toMatch(/gap:\s*8px/);
     expect(actions[1]).toMatch(/flex:\s*0 0 auto/);
     expect(actions[1]).toMatch(/margin-left:\s*auto/);
-    // Visual order is identity, field, controls, chips; the DOM keeps the
-    // chips before the controls so Tab still walks field → chips → controls.
-    expect(actions[1]).toMatch(/order:\s*2/);
+    // Visual order is field, chips, controls; the DOM keeps the chips before
+    // the controls so Tab still walks field → chips → controls.
+    expect(actions[1]).toMatch(/order:\s*3/);
 
     // The primary action leads the cluster, so it is reached before the view
     // controls while Columns still owns the card's right edge. Every pill in
@@ -566,17 +563,24 @@ describe("table styles", () => {
     expect(addNoteBadge[1]).toMatch(/top:\s*calc\(100% \+ 8px\)/);
     expect(addNoteBadge[1]).toMatch(/bottom:\s*auto/);
 
-    // The chips own one full-width line at every width, never a second row:
-    // the plan keeps whole units and the `+N` chip carries the rest.
+    // The chips share the field's line while they fit and wrap to their own
+    // only when they do not: the block never shrinks under its planned width,
+    // and the plan keeps it to one line with the `+N` chip carrying the rest.
     const chips = styles.match(/^\.table-filter-chips\s*\{([^}]*)\}/m);
     expect(chips).not.toBeNull();
     expect(chips[1]).toMatch(/flex-wrap:\s*nowrap/);
-    expect(chips[1]).toMatch(/flex:\s*1 1 100%/);
+    expect(chips[1]).toMatch(/flex:\s*0 0 auto/);
     expect(chips[1]).toMatch(/gap:\s*4px/);
-    expect(chips[1]).toMatch(/min-width:\s*0/);
     expect(chips[1]).toMatch(/margin:\s*0/);
-    expect(chips[1]).toMatch(/order:\s*3/);
+    expect(chips[1]).toMatch(/order:\s*2/);
     expect(chips[1]).not.toMatch(/min-height/);
+
+    // The planner's own-line verdict takes the whole width deliberately.
+    const ownLine = styles.match(
+      /^\.table-filter-chips--own-line\s*\{([^}]*)\}/m,
+    );
+    expect(ownLine).not.toBeNull();
+    expect(ownLine[1]).toMatch(/flex-basis:\s*100%/);
 
     // The old toolbar band left with the filter bar that used it.
     expect(styles).not.toMatch(/\.toolbar-row--table-controls/);
@@ -647,17 +651,17 @@ describe("table styles", () => {
     expect(reserve[1]).toMatch(/padding-bottom:\s*64px/);
   });
 
-  test("find is a rail mode, not an overlay", () => {
+  test("find floats over the view instead of taking the rail", () => {
     const find = styles.match(/^\.table-find-bar\s*\{([^}]*)\}/m);
     expect(find).not.toBeNull();
-    // The bar is in the rail's flow: no absolute placement and no shadow.
-    expect(find[1]).not.toMatch(/position:\s*absolute/);
-    expect(find[1]).toMatch(/flex:\s*0 1 520px/);
-    expect(find[1]).toMatch(/min-width:\s*400px/);
-    expect(find[1]).toMatch(/height:\s*36px/);
-    expect(find[1]).not.toMatch(/\/\*[\s\S]*\*\//);
-    expect(find[1]).not.toMatch(/top:\s*7px/);
-    expect(find[1]).not.toMatch(/box-shadow:\s*var\(--shadow-md\)/);
+    // A card in the viewport's corner: absolutely placed, capped at 560px and
+    // lifted off the rows with the shared shadow.
+    expect(find[1]).toMatch(/position:\s*absolute/);
+    expect(find[1]).toMatch(/top:\s*7px/);
+    expect(find[1]).toMatch(/right:\s*12px/);
+    expect(find[1]).toMatch(/z-index:\s*6/);
+    expect(find[1]).toMatch(/width:\s*min\(560px,\s*calc\(100% - 24px\)\)/);
+    expect(find[1]).toMatch(/box-shadow:\s*var\(--shadow-md\)/);
   });
 
   // A connector names the chip that follows it, so prefix and chip wrap as one
@@ -2836,16 +2840,16 @@ describe("catalog header", () => {
   // vertical padding used to make the form taller than the heading.
   test("the inline rename form keeps the title's line box", () => {
     const form = styles.match(
-      /\.table-rail-title \.collection-rename-form\s*\{([^}]*)\}/,
+      /\.panel-heading-copy \.collection-rename-form\s*\{([^}]*)\}/,
     );
     expect(form).not.toBeNull();
-    // The form fills the rail's 36px control line instead of the title's
-    // 1.5em line box, so the rail does not grow while a name is edited.
-    expect(form[1]).toMatch(/height:\s*36px/);
+    // The form keeps the title's own 1.5em line box, so the heading — and the
+    // table under it — does not grow while a name is edited.
+    expect(form[1]).toMatch(/height:\s*1\.5em/);
     expect(form[1]).toMatch(/font-size:\s*1\.3125rem/);
 
     const field = styles.match(
-      /\.table-rail-title \.collection-rename-form \.showcase-name-field\s*\{([^}]*)\}/,
+      /\.panel-heading-copy \.collection-rename-form \.showcase-name-field\s*\{([^}]*)\}/,
     );
     expect(field).not.toBeNull();
     expect(field[1]).toMatch(/height:\s*100%/);
