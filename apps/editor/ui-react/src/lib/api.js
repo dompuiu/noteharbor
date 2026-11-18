@@ -401,7 +401,17 @@ async function importArchive(file, onProgress, mode = 'replace') {
   return postFormDataWithUploadProgress(url, formData, onProgress);
 }
 
-async function downloadArchive(collectionIds = null, showcaseIds = undefined) {
+// The desktop shell owns a real file system: it asks for a destination with
+// the OS save dialog and writes the archive there, so no browser download
+// happens. `null` means the save dialog was cancelled and nothing was
+// written; the browser build keeps the blob download and never returns null.
+async function exportArchive(collectionIds = null, showcaseIds = undefined) {
+  const bridge = window.noteHarborDesktop;
+
+  if (bridge && typeof bridge.exportArchive === 'function') {
+    return bridge.exportArchive(collectionIds, showcaseIds);
+  }
+
   const searchParams = new URLSearchParams();
 
   if (Array.isArray(collectionIds) && collectionIds.length) {
@@ -458,20 +468,6 @@ async function downloadArchive(collectionIds = null, showcaseIds = undefined) {
   }
 
   return { filename, omittedShowcases };
-}
-
-// The desktop shell owns a real file system: it asks for a destination with
-// the OS save dialog and writes the archive there, so no browser download
-// happens. `null` means the save dialog was cancelled and nothing was
-// written; the browser build keeps the blob download and never returns null.
-async function exportArchive(collectionIds = null, showcaseIds = undefined) {
-  const bridge = window.noteHarborDesktop;
-
-  if (bridge && typeof bridge.exportArchive === 'function') {
-    return bridge.exportArchive(collectionIds, showcaseIds);
-  }
-
-  return downloadArchive(collectionIds, showcaseIds);
 }
 
 async function getOperationStatus() {
@@ -708,7 +704,6 @@ export {
   deleteNode,
   deleteNote,
   deleteShowcase,
-  downloadArchive,
   exportArchive,
   getCategories,
   getCollections,

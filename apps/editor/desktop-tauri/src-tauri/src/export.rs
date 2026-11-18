@@ -6,17 +6,24 @@
 //! straight into that file: no blob, no silent drop into the download folder.
 //!
 //! Pure helpers (directory choice, serialized payload) live here so `cargo
-//! test` covers them without a WebView; `main.rs` wires the dialog and the
-//! command that calls [`export_archive_to_path`].
+//! test` covers them without a WebView; [`export_archive_to_path`] is
+//! exercised against a temporary database. `main.rs` wires the dialog and the
+//! command that calls it.
 
-use std::path::PathBuf;
+use std::{
+    collections::HashSet,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
+use editor_server_rust::ops::OperationState;
 use serde::Serialize;
 
-/// What the UI gets back after a successful save. `path` lets the export
-/// screen tell the collector where the archive landed; the web build omits it
-/// because the browser's download flow never exposes the destination.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+/// What the UI gets back after a successful save. `filename` is the name the
+/// file actually got (the user may rename the suggested one); `path` lets the
+/// export screen tell the collector where the archive landed. The web build
+/// omits `path` because the browser's download flow never exposes it.
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedArchive {
     pub filename: String,
@@ -35,48 +42,115 @@ pub fn preferred_archive_directory(candidates: &[Option<PathBuf>]) -> Option<Pat
         .cloned()
 }
 
-/// Runs the editor's export pipeline under the `exporting_archive` operation
-/// and writes the finished zip to `path`. Errors carry user-facing text: a
-/// conflicting import/export, a failed export, or a failed write.
+/// Appends `.zip` when the chosen name has no extension. The save dialog's
+/// filter is advisory and GTK appends nothing, so `myarchive` would otherwise
+/// land as an extensionless file the import picker cannot see.
+pub fn ensure_zip_extension(mut path: PathBuf) -> PathBuf {
+    if path.extension().is_none() {
+        path.set_extension("zip");
+    }
+    path
+}
+
+/// Mirrors the route's `parse_selected_ids`: drop non-positive ids and
+/// duplicates while keeping the request's order. `None` still means "no
+/// filter"; an empty list is a real selection (e.g. "no showcases").
+pub fn sanitize_ids(ids: Option<Vec<i64>>) -> Option<Vec<i64>> {
+    ids.map(|values| {
+        let mut seen = HashSet::new();
+        values
+            .into_iter()
+            .filter(|id| *id > 0 && seen.insert(*id))
+            .collect()
+    })
+}
+
+/// Claims the `exporting_archive` operation for the whole shell interaction,
+/// dialog included, so a running import is reported before the user picks a
+/// folder. Dropping the claim (cancel, error, or success) ends the operation.
+pub struct ExportClaim {
+    ops: Arc<Mutex<OperationState>>,
+}
+
+impl ExportClaim {
+    pub fn begin(state: &editor_server_rust::AppState) -> Result<Self, String> {
+        state
+            .ops
+            .lock()
+            .map_err(|_| "This action is unavailable while unknown is in progress.".to_owned())?
+            .begin("exporting_archive", None)
+            .map_err(|conflict| conflict.message)?;
+        Ok(Self {
+            ops: state.ops.clone(),
+        })
+    }
+}
+
+impl Drop for ExportClaim {
+    fn drop(&mut self) {
+        if let Ok(mut ops) = self.ops.lock() {
+            ops.end("exporting_archive");
+        }
+    }
+}
+
+/// Runs the editor's export pipeline under an already-claimed
+/// [`ExportClaim`].
+pub async fn run_export(
+    state: &editor_server_rust::AppState,
+    collection_ids: Option<Vec<i64>>,
+    showcase_ids: Option<Vec<i64>>,
+) -> Result<editor_server_rust::archive::ExportOutput, String> {
+    let pool = state.pool.clone();
+    let data_dir = state.data_dir.clone();
+    let collection_ids = sanitize_ids(collection_ids);
+    let showcase_ids = sanitize_ids(showcase_ids);
+    let join_result = tokio::task::spawn_blocking(move || {
+        editor_server_rust::archive::run_export(
+            &pool,
+            &data_dir,
+            collection_ids,
+            showcase_ids,
+        )
+    })
+    .await
+    .map_err(|error| format!("Export task failed: {error}"))?;
+
+    join_result.map_err(|error| error.message)
+}
+
+/// Writes a finished export to `path` and reports what landed there.
+pub async fn write_archive(
+    output: editor_server_rust::archive::ExportOutput,
+    path: PathBuf,
+) -> Result<SavedArchive, String> {
+    tokio::fs::write(&path, &output.zip_bytes)
+        .await
+        .map_err(|error| format!("Cannot write {}: {error}", path.display()))?;
+
+    let filename = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or(output.filename);
+
+    Ok(SavedArchive {
+        filename,
+        path: path.display().to_string(),
+        omitted_showcases: output.omitted_names,
+    })
+}
+
+/// Claim, export, and write in one call: the path used by tests and by any
+/// caller that already knows its destination.
 pub async fn export_archive_to_path(
     state: &editor_server_rust::AppState,
     collection_ids: Option<Vec<i64>>,
     showcase_ids: Option<Vec<i64>>,
     path: PathBuf,
 ) -> Result<SavedArchive, String> {
-    let pool = state.pool.clone();
-    let data_dir = state.data_dir.clone();
-    let outcome = editor_server_rust::ops::with_exclusive_operation(
-        &state.ops,
-        "exporting_archive",
-        None,
-        async move {
-            tokio::task::spawn_blocking(move || {
-                editor_server_rust::archive::run_export(
-                    &pool,
-                    &data_dir,
-                    collection_ids,
-                    showcase_ids,
-                )
-            })
-            .await
-        },
-    )
-    .await
-    .map_err(|conflict| conflict.message)?;
-    let output = outcome
-        .map_err(|error| format!("Export task failed: {error}"))?
-        .map_err(|error| error.message)?;
-
-    tokio::fs::write(&path, &output.zip_bytes)
-        .await
-        .map_err(|error| format!("Cannot write {}: {error}", path.display()))?;
-
-    Ok(SavedArchive {
-        filename: output.filename,
-        path: path.display().to_string(),
-        omitted_showcases: output.omitted_names,
-    })
+    let _claim = ExportClaim::begin(state)?;
+    let output = run_export(state, collection_ids, showcase_ids).await?;
+    write_archive(output, path).await
 }
 
 #[cfg(test)]
@@ -129,6 +203,57 @@ mod tests {
         );
     }
 
+    #[test]
+    fn appends_zip_when_the_chosen_name_has_no_extension() {
+        let dir = tempfile::tempdir().expect("temp dir");
+
+        assert_eq!(
+            ensure_zip_extension(dir.path().join("myarchive")),
+            dir.path().join("myarchive.zip"),
+        );
+        assert_eq!(
+            ensure_zip_extension(dir.path().join("myarchive ZIP.zip")),
+            dir.path().join("myarchive ZIP.zip"),
+        );
+        assert_eq!(
+            ensure_zip_extension(dir.path().join("notes.tar.gz")),
+            dir.path().join("notes.tar.gz"),
+        );
+    }
+
+    #[test]
+    fn selected_ids_drop_non_positive_and_duplicates() {
+        assert_eq!(sanitize_ids(None), None);
+        assert_eq!(sanitize_ids(Some(vec![])), Some(vec![]));
+        assert_eq!(
+            sanitize_ids(Some(vec![2, 0, -3, 2, 5, 5])),
+            Some(vec![2, 5]),
+        );
+    }
+
+    #[test]
+    fn export_claim_marks_the_operation_busy_until_dropped() {
+        let (_dir, state) = temp_state();
+
+        let claim = ExportClaim::begin(&state).expect("claim");
+        assert_eq!(
+            state.ops.lock().expect("lock").current_operation,
+            "exporting_archive",
+        );
+        assert_eq!(
+            ExportClaim::begin(&state)
+                .err()
+                .expect("second claim conflicts"),
+            "This action is unavailable while exporting archive is in progress.",
+        );
+
+        drop(claim);
+        assert_eq!(
+            state.ops.lock().expect("lock").current_operation,
+            "idle",
+        );
+    }
+
     #[tokio::test]
     async fn writes_the_zip_to_the_chosen_path() {
         let (dir, state) = temp_state();
@@ -140,11 +265,14 @@ mod tests {
             .expect("export succeeds");
 
         assert_eq!(saved.path, path.display().to_string());
-        assert!(saved.filename.starts_with("noteharbor-archive-"));
-        assert!(saved.filename.ends_with(".zip"));
+        assert_eq!(saved.filename, "my archive.zip");
         assert!(saved.omitted_showcases.is_empty());
         let bytes = std::fs::read(&path).expect("archive is written");
         assert!(bytes.starts_with(b"PK"), "not a zip: {bytes:?}");
+        assert_eq!(
+            state.ops.lock().expect("lock").current_operation, "idle",
+            "the claim must be released after the export",
+        );
     }
 
     #[tokio::test]

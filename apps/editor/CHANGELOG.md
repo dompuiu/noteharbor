@@ -18,7 +18,7 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 - Showcase: a name dialog's failure now shows once, inside the dialog, instead of repeating as a banner and a toast as well.
 
-- Export (desktop): **Download archive** now opens the operating system's save dialog, pre-filled with `noteharbor-archive-YYYY-MM-DD.zip` and the downloads folder (Documents, then home, when that folder is missing), and writes the zip straight to the chosen path. Dismissing the dialog exports nothing, and the result card shows where the archive was saved. Previously the desktop webview wrote the archive straight into the system downloads directory with no way to choose a name or folder.
+- Export (desktop): **Download archive** now opens the operating system's save dialog, pre-filled with `noteharbor-archive-YYYY-MM-DD.zip` and the downloads folder (Documents, then home, when that folder is missing), appends `.zip` when the chosen name carries no extension, and writes the zip straight to the chosen path. The export claims the `exporting_archive` operation first, so a running import reports its conflict instead of letting the user pick a folder for nothing. Dismissing the dialog exports nothing, and the result card shows the saved name and path. Previously the desktop webview handled the download itself — WebKitGTK dropped the file into the system downloads directory with no prompt — so there was no way to choose a name or folder.
 
 ## [2.18.0] - 2026-11-17
 

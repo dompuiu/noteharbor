@@ -422,8 +422,9 @@ fn set_last_visited_route(app: tauri::AppHandle, value: String) -> Option<String
 /// Saves an archive through a native OS save dialog. The shell owns the file
 /// system, so the export never becomes a silent webview download: the picker
 /// suggests `noteharbor-archive-YYYY-MM-DD.zip`, the user names and places it,
-/// and the zip is written straight to that path under the same
-/// `exporting_archive` guard the HTTP route uses. `None` means the dialog was
+/// and the zip is written straight to that path. The `exporting_archive`
+/// operation is claimed before the dialog opens, so a running import reports
+/// its conflict instead of wasting the prompt. `None` means the dialog was
 /// dismissed and nothing was written.
 #[tauri::command]
 async fn export_archive(
@@ -433,6 +434,7 @@ async fn export_archive(
     collection_ids: Option<Vec<i64>>,
     showcase_ids: Option<Vec<i64>>,
 ) -> Result<Option<export::SavedArchive>, String> {
+    let claim = export::ExportClaim::begin(&state.app_state)?;
     let start_dir = export::preferred_archive_directory(&[
         app.path().download_dir().ok(),
         app.path().document_dir().ok(),
@@ -461,13 +463,16 @@ async fn export_archive(
     else {
         return Ok(None);
     };
-    let path = chosen
-        .into_path()
-        .map_err(|error| format!("Cannot save the archive there: {error}"))?;
+    let path = export::ensure_zip_extension(
+        chosen
+            .into_path()
+            .map_err(|error| format!("Cannot save the archive there: {error}"))?,
+    );
 
-    export::export_archive_to_path(&state.app_state, collection_ids, showcase_ids, path)
-        .await
-        .map(Some)
+    let output = export::run_export(&state.app_state, collection_ids, showcase_ids).await?;
+    let saved = export::write_archive(output, path).await?;
+    drop(claim);
+    Ok(Some(saved))
 }
 
 pub fn run() {
