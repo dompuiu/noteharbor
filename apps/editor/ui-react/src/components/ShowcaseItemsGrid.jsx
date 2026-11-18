@@ -1,6 +1,7 @@
 import {
   catalogEntryIdentity,
   isCatalogEntry,
+  isNoteNode,
   nodeCatalogState,
   primarySpecimen,
 } from "../lib/showcaseTree.js";
@@ -35,6 +36,7 @@ function ShowcaseItemsGrid({
   onAddShellAfter,
   onEditShell,
   onEditNote,
+  onReplaceNote,
   onOpenGrouping,
   onOpenNote,
   onOpenShell,
@@ -91,6 +93,7 @@ function ShowcaseItemsGrid({
         canClearCover={isGrouping && node.cover_note_id != null}
         canSetCover={isGroupingParent}
         isGrouping={isGrouping}
+        isNote={isNoteNode(node)}
         isShell={isShell}
         label={label || "item"}
         onAddCatalogShell={() => onAddShellAfter(parent, node)}
@@ -115,6 +118,9 @@ function ShowcaseItemsGrid({
         onRemove={() => onRemove(node)}
         onRename={() => onRenameGrouping(node)}
         onReplaceShell={() => onOpenShell(node)}
+        onReplaceNote={
+          onReplaceNote ? () => onReplaceNote(node) : undefined
+        }
         onSetCover={() => onSetCover(node)}
         onToggleOwned={
           catalogState

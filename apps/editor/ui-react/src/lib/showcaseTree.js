@@ -255,6 +255,10 @@ function isCatalogEntry(node) {
   return node?.node_type === "catalog_entry";
 }
 
+function isNoteNode(node) {
+  return node?.node_type === "note";
+}
+
 // An entry with no specimens is a planned position (unseen); any owned
 // specimen makes the entry owned, even when the primary is an unowned
 // reference scan.
@@ -770,6 +774,7 @@ export {
   findParentId,
   hasSeenPrimary,
   isCatalogEntry,
+  isNoteNode,
   nodeCatalogState,
   normalizeCatalogEntry,
   noteOwnedInTree,

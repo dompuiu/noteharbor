@@ -647,7 +647,7 @@ Direct route for editing or reviewing one note outside the overlay flow.
 One always-editable canvas. There is no draft or Save/Cancel: adds, renames, removals, cover choices, and drag reorders write immediately. The retired `/edit` URL redirects to the same view.
 
 - The drill is URL-synced: the current Grouping is `?node=<nodeId>` (the root has no parameter), so Back and shared links work. A bare `/portfolio/showcases/:id` URL redirects to the view with the query kept.
-- Every card is draggable onto another to reorder its level. Each card also has a `⋯` menu: add a note, grouping, or placeholder after it; rename/remove a grouping; set or clear a cover; replace a placeholder with a library note.
+- Every card is draggable onto another to reorder its level. Each card also has a `⋯` menu: add a note, grouping, or placeholder after it; rename/remove a grouping; set or clear a cover; swap a note card for another library note, or fill a placeholder with one.
 - Categories render expanded at the root; Groupings still drill to show their direct children.
 - The `+ Add` tile opens one dialog with Notes, Placeholder, and Grouping tabs.
 - A Placeholder is a planned card: it carries catalog metadata only, never notes. Picking a note turns the same card into that note in place, preserving order.

@@ -1250,7 +1250,20 @@ fn add_showcase_node(
     }
 }
 
-/// Rename a node, or set/clear a grouping's manual cover.
+/// Read the `note_id` a replace request names and confirm the note exists.
+fn required_note_id(conn: &Connection, body: &Value) -> Result<i64, DbError> {
+    let Some(note_id) = body.get("note_id").and_then(js_number) else {
+        return Err(DbError::Failed("A valid note id is required.".to_owned()));
+    };
+    if !note_exists(conn, note_id)? {
+        return Err(DbError::Failed("Note not found.".to_owned()));
+    }
+    Ok(note_id)
+}
+
+/// Rename a node, set/clear a grouping's manual cover, edit a catalog shell's
+/// metadata, or swap the note a note card (or a shell, which becomes one)
+/// presents in place.
 fn update_showcase_node(
     conn: &mut Connection,
     id: i64,
@@ -1308,12 +1321,7 @@ fn update_showcase_node(
         // parent, position, and id, so replacing a shell never disturbs the
         // surrounding order. Any legacy specimen links are dropped with it.
         if body.get("note_id").is_some() {
-            let Some(note_id) = body.get("note_id").and_then(js_number) else {
-                return Err(DbError::Failed("A valid note id is required.".to_owned()));
-            };
-            if !note_exists(conn, note_id)? {
-                return Err(DbError::Failed("Note not found.".to_owned()));
-            }
+            let note_id = required_note_id(conn, body)?;
             let tx = conn.transaction().map_err(classify)?;
             tx.execute(
                 "DELETE FROM showcase_catalog_notes WHERE node_id = ?1",
@@ -1348,6 +1356,39 @@ fn update_showcase_node(
             )
             .map_err(classify)?;
         }
+    } else if existing.node_type == "note" {
+        // A note card can swap the note it presents in place: the node keeps
+        // its parent, position, and id, so replacing a note never disturbs the
+        // surrounding order.
+        if body.get("note_id").is_none() {
+            return Err(DbError::Failed(
+                "A note id is required to replace the note.".to_owned(),
+            ));
+        }
+        let note_id = required_note_id(conn, body)?;
+        let tx = conn.transaction().map_err(classify)?;
+        tx.execute(
+            "UPDATE showcase_nodes
+             SET note_id = ?1, updated_at = datetime('now')
+             WHERE id = ?2",
+            params![note_id, id],
+        )
+        .map_err(classify)?;
+        // A grouping that had manually chosen this card as its cover follows
+        // the replacement; otherwise its card would show a note it no longer
+        // holds.
+        if let (Some(old_note_id), Some(parent_id)) =
+            (existing.note_id, existing.parent_node_id)
+        {
+            tx.execute(
+                "UPDATE showcase_nodes
+                 SET cover_note_id = ?1, updated_at = datetime('now')
+                 WHERE id = ?2 AND node_type = 'grouping' AND cover_note_id = ?3",
+                params![note_id, parent_id, old_note_id],
+            )
+            .map_err(classify)?;
+        }
+        tx.commit().map_err(classify)?;
     } else {
         return Err(DbError::Failed("A note node cannot be renamed.".to_owned()));
     }

@@ -8,6 +8,7 @@ import { MenuIcon } from "./MenuIcon.jsx";
 // - every item: add a note, a grouping, or a catalog shell after it, remove it
 // - catalog entry or catalog-mode note: mark the displayed note owned or not
 // - note, or an entry's displayed note: edit the note
+// - note: replace it with another library note in place
 // - grouping: open, rename, set/clear its cover
 // - note inside a grouping: make it the grouping's cover
 // - catalog shell: replace it with a library note, edit its details
@@ -25,6 +26,7 @@ function ShowcaseItemMenu({
   onSetCover,
   onClearCover,
   onReplaceShell,
+  onReplaceNote,
   onEditDetails,
   onEditNote,
   onMoveUp,
@@ -37,6 +39,7 @@ function ShowcaseItemMenu({
   canClearCover = false,
   isGrouping = false,
   isShell = false,
+  isNote = false,
   isCategory = false,
   owned = null,
   onToggleOwned,
@@ -56,6 +59,14 @@ function ShowcaseItemMenu({
           label: "Edit note…",
           icon: "edit",
           run: onEditNote,
+        }
+      : null,
+    isNote && onReplaceNote
+      ? {
+          key: "replace-note",
+          label: "Replace with a note…",
+          icon: "replace",
+          run: onReplaceNote,
         }
       : null,
     onAddNote

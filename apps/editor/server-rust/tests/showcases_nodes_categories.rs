@@ -1591,6 +1591,128 @@ async fn catalog_entry_becomes_a_note_in_place() {
 }
 
 #[tokio::test]
+async fn note_card_replaces_its_note_in_place() {
+    let (dir, state) = fresh_state();
+    let app = create_app(state);
+    let showcase = create_showcase(app.clone(), Some("Note replacement")).await;
+    let showcase_id = showcase["id"].as_i64().unwrap();
+    let category = place_category(app.clone(), showcase_id, "Kingdom").await;
+    let category_id = category["id"].as_i64().unwrap();
+    let collection = create_collection(app.clone(), "Replacement notes").await;
+    let collection_id = collection["id"].as_i64().unwrap();
+    let first = create_note(app.clone(), collection_id, "1 leu").await;
+    let second = create_note(app.clone(), collection_id, "2 lei").await;
+
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/showcases/{showcase_id}/nodes"),
+        Some(json!({
+            "type": "notes",
+            "parent_id": category_id,
+            "note_ids": [first["id"]],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let node = body["nodes"][0].clone();
+    let node_id = node["id"].as_i64().unwrap();
+
+    // Replacing a note card keeps the card's id, parent, and position; only
+    // the note it presents changes.
+    let (status, body) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/nodes/{node_id}"),
+        Some(json!({ "note_id": second["id"] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let replaced = body["node"].clone();
+    assert_eq!(replaced["node_type"], json!("note"));
+    assert_eq!(replaced["note_id"], second["id"]);
+    assert_eq!(replaced["parent_node_id"], json!(category_id));
+    assert_eq!(replaced["position"], node["position"]);
+    assert_eq!(replaced["note"]["denomination"], second["denomination"]);
+
+    let in_tree = tree_child(app.clone(), showcase_id, json!(node_id)).await;
+    assert_eq!(in_tree["note_id"], second["id"]);
+    assert_eq!(in_tree["note"]["denomination"], second["denomination"]);
+    assert!(dir.path().join("banknotes.db").exists());
+
+    // A missing note is rejected and the card keeps its current note.
+    let (status, body) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/nodes/{node_id}"),
+        Some(json!({ "note_id": 999_999 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
+    let in_tree = tree_child(app, showcase_id, json!(node_id)).await;
+    assert_eq!(in_tree["note_id"], second["id"]);
+}
+
+#[tokio::test]
+async fn replacing_a_cover_note_card_repoints_the_grouping_cover() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let showcase = create_showcase(app.clone(), Some("Cover replacement")).await;
+    let showcase_id = showcase["id"].as_i64().unwrap();
+    let category = place_category(app.clone(), showcase_id, "Kingdom").await;
+    let collection = create_collection(app.clone(), "Cover notes").await;
+    let collection_id = collection["id"].as_i64().unwrap();
+    let first = create_note(app.clone(), collection_id, "1 leu").await;
+    let second = create_note(app.clone(), collection_id, "2 lei").await;
+    let (status, body) = add_grouping(
+        app.clone(),
+        showcase_id,
+        category["id"].as_i64().unwrap(),
+        "Cover",
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let grouping = body["node"].clone();
+    let grouping_id = grouping["id"].as_i64().unwrap();
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/showcases/{showcase_id}/nodes"),
+        Some(json!({
+            "type": "notes",
+            "parent_id": grouping_id,
+            "note_ids": [first["id"], second["id"]],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let first_node_id = body["nodes"][0]["id"].as_i64().unwrap();
+
+    let (status, body) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/nodes/{grouping_id}"),
+        Some(json!({ "cover_note_id": first["id"] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["node"]["cover_note_id"], first["id"]);
+
+    let (status, body) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/nodes/{first_node_id}"),
+        Some(json!({ "note_id": second["id"] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+
+    let grouping = tree_child(app, showcase_id, json!(grouping_id)).await;
+    assert_eq!(grouping["cover_note_id"], second["id"]);
+    assert_eq!(grouping["cover_note"]["denomination"], second["denomination"]);
+}
+
+#[tokio::test]
 async fn legacy_specimen_entries_migrate_to_single_note_cards() {
     let (dir, state) = fresh_state();
     let app = create_app(state);

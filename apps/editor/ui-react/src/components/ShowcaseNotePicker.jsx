@@ -229,10 +229,11 @@ function ShowcaseNotePicker({
     [availableNotes, column, value],
   );
 
-  // The catalog finder (the manager's append mode and an unseen card's finder)
+  // The catalog finder (the manager's append mode and a replacement finder)
   // treats owned records as the likely pick: their rows chip Owned/Seen and
-  // owned matches lead. The draft finder keeps its plain collection order.
-  const catalogFinder = embedded || node?.node_type === "catalog_entry";
+  // owned matches lead. The batch add finder keeps its plain collection order.
+  const catalogFinder =
+    embedded || singleSelect || node?.node_type === "catalog_entry";
 
   // In append mode a library record is the likelier pick, so owned notes lead.
   // The sort is stable: within each group the collection order is untouched.

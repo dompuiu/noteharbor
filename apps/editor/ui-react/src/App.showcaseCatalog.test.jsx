@@ -71,6 +71,7 @@ import {
   getShowcaseTree,
   replaceCatalogEntryWithNote,
   updateCatalogEntry,
+  updateNode,
   updateNodeNotes,
   updateNote,
 } from "./lib/api.js";
@@ -475,6 +476,48 @@ describe("a presentation-only showcase", () => {
         name: "Next note: 5 lei 1920",
       }),
     ).not.toBeInTheDocument();
+  });
+
+  test("a note card can be replaced with another library note in place", async () => {
+    const user = userEvent.setup();
+    getAllNotes.mockResolvedValue({ notes: [OWNED_NOTE, PICKER_NOTE] });
+    await openShowcase(presentationOnlyTree());
+
+    await user.click(
+      screen.getByRole("button", { name: "Actions for 1 leu Pick 22a 1917" }),
+    );
+    const menu = screen.getByRole("menu", {
+      name: "Actions for 1 leu Pick 22a 1917",
+    });
+    await user.click(
+      within(menu).getByRole("menuitem", { name: "Replace with a note…" }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Replace “Pick 22a · 1917 · 1 leu” with a note",
+      }),
+    ).toBeInTheDocument();
+    // The note the card already holds is not a replacement candidate.
+    expect(
+      screen.queryByRole("checkbox", { name: /1 leu · 1917/ }),
+    ).not.toBeInTheDocument();
+
+    updateNode.mockResolvedValue({ node: noteNode(400, PICKER_NOTE, 1) });
+    await user.click(screen.getByRole("checkbox", { name: /10 lei · 1921/ }));
+    await user.click(
+      screen.getByRole("button", { name: "Use selected note" }),
+    );
+
+    await waitFor(() =>
+      expect(updateNode).toHaveBeenCalledWith(400, {
+        note_id: PICKER_NOTE.id,
+      }),
+    );
+    expect(
+      await screen.findByRole("button", { name: "Pick 25d · 1921 · 10 lei" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Note replaced.")).toBeInTheDocument();
   });
 
   test("keeps the view toolbar on an empty showcase", async () => {

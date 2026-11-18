@@ -20,7 +20,10 @@ import {
 } from "../lib/imagePreload.js";
 import { usePhotoSize } from "../lib/photoSize.js";
 import { useCatalogLayout } from "../lib/catalogLayout.js";
-import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
+import {
+  showcaseNoteDisplayParts,
+  showcaseNoteTitleParts,
+} from "../lib/showcaseNoteLabels.js";
 import {
   DEFAULT_DESTINATION,
   noteEditorHash,
@@ -40,6 +43,7 @@ import {
   findNodePath,
   findParentId,
   isCatalogEntry,
+  isNoteNode,
   noteOwnedInTree,
   removeNodeTree,
   reorderNodeTree,
@@ -178,8 +182,9 @@ function ShowcaseScreen() {
   // The merged add dialog's insertion point. `parent` is the container whose
   // grid the add tile or item menu belongs to; `afterId` null means append.
   const [addTarget, setAddTarget] = useState(null);
-  // A catalog shell waiting for the one library note that replaces it.
-  const [replaceShellId, setReplaceShellId] = useState(null);
+  // A catalog shell or note card waiting for the one library note that
+  // replaces it in place.
+  const [replaceNodeId, setReplaceNodeId] = useState(null);
   // The name dialog: adding a grouping after an item, or renaming a node.
   const [nameDialog, setNameDialog] = useState(null);
   // The catalog shell whose metadata is being edited.
@@ -813,17 +818,23 @@ function ShowcaseScreen() {
     }
   }
 
-  async function handleReplaceShell(noteIds) {
+  async function handleReplaceNode(noteIds) {
     const target =
-      replaceShellId == null ? null : findNodeById(nodesRef.current, replaceShellId);
+      replaceNodeId == null ? null : findNodeById(nodesRef.current, replaceNodeId);
     const noteId = noteIds?.[0];
 
     if (!target || noteId == null) {
       return;
     }
 
+    const wasShell = isCatalogEntry(target);
+
     try {
-      const { node } = await replaceCatalogEntryWithNote(target.id, noteId);
+      // A shell converts to a note; a note card swaps the note it presents.
+      // Both keep the node's id, parent, and position.
+      const { node } = wasShell
+        ? await replaceCatalogEntryWithNote(target.id, noteId)
+        : await updateNode(target.id, { note_id: noteId });
       let replaced =
         node?.node_type === "note" && node.note_id === noteId ? node : null;
 
@@ -840,16 +851,26 @@ function ShowcaseScreen() {
       }
 
       if (!replaced || replaced.node_type !== "note" || replaced.note_id !== noteId) {
-        throw new Error("The placeholder was not replaced.");
+        throw new Error(
+          wasShell
+            ? "The placeholder was not replaced."
+            : "The note was not replaced.",
+        );
       }
 
       replaceServerNode(replaced);
-      setReplaceShellId(null);
+      setReplaceNodeId(null);
       setActionError("");
       refreshShowcases?.().catch(() => {});
-      toastHost?.current?.show("Placeholder replaced with a note.", "success");
+      toastHost?.current?.show(
+        wasShell ? "Placeholder replaced with a note." : "Note replaced.",
+        "success",
+      );
     } catch (error) {
-      reportActionError(error, "Could not replace the shell.");
+      reportActionError(
+        error,
+        wasShell ? "Could not replace the shell." : "Could not replace the note.",
+      );
       throw error;
     }
   }
@@ -1542,7 +1563,7 @@ function ShowcaseScreen() {
       if (
         showShortcutsHelp ||
         addTarget != null ||
-        replaceShellId != null ||
+        replaceNodeId != null ||
         nameDialog != null ||
         editShellId != null ||
         editingNote != null ||
@@ -1667,7 +1688,7 @@ function ShowcaseScreen() {
     nameDialog,
     presentIndex,
     previewOpen,
-    replaceShellId,
+    replaceNodeId,
     showShortcutsHelp,
   ]);
 
@@ -1693,8 +1714,8 @@ function ShowcaseScreen() {
     card?.focus();
   }, [drillKey, loading]);
 
-  const pickerShell =
-    replaceShellId == null ? null : findNodeById(nodes, replaceShellId);
+  const replaceNode =
+    replaceNodeId == null ? null : findNodeById(nodes, replaceNodeId);
   const editShellNode =
     editShellId == null ? null : findNodeById(nodes, editShellId);
   const ownedPercent = levelTotals.total
@@ -1719,6 +1740,10 @@ function ShowcaseScreen() {
   );
   const reorderEnabled = !filterActive;
 
+  function openReplaceFinder(node) {
+    setReplaceNodeId(node.id);
+  }
+
   const gridProps = {
     catalogLayout,
     onAdd: (parent) => openAdd(parent, null, "notes"),
@@ -1730,7 +1755,8 @@ function ShowcaseScreen() {
     onEditNote: openNoteEditor,
     onOpenGrouping: openNode,
     onOpenNote: openShowcasePreview,
-    onOpenShell: (node) => setReplaceShellId(node.id),
+    onOpenShell: openReplaceFinder,
+    onReplaceNote: openReplaceFinder,
     onOwnershipToggle: handleOwnershipToggle,
     onPresent: (node) => openPresentation(node.id),
     onRemove: handleRemove,
@@ -2051,15 +2077,23 @@ function ShowcaseScreen() {
         />
       ) : null}
 
-      {pickerShell && isCatalogEntry(pickerShell) ? (
+      {replaceNode && (isCatalogEntry(replaceNode) || isNoteNode(replaceNode)) ? (
         <ShowcaseNotePicker
           collections={collections}
+          excludeNoteIds={
+            isNoteNode(replaceNode) && replaceNode.note_id != null
+              ? [replaceNode.note_id]
+              : undefined
+          }
           node={{
-            ...pickerShell,
-            name: catalogEntryIdentity(pickerShell.entry),
+            ...replaceNode,
+            name: isCatalogEntry(replaceNode)
+              ? catalogEntryIdentity(replaceNode.entry)
+              : showcaseNoteTitleParts(replaceNode.note ?? {}).join(" · ") ||
+                "note",
           }}
-          onAdd={handleReplaceShell}
-          onClose={() => setReplaceShellId(null)}
+          onAdd={handleReplaceNode}
+          onClose={() => setReplaceNodeId(null)}
           singleSelect
         />
       ) : null}
