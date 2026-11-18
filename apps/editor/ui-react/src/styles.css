@@ -8319,6 +8319,8 @@ td.drag-cell {
   color: var(--text-muted);
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
+  /* A desktop save path has no break opportunity. */
+  overflow-wrap: anywhere;
 }
 
 .import-result-copy .warning-text {

@@ -828,13 +828,12 @@ function ImportScreen({
               </span>
               <div className="import-result-copy">
                 <h2>Your archive is ready</h2>
+                <p className="import-result-file">{archiveResult.exported}</p>
                 {archiveResult.path ? (
-                  <p className="import-result-file">
+                  <p className="import-result-meta">
                     Saved to {archiveResult.path}
                   </p>
-                ) : (
-                  <p className="import-result-file">{archiveResult.exported}</p>
-                )}
+                ) : null}
                 <p className="import-result-meta">
                   Collections included:{" "}
                   {archiveResult.selectedCount ?? collections.length} · Showcases
