@@ -21,9 +21,9 @@ import { TableFilterBar } from "./TableFilterBar.jsx";
 // they do in the Table, and a sort control orders the list by any picker field.
 //
 // Every row is one aligned grid: the checkbox, the thumbnail, the note's
-// caption, its catalog number, its collection and its Owned/Seen (or Added)
-// state. The columns keep their x positions from row to row, so the list reads
-// as a compact table even though it is not one.
+// caption, its catalog number, its grading, its collection and its Owned/Seen
+// (or Added) state. The columns keep their x positions from row to row, so the
+// list reads as a compact table even though it is not one.
 //
 // The list carries the Table's keyboard niceties at its own size: Down/j and
 // Up/k walk the rows, Home/End jump to the ends, PageDown/PageUp page, Space
@@ -67,6 +67,15 @@ function noteCaption(note) {
   return [String(note.denomination ?? "").trim(), String(note.issue_date ?? "").trim()]
     .filter(Boolean)
     .join(" · ");
+}
+
+// A note's grading as one quiet value: a bare `66 EPQ` is ambiguous across
+// companies, so the company that graded the note leads its grade.
+function noteGrading(note) {
+  const company = String(note?.grading_company ?? "").trim();
+  const grade = String(note?.grade ?? "").trim();
+
+  return [company, grade].filter(Boolean).join(" ");
 }
 
 function ShowcaseNotePicker({
@@ -738,6 +747,7 @@ function ShowcaseNotePicker({
     const previewVisible = thumbPreview?.noteId === note.id && Boolean(previewPath);
     const statusTone = isAdded ? "added" : note.owned ? "owned" : "seen";
     const status = isAdded ? "Added" : note.owned ? "Owned" : "Seen";
+    const grading = noteGrading(note);
 
     return (
       <label
@@ -745,7 +755,14 @@ function ShowcaseNotePicker({
         title={isAdded ? "Already in this Showcase" : undefined}
       >
         <input
-          aria-label={`${noteCaption(note)} ${note.catalog_number ?? ""} ${note.collection_name ?? ""}`.trim()}
+          aria-label={[
+            noteCaption(note),
+            note.catalog_number,
+            grading,
+            note.collection_name,
+          ]
+            .filter(Boolean)
+            .join(" ")}
           checked={checked}
           disabled={isAdded}
           onChange={() => toggle(note.id)}
@@ -791,6 +808,12 @@ function ShowcaseNotePicker({
         <span className="showcase-note-row-main">{noteCaption(note)}</span>
         <span className="showcase-note-row-catalog">
           {note.catalog_number || "—"}
+        </span>
+        <span
+          className="showcase-note-row-grading"
+          title={grading || undefined}
+        >
+          {grading || "—"}
         </span>
         <span
           className="showcase-note-row-collection"
@@ -943,6 +966,11 @@ function ShowcaseNotePicker({
           <span aria-hidden="true" />
           {renderSortHeader("denomination", "Note")}
           {renderSortHeader("catalog_number", "Catalog")}
+          {renderSortHeader(
+            "grade",
+            "Grading",
+            "showcase-picker-header-grading",
+          )}
           {renderSortHeader(
             "collection_name",
             "Collection",

@@ -3586,7 +3586,7 @@ input[type="radio"] {
 
 .showcase-picker-header {
   display: grid;
-  grid-template-columns: 16px 64px minmax(0, 1fr) 72px 148px;
+  grid-template-columns: 16px 64px minmax(0, 1fr) 72px 92px 148px;
   gap: 12px;
   align-items: center;
   min-height: 32px;
@@ -3605,7 +3605,7 @@ input[type="radio"] {
 }
 
 .showcase-picker-header--catalog {
-  grid-template-columns: 16px 64px minmax(0, 1fr) 72px 148px 72px;
+  grid-template-columns: 16px 64px minmax(0, 1fr) 72px 92px 148px 72px;
 }
 
 .showcase-picker-header-cell {
@@ -3708,12 +3708,12 @@ input[type="radio"] {
 }
 
 /* One row is one aligned grid: checkbox, thumbnail, caption, catalog number,
-   collection and (for the catalog finder) the note's Owned/Seen state. The
-   tracks are fixed, so a short catalog code and a long collection name still
-   line up from row to row instead of drifting with their content. */
+   grading, collection and (for the catalog finder) the note's Owned/Seen
+   state. The tracks are fixed, so a short catalog code and a long collection
+   name still line up from row to row instead of drifting with their content. */
 .showcase-note-row {
   display: grid;
-  grid-template-columns: 16px 64px minmax(0, 1fr) 72px 148px;
+  grid-template-columns: 16px 64px minmax(0, 1fr) 72px 92px 148px;
   gap: 12px;
   align-items: center;
   min-height: 64px;
@@ -3728,7 +3728,7 @@ input[type="radio"] {
 }
 
 .showcase-note-row--catalog {
-  grid-template-columns: 16px 64px minmax(0, 1fr) 72px 148px 72px;
+  grid-template-columns: 16px 64px minmax(0, 1fr) 72px 92px 148px 72px;
 }
 
 .showcase-note-row input[type="checkbox"] {
@@ -3831,7 +3831,8 @@ input[type="radio"] {
   white-space: nowrap;
 }
 
-.showcase-note-row-catalog {
+.showcase-note-row-catalog,
+.showcase-note-row-grading {
   min-width: 0;
   overflow: hidden;
   color: var(--text-muted);
@@ -3904,6 +3905,26 @@ input[type="radio"] {
 .showcase-picker--embedded .showcase-picker-list {
   min-height: 160px;
   max-height: min(46vh, 380px);
+}
+
+/* Below 720px the caption needs the width the grading column was taking, so
+   the picker drops grading and its sort header, the way the 640px layout drops
+   the collection. The header and rows keep matching tracks at every width. */
+@media (max-width: 720px) {
+  .showcase-picker-header,
+  .showcase-note-row {
+    grid-template-columns: 16px 64px minmax(0, 1fr) 72px 148px;
+  }
+
+  .showcase-picker-header--catalog,
+  .showcase-note-row--catalog {
+    grid-template-columns: 16px 64px minmax(0, 1fr) 72px 148px 72px;
+  }
+
+  .showcase-picker-header-grading,
+  .showcase-note-row-grading {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {
