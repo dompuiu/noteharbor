@@ -3471,46 +3471,31 @@ input[type="radio"] {
   }
 }
 
-/* The note picker popup. */
-.showcase-picker-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 150;
+/* The note picker: the Add dialog's Notes tab and the standalone finder (Add
+   or Replace) are one surface, so a row reads the same in both. */
+.showcase-picker-dialog {
+  width: min(920px, 100%);
+}
+
+.showcase-picker-body {
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 48px 16px;
-  background: rgba(37, 40, 43, 0.55);
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  margin-inline: -6px;
+  padding-inline: 6px;
+  overflow-y: auto;
 }
 
 .showcase-picker {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  width: min(720px, 100%);
-  max-height: calc(100vh - 96px);
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-  box-shadow: var(--shadow-lg);
+  gap: 16px;
+  min-height: 0;
 }
 
-.showcase-picker-head {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.showcase-picker-title {
-  margin: 0;
-  font-size: 1.05rem;
-}
-
-/* The filter bar is the Table's own rail, narrowed to the dialog: the search
-   field stays the primary control, the committed chips wrap under it, and the
-   sort + bulk cluster keeps the trailing edge like the Table's rail actions. */
+/* The filter bar is the Table's own rail, narrowed to the dialog. The field
+   owns the row; committed chips take a full row under it. */
 .showcase-picker-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -3519,56 +3504,28 @@ input[type="radio"] {
 }
 
 .showcase-picker-toolbar .table-search--scoped {
-  flex: 1 1 360px;
+  flex: 1 1 320px;
   width: auto;
-  min-width: 260px;
+  min-width: 240px;
 }
 
-.showcase-picker-toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-  margin-left: auto;
+.showcase-picker-toolbar .table-filter-hint,
+.showcase-picker-toolbar .table-filter-chips {
+  order: 2;
+  flex: 1 1 100%;
 }
 
-.showcase-picker-sort {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+/* The picker is a quick finder, not the Table's teaching surface: the field's
+   own Replace/Add control already names the commit mode, so the idle hint row
+   would only push the list down. Active chips still take their row. */
+.showcase-picker-toolbar .table-filter-hint {
+  display: none;
 }
 
-.showcase-picker-sort-label {
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  font-weight: 650;
-  letter-spacing: 0.01em;
-}
-
-.showcase-picker-sort-field {
-  width: 170px;
-}
-
-.showcase-picker-sort-direction {
-  min-width: 58px;
-}
-
-.showcase-picker-bulk {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-@media (max-width: 560px) {
-  .showcase-picker-toolbar-actions {
-    margin-left: 0;
-  }
-}
-
-.showcase-picker-hint {
+.showcase-picker-note {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
 }
 
 /* Add notes can stage note leaves or catalog positions; the switch sits under
@@ -3613,16 +3570,124 @@ input[type="radio"] {
 
 .showcase-picker-count {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+}
+
+/* The list is a compact table: a fixed header row over the scrolling rows.
+   The header stays put while the rows scroll, and its sort buttons replace the
+   old sort field and bulk buttons. */
+.showcase-picker-table {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.showcase-picker-header {
+  display: grid;
+  grid-template-columns: 16px 64px minmax(0, 1fr) 72px 148px;
+  gap: 12px;
+  align-items: center;
+  min-height: 32px;
+  /* The list pads its rows by 4px, so the header starts at 14px to share the
+     row's text line. The right side also reserves the list's scrollbar so the
+     last column stays above its cells. */
+  padding: 0 14px;
+  padding-right: calc(14px + var(--showcase-picker-scrollbar, 0px));
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.showcase-picker-header--catalog {
+  grid-template-columns: 16px 64px minmax(0, 1fr) 72px 148px 72px;
+}
+
+.showcase-picker-header-cell {
+  min-width: 0;
+}
+
+.showcase-picker-header input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent-strong);
+  cursor: pointer;
+}
+
+.showcase-picker-header input[type="checkbox"]:disabled {
+  cursor: default;
+}
+
+/* The header's sort button follows the Table's label treatment, sized for the
+   picker: the negative pull lands the label on the row text's own line, and
+   the chevron is drawn on every sortable header so the affordance appears on
+   hover. */
+.showcase-picker-sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: -6px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  white-space: nowrap;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.showcase-picker-sort-button--active {
+  color: var(--accent-strong);
+}
+
+.showcase-picker-sort-chevron {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  opacity: 0;
+  transition:
+    opacity 0.12s ease,
+    transform 0.15s ease;
+}
+
+.showcase-picker-sort-button--active .showcase-picker-sort-chevron {
+  opacity: 1;
+}
+
+.showcase-picker-sort-button--desc .showcase-picker-sort-chevron {
+  transform: rotate(180deg);
+}
+
+@media (hover: hover) {
+  .showcase-picker-sort-button:hover {
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+  }
+
+  .showcase-picker-sort-button:hover .showcase-picker-sort-chevron {
+    opacity: 0.45;
+  }
+
+  .showcase-picker-sort-button--active:hover .showcase-picker-sort-chevron {
+    opacity: 1;
+  }
 }
 
 .showcase-picker-list {
   min-height: 200px;
-  max-height: min(50vh, 420px);
+  max-height: min(54vh, 460px);
   overflow-y: auto;
-  padding: 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  padding: 4px;
 }
 
 .showcase-picker-virtual {
@@ -3641,13 +3706,40 @@ input[type="radio"] {
   padding: 12px;
 }
 
+/* One row is one aligned grid: checkbox, thumbnail, caption, catalog number,
+   collection and (for the catalog finder) the note's Owned/Seen state. The
+   tracks are fixed, so a short catalog code and a long collection name still
+   line up from row to row instead of drifting with their content. */
 .showcase-note-row {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 16px 64px minmax(0, 1fr) 72px 148px;
+  gap: 12px;
   align-items: center;
   min-height: 64px;
-  padding: 6px 8px;
+  padding: 6px 10px;
+  /* The transparent block border keeps the row's 64px pitch while insetting
+     its hover/cursor wash, so adjacent rows read as separate rows instead of
+     one merged block. */
+  border-block: 3px solid transparent;
   border-radius: var(--radius-sm);
+  background-clip: padding-box;
+  cursor: pointer;
+}
+
+.showcase-note-row--catalog {
+  grid-template-columns: 16px 64px minmax(0, 1fr) 72px 148px 72px;
+}
+
+.showcase-note-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent-strong);
+  cursor: pointer;
+}
+
+.showcase-note-row input[type="checkbox"]:disabled {
+  cursor: default;
 }
 
 .showcase-note-row:hover {
@@ -3658,13 +3750,19 @@ input[type="radio"] {
   color: var(--text-muted);
 }
 
-.showcase-note-row--selected {
-  background: var(--surface-2);
+/* Selection lives in the checkbox and the footer count; the row itself only
+   paints the keyboard cursor or a hover, never a second selection wash. */
+
+/* Only the keyboard cursor paints a row. A mouse pick focuses the checkbox
+   too, but `:focus-visible` stays off there, so selecting leaves the row clean
+   and the checked box carries the state. */
+.showcase-note-row:has(:focus-visible) {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .showcase-note-row-thumb {
   position: relative;
-  flex: 0 0 64px;
   width: 64px;
   height: 44px;
   display: flex;
@@ -3725,66 +3823,118 @@ input[type="radio"] {
 }
 
 .showcase-note-row-main {
-  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.showcase-note-row-pill {
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-3);
+.showcase-note-row-catalog {
+  min-width: 0;
+  overflow: hidden;
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.showcase-note-row-pill--added {
+.showcase-note-row-collection {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.showcase-note-row-status {
+  justify-self: start;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.showcase-note-row-status--owned {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.showcase-note-row-status--seen {
+  background: var(--surface-3);
+  color: var(--text-muted);
+}
+
+.showcase-note-row-status--added {
   background: var(--success-bg);
   color: var(--success);
 }
 
 .showcase-picker-actions {
   display: flex;
-  gap: 8px;
-  align-items: center;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
 }
 
-/* The manager's append-mode finder sits inside the manager dialog: no second
-   modal shell, no duplicate action row, and its list gets the room the dialog
-   leaves. */
+.showcase-picker-action-buttons {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.showcase-picker-actions .showcase-error {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+/* The Add dialog's Notes tab sits inside the dialog: no second modal shell,
+   no duplicate action row, and its list gets the room the dialog leaves. */
 .showcase-picker--embedded {
   width: 100%;
-  max-height: none;
-  padding: 0;
-  border: 0;
-  background: none;
-  box-shadow: none;
-  gap: 8px;
-}
-
-.showcase-picker-title--embedded {
-  margin: 0;
-  font-size: 0.92rem;
 }
 
 .showcase-picker--embedded .showcase-picker-list {
   min-height: 160px;
-  max-height: min(38vh, 320px);
+  max-height: min(46vh, 380px);
 }
 
-.showcase-note-row-pill--owned {
-  background: var(--success-bg);
-  color: var(--success);
-  font-weight: 700;
-}
+@media (max-width: 640px) {
+  .showcase-picker-header,
+  .showcase-note-row {
+    grid-template-columns: 16px 48px minmax(0, 1fr) 72px;
+    gap: 8px;
+  }
 
-.showcase-note-row-pill--seen {
-  background: var(--surface-3);
-  color: var(--text-muted);
+  .showcase-picker-header--catalog,
+  .showcase-note-row--catalog {
+    grid-template-columns: 16px 48px minmax(0, 1fr) 72px 64px;
+  }
+
+  .showcase-picker-header-collection,
+  .showcase-note-row-collection {
+    display: none;
+  }
+
+  .showcase-picker-header {
+    padding: 0 12px;
+    padding-right: calc(12px + var(--showcase-picker-scrollbar, 0px));
+  }
+
+  .showcase-note-row {
+    padding: 6px 8px;
+  }
+
+  .showcase-note-row-thumb {
+    width: 48px;
+    height: 34px;
+  }
 }
 
 /* The specimen manager: the entry's notes in server order, then the finder.
@@ -11324,7 +11474,7 @@ td.table-col-collection {
 }
 
 .showcase-add-modes {
-  margin: 10px 0 4px;
+  margin: 12px 0 16px;
 }
 
 .showcase-add-body {

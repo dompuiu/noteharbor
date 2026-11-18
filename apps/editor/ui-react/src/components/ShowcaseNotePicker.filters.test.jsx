@@ -80,6 +80,7 @@ async function commitChip(user, label, value) {
 function rowLabels(dialog) {
   return within(dialog)
     .getAllByRole("checkbox")
+    .filter((box) => box.closest(".showcase-note-row"))
     .map((box) => box.getAttribute("aria-label"));
 }
 
@@ -91,11 +92,9 @@ function filterModeButton(target) {
   });
 }
 
-async function chooseSortField(user, label) {
-  await user.click(screen.getByRole("combobox", { name: "Sort notes by" }));
+async function chooseSortHeader(user, label) {
   await user.click(
-    within(screen.getByRole("listbox", { name: "Sort notes by options" }))
-      .getByRole("option", { name: label }),
+    screen.getByRole("button", { name: new RegExp(`^Sort by ${label}`) }),
   );
 }
 
@@ -166,35 +165,33 @@ describe("ShowcaseNotePicker filter bar", () => {
     expect(rowLabels(dialog)).toEqual(["1 leu · 1917 22 Kingdom"]);
   });
 
-  test("sorts by a chosen field and reverses the direction", async () => {
+  test("sorts from the header and reverses the direction", async () => {
     const user = userEvent.setup();
 
     renderPicker();
     const dialog = await screen.findByRole("dialog", { name: "Add notes" });
 
-    expect(
-      screen.getByRole("button", { name: "Sort descending" }),
-    ).toBeEnabled();
-
-    await chooseSortField(user, "Date");
+    await chooseSortHeader(user, "Note");
 
     expect(rowLabels(dialog)).toEqual([
       "1 leu · 1917 22 Kingdom",
       "1 leu · 1920 220 Inflation",
-      "5 lei · 1943 M1 Inflation",
       "2 lei · 1950 22a Kingdom",
+      "5 lei · 1943 M1 Inflation",
     ]);
 
-    await user.click(screen.getByRole("button", { name: "Sort descending" }));
+    await user.click(
+      screen.getByRole("button", { name: "Sort by Note, ascending" }),
+    );
 
     expect(rowLabels(dialog)).toEqual([
-      "2 lei · 1950 22a Kingdom",
       "5 lei · 1943 M1 Inflation",
-      "1 leu · 1920 220 Inflation",
+      "2 lei · 1950 22a Kingdom",
       "1 leu · 1917 22 Kingdom",
+      "1 leu · 1920 220 Inflation",
     ]);
     expect(
-      screen.getByRole("button", { name: "Sort ascending" }),
+      screen.getByRole("button", { name: "Sort by Note, descending" }),
     ).toBeInTheDocument();
   });
 
@@ -214,13 +211,13 @@ describe("ShowcaseNotePicker filter bar", () => {
     expect(rowLabels(dialog)).toEqual(["2 lei · 1950 22a Kingdom"]);
   });
 
-  test("sorts by collection order and reverses the default order", async () => {
+  test("sorts by collection order and a third click restores the default order", async () => {
     const user = userEvent.setup();
 
     renderPicker();
     const dialog = await screen.findByRole("dialog", { name: "Add notes" });
 
-    await chooseSortField(user, "Collection");
+    await chooseSortHeader(user, "Collection");
 
     expect(rowLabels(dialog)).toEqual([
       "1 leu · 1917 22 Kingdom",
@@ -229,14 +226,29 @@ describe("ShowcaseNotePicker filter bar", () => {
       "5 lei · 1943 M1 Inflation",
     ]);
 
-    await chooseSortField(user, "Default order");
-    await user.click(screen.getByRole("button", { name: "Sort descending" }));
+    await user.click(
+      screen.getByRole("button", { name: "Sort by Collection, ascending" }),
+    );
 
     expect(rowLabels(dialog)).toEqual([
-      "5 lei · 1943 M1 Inflation",
       "1 leu · 1920 220 Inflation",
-      "2 lei · 1950 22a Kingdom",
+      "5 lei · 1943 M1 Inflation",
       "1 leu · 1917 22 Kingdom",
+      "2 lei · 1950 22a Kingdom",
     ]);
+
+    await user.click(
+      screen.getByRole("button", { name: "Sort by Collection, descending" }),
+    );
+
+    expect(rowLabels(dialog)).toEqual([
+      "1 leu · 1917 22 Kingdom",
+      "2 lei · 1950 22a Kingdom",
+      "1 leu · 1920 220 Inflation",
+      "5 lei · 1943 M1 Inflation",
+    ]);
+    expect(
+      screen.getByRole("button", { name: "Sort by Collection" }),
+    ).toBeInTheDocument();
   });
 });

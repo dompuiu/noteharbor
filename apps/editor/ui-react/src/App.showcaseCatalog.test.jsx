@@ -1292,7 +1292,7 @@ describe("the catalog checklist", () => {
       }),
     );
 
-    const dialog = await screen.findByRole("dialog", { name: "Add notes" });
+    const dialog = await screen.findByRole("dialog", { name: "Replace note" });
     expect(
       within(dialog).getByText("Replace “Pick 25d” with a note"),
     ).toBeInTheDocument();
@@ -1337,7 +1337,7 @@ describe("the catalog checklist", () => {
         name: "Pick 25d · 1921 · 10 lei is unseen. Replace with note",
       }),
     );
-    const dialog = await screen.findByRole("dialog", { name: "Add notes" });
+    const dialog = await screen.findByRole("dialog", { name: "Replace note" });
     await user.click(within(dialog).getByRole("checkbox", { name: /10 lei/ }));
     await user.click(
       within(dialog).getByRole("button", { name: "Use selected note" }),

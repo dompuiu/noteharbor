@@ -7,7 +7,11 @@ vi.mock("../lib/api.js", () => ({
   getAllNotes: vi.fn(),
 }));
 
-const virtualWindow = vi.hoisted(() => ({ start: 0, end: 10 }));
+const virtualWindow = vi.hoisted(() => ({
+  start: 0,
+  end: 10,
+  scrollToIndex: null,
+}));
 
 vi.mock("@tanstack/react-virtual", () => ({
   useVirtualizer: ({ count }) => ({
@@ -23,7 +27,7 @@ vi.mock("@tanstack/react-virtual", () => ({
       ),
     getTotalSize: () => count * 64,
     measureElement: () => {},
-    scrollToIndex: () => {},
+    scrollToIndex: (...args) => virtualWindow.scrollToIndex?.(...args),
     scrollToOffset: () => {},
   }),
 }));
@@ -70,6 +74,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   virtualWindow.start = 0;
   virtualWindow.end = 10;
+  virtualWindow.scrollToIndex = vi.fn();
 });
 
 describe("ShowcaseNotePicker thumbnails and virtualization", () => {
@@ -110,7 +115,11 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
     const dialog = await screen.findByRole("dialog", { name: "Add notes" });
 
     expect(await within(dialog).findByText("50 notes")).toBeInTheDocument();
-    expect(within(dialog).getAllByRole("checkbox")).toHaveLength(10);
+    expect(
+      within(dialog)
+        .getAllByRole("checkbox")
+        .filter((box) => box.closest(".showcase-note-row")),
+    ).toHaveLength(10);
 
     const virtual = dialog.querySelector(".showcase-picker-virtual");
     expect(virtual?.style.height).toBe(`${50 * 64}px`);
@@ -127,7 +136,9 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
     renderPicker();
 
     const dialog = await screen.findByRole("dialog", { name: "Add notes" });
-    const [first] = within(dialog).getAllByRole("checkbox");
+    const [first] = within(dialog)
+      .getAllByRole("checkbox")
+      .filter((box) => box.closest(".showcase-note-row"));
     await user.click(first);
 
     expect(
@@ -174,6 +185,44 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
     );
 
     await user.unhover(thumb);
+    expect(
+      dialog.querySelector(".showcase-thumb-preview img"),
+    ).toBeNull();
+  });
+
+  test("keyboard focus does not open the thumbnail preview", async () => {
+    getAllNotes.mockResolvedValue({
+      notes: [
+        note(1, {
+          images: [
+            {
+              type: "front",
+              variant: "thumbnail",
+              localPath: "/api/images/notes/1/front-thumbnail.jpg",
+            },
+            {
+              type: "front",
+              variant: "full",
+              localPath: "/api/images/notes/1/front-full.jpg",
+            },
+          ],
+        }),
+        note(2),
+      ],
+    });
+    const user = userEvent.setup();
+
+    renderPicker();
+
+    const dialog = await screen.findByRole("dialog", { name: "Add notes" });
+    within(dialog).getByRole("searchbox").focus();
+    await user.keyboard("{ArrowDown}");
+
+    expect(
+      within(dialog)
+        .getAllByRole("checkbox")
+        .filter((box) => box.closest(".showcase-note-row"))[0],
+    ).toHaveFocus();
     expect(
       dialog.querySelector(".showcase-thumb-preview img"),
     ).toBeNull();
@@ -226,6 +275,22 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
     ).toBeNull();
   });
 
+  test("End scrolls an unmounted row into the virtual window", async () => {
+    const notes = Array.from({ length: 50 }, (_, index) => note(100 + index));
+    getAllNotes.mockResolvedValue({ notes });
+    const user = userEvent.setup();
+
+    renderPicker();
+
+    const dialog = await screen.findByRole("dialog", { name: "Add notes" });
+    within(dialog).getByRole("searchbox").focus();
+    await user.keyboard("{ArrowDown}{End}");
+
+    expect(virtualWindow.scrollToIndex).toHaveBeenCalledWith(49, {
+      align: "auto",
+    });
+  });
+
   test("Escape dismisses the picker", async () => {
     getAllNotes.mockResolvedValue({ notes: [note(1)] });
     const onClose = vi.fn();
@@ -247,7 +312,9 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
     renderPicker({ onClose });
 
     const dialog = await screen.findByRole("dialog", { name: "Add notes" });
-    await user.click(within(dialog).getByRole("button", { name: "Select all" }));
+    await user.click(
+      within(dialog).getByRole("checkbox", { name: "Select all visible notes" }),
+    );
     expect(onClose).not.toHaveBeenCalled();
 
     await user.click(dialog.parentElement);

@@ -219,7 +219,9 @@ describe("the merged add dialog", () => {
     });
 
     await user.type(filter, "22{Enter}");
-    await user.click(within(dialog).getByRole("button", { name: "Select all" }));
+    await user.click(
+      within(dialog).getByRole("checkbox", { name: "Select all visible notes" }),
+    );
 
     await user.type(filter, "220{Enter}");
     await user.click(
@@ -262,7 +264,9 @@ describe("the merged add dialog", () => {
     });
 
     await user.type(filter, "22{Enter}");
-    await user.click(within(dialog).getByRole("button", { name: "Select all" }));
+    await user.click(
+      within(dialog).getByRole("checkbox", { name: "Select all visible notes" }),
+    );
 
     await user.type(filter, "220{Enter}");
     await user.click(
@@ -273,7 +277,7 @@ describe("the merged add dialog", () => {
     ).toBeInTheDocument();
 
     await user.click(
-      within(dialog).getByRole("button", { name: "Deselect all" }),
+      within(dialog).getByRole("checkbox", { name: "Select all visible notes" }),
     );
     expect(
       within(dialog).getByRole("button", { name: "Add selected (2)" }),
@@ -333,6 +337,16 @@ describe("the merged add dialog", () => {
   });
 });
 
+describe("the add dialog's focus", () => {
+  test("opening the dialog moves focus to the filter", async () => {
+    const { dialog } = await openAddDialog();
+
+    expect(
+      within(dialog).getByRole("searchbox", { name: "Filter Catalog" }),
+    ).toHaveFocus();
+  });
+});
+
 describe("a note already in the node", () => {
   test("shows added and its checkbox is disabled", async () => {
     getShowcaseTree.mockResolvedValue({
@@ -350,6 +364,6 @@ describe("a note already in the node", () => {
       name: /1 leu · 1917/,
     });
     expect(checkbox).toBeDisabled();
-    expect(within(dialog).getByText("added")).toBeInTheDocument();
+    expect(within(dialog).getByText("Added")).toBeInTheDocument();
   });
 });

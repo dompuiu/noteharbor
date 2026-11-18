@@ -8,6 +8,11 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 - Showcase note picker: the Table's chip filter bar now backs the picker — field chips, Add/Replace commit modes, comma/range values and `!` negation, with tag suggestions — and a sort control orders the list by collection or any filterable note field, ascending or descending, including reversing the default order. The picker projection now carries company, grade, serial and owned so those filters and its Owned/Seen chips read the note itself.
 
+### Changed
+
+- Showcase note picker: the Add dialog's Notes tab and the Replace finder now wear the same shell and the same row layout. The title, subtitle and close X sit in the dialog head, the filter owns its row, the tabs, filter and table share one 16px rhythm, and the note count moved into the footer beside the action, so the list starts higher. Opening the dialog now moves focus to the filter instead of leaving it on the showcase. The list is a compact table now: a fixed header row carries the select-all checkbox and click-to-sort column labels, replacing the sort field and the Select all/Deselect all buttons; a third click on a sorted column returns to the default order. Each row is an aligned grid — checkbox, thumbnail, caption, catalog number, collection, and Owned/Seen (or Added) — with a small inset between rows. Selection lives in the checkbox and the footer count, so a run of selected notes no longer paints one merged wash.
+- Showcase note picker: the list carries the Table's keyboard niceties at its smaller size — Down/j and Up/k walk the rows, Up from the first row returns to the filter, Home/End jump, PageDown/PageUp page, Space or Enter toggles, and the cursor skips notes already on the entry. A row outside the virtual window scrolls in before it takes focus. The full-size thumbnail preview is a pointer-only affordance now, so keyboard navigation does not throw a preview bubble over the list.
+
 ## [2.19.0] - 2026-11-17
 
 ### Added

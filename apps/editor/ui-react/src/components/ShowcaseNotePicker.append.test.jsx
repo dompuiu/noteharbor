@@ -73,7 +73,9 @@ describe("ShowcaseNotePicker append mode", () => {
     const region = await screen.findByRole("region", { name: "Add notes" });
     expect(await within(region).findByText("2 notes")).toBeInTheDocument();
 
-    const boxes = within(region).getAllByRole("checkbox");
+    const boxes = within(region)
+      .getAllByRole("checkbox")
+      .filter((box) => box.closest(".showcase-note-row"));
     expect(boxes).toHaveLength(2);
     expect(
       boxes.map((box) => box.getAttribute("aria-label")),
@@ -95,7 +97,9 @@ describe("ShowcaseNotePicker append mode", () => {
     renderEmbedded();
 
     const region = await screen.findByRole("region", { name: "Add notes" });
-    const boxes = await within(region).findAllByRole("checkbox");
+    const boxes = (await within(region).findAllByRole("checkbox")).filter(
+      (box) => box.closest(".showcase-note-row"),
+    );
 
     expect(boxes.map((box) => box.getAttribute("aria-label"))).toEqual([
       "Note 2 · 1917 22 Kingdom",
@@ -154,7 +158,9 @@ describe("ShowcaseNotePicker append mode", () => {
     );
 
     const dialog = await screen.findByRole("dialog", { name: "Add notes" });
-    const boxes = within(dialog).getAllByRole("checkbox");
+    const boxes = within(dialog)
+      .getAllByRole("checkbox")
+      .filter((box) => box.closest(".showcase-note-row"));
 
     expect(boxes.map((box) => box.getAttribute("aria-label"))).toEqual([
       "Note 2 · 1917 22 Kingdom",
