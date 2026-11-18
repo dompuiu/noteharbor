@@ -8,10 +8,14 @@ import { TableSurface } from "./TableSurface.jsx";
 
 const rowHeightEstimate = 45;
 const tableGutterWidth = 14;
+// The rail pads 10px on each side; its chip plan and its width checks work on
+// the content box those paddings leave.
+const railInlinePadding = 20;
 // The rail's controls stop trying to keep their words below this card width
-// and slide into the one overflow menu. It sits a hair above the stylesheet's
-// 960px query so the menu is already mounted when the words are hidden.
-const compactRailWidth = 962;
+// and slide into the one overflow menu. It mirrors the stylesheet's
+// `@container table-shell (max-width: 959px)` check, the same content box, so
+// the menu mounts exactly when the standalone view controls hide.
+const compactRailWidth = 959;
 
 // The one notes table view: the card, its rail, the virtualized surface and
 // the footer. Both the Table screen and the All notes screen render this; they
@@ -20,7 +24,7 @@ const compactRailWidth = 962;
 export function NotesTableView({
   ariaLabel,
   body = null,
-  bodyClassName = "",
+  cardClassName = "",
   bulkBar = null,
   canResetView = false,
   columns,
@@ -41,7 +45,7 @@ export function NotesTableView({
   onToggleColumn,
   railIdentity = null,
   railNotice = null,
-  railStatus = null,
+  railActionStatus = null,
   railStart = null,
   resetTitle = "Clears filters, sort and selection — keeps your columns",
   rows,
@@ -56,7 +60,10 @@ export function NotesTableView({
 }) {
   const { columnPan, cursor, find } = table;
   const railWidth = table.tableWidth ?? null;
-  const compactRail = railWidth != null && railWidth < compactRailWidth;
+  const compactRail = railWidth != null && railWidth <= compactRailWidth;
+  // The rail's chrome (field, find, controls) belongs to a loaded table; the
+  // identity and its status always show.
+  const railChrome = showToolbar && !body;
   const emptyRow = emptyView ? (
     <tr className="table-empty-row">
       <td className="table-empty-cell" colSpan={table.totalColumnCount}>
@@ -64,14 +71,14 @@ export function NotesTableView({
       </td>
     </tr>
   ) : null;
-  // The compact line the eye reads, with the full sentence kept as the live
-  // region so assistive tech still hears the count, the sort and the selection
-  // exactly as before.
+  // The compact count and sort line sits in the footer, where the summary
+  // used to, with the full sentence kept as the live region so assistive tech
+  // still hears the count, the sort and the selection exactly as before.
   const status =
-    statusSummary || footerSummary || railStatus ? (
+    statusSummary || footerSummary ? (
       <>
         {statusSummary ? (
-          <span aria-hidden="true" className="table-rail-status-visible">
+          <span aria-hidden="true" className="table-footer-status">
             {statusSummary}
           </span>
         ) : null}
@@ -84,18 +91,17 @@ export function NotesTableView({
             {footerSummary}
           </span>
         ) : null}
-        {railStatus}
       </>
     ) : null;
 
   return (
     <>
       <TableCard
-        bodyClassName={bodyClassName}
+        cardClassName={cardClassName}
         focusAnchorRef={focusAnchorRef}
         onDragOver={onDragOver}
         railActions={
-          showToolbar ? (
+          railChrome ? (
             <>
               {railStart}
               <button
@@ -169,9 +175,11 @@ export function NotesTableView({
           ) : null
         }
         railControls={
-          showToolbar ? (
+          railChrome ? (
             <TableFilterBar
-              availableWidth={railWidth == null ? null : railWidth - 20}
+              availableWidth={
+                railWidth == null ? null : railWidth - railInlinePadding
+              }
               conditions={filterBar.conditions}
               defaultField={filterBar.defaultField}
               entry={
@@ -188,7 +196,7 @@ export function NotesTableView({
         }
         railIdentity={railIdentity}
         railNotice={railNotice}
-        railStatus={status}
+        railActionStatus={railActionStatus}
         shellRef={shellRef}
         shortcuts={
           showShortcutsHelp ? (
@@ -250,6 +258,7 @@ export function NotesTableView({
       {body ? null : (
         <div className="table-footer-hint">
           {footerAnnouncer}
+          {status}
           <span className="table-footer-keys">
             {footerHint}
             {columnPan.columnPanAvailable ? (

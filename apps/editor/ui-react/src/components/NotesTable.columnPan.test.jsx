@@ -267,7 +267,8 @@ describe("NotesTable column keyboard panning", () => {
     expect(keys().textContent).not.toContain("to pan");
   });
 
-  test("column keys are left for the platform when the columns fit the window", async () => {    renderTable();
+  test("column keys are left for the platform when the columns fit the window", async () => {
+    renderTable();
     await screen.findByText("ZZTEST");
 
     // The mocked scroller reports no horizontal overflow, so the edge jump

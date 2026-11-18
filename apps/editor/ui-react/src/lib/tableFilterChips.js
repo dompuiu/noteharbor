@@ -25,13 +25,13 @@ const unitGap = 4;
 const clearAllReserve = 70;
 
 function measureWithProbe(className, text, fallbackCharWidth) {
-  const cached = chipWidthCache.get(`${className}:${text}`);
+  const cacheKey = `${className}:${text}`;
+  const cached = chipWidthCache.get(cacheKey);
 
   if (cached != null) {
     return cached;
   }
 
-  let width = null;
   let context = chipTextMeasureContexts.get(className);
 
   if (context === undefined) {
@@ -60,7 +60,7 @@ function measureWithProbe(className, text, fallbackCharWidth) {
     chipTextMeasureContexts.set(className, context);
   }
 
-  width = context
+  const width = context
     ? Math.ceil(context.measureText(text).width)
     : Math.ceil(text.length * fallbackCharWidth);
 
@@ -68,7 +68,7 @@ function measureWithProbe(className, text, fallbackCharWidth) {
     chipWidthCache.clear();
   }
 
-  chipWidthCache.set(`${className}:${text}`, width);
+  chipWidthCache.set(cacheKey, width);
   return width;
 }
 
@@ -102,9 +102,9 @@ function unitWidth(unit) {
   return measureLabel(unit.label) + labelGap + chipWidth(unit);
 }
 
-// Returns how many units stay on the line. `0` visible is accepted when even
-// the count cannot share the line, so the reader always keeps a way to reach
-// the hidden conditions.
+// Returns how many units stay on the line. One unit is always visible, even
+// when its chip is wider than the budget: the chip truncates, and a lone
+// condition hidden behind `+1` would say less than the value it names.
 export function computeFilterChipPlan(units, availableWidth) {
   if (!units.length) {
     return { hiddenCount: 0, visibleCount: 0 };

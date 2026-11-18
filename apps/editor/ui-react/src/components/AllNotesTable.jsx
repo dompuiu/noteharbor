@@ -347,18 +347,6 @@ export function AllNotesTable({
     ? ` · sorted by ${sortLabel} ${sortDirection === "asc" ? "ascending" : "descending"}`
     : "";
   const summary = `Showing ${notes.length} of ${noteCountLabel(totalCount)} across ${collectionCountLabel(collectionCount)}${sortStatus}${find.status}`;
-  const compactStatus = (
-    <>
-      {notes.length} of {noteCountLabel(totalCount)}
-      {sortKey ? (
-        <>
-          <span aria-hidden="true"> · </span>
-          {sortLabel} {sortDirection === "asc" ? "ascending" : "descending"}
-        </>
-      ) : null}
-      {find.status ? <> {find.status}</> : null}
-    </>
-  );
 
   const selectedIdSet = useMemo(() => new Set(), []);
   const collectionPicker = (
@@ -400,7 +388,7 @@ export function AllNotesTable({
       rows={notes}
       showShortcutsHelp={showShortcutsHelp}
       showToolbar={showToolbar}
-      statusSummary={statusSummary ?? compactStatus}
+      statusSummary={statusSummary}
       surface={{
         allVisibleSelected: false,
         ariaBusy: rowsPending,

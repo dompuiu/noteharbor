@@ -1,9 +1,14 @@
 import { AnchoredPopover } from "./AnchoredPopover.jsx";
 
-// The column choices list, shared by the rail's Columns popover and the
-// compact rail's overflow menu: one checkbox per hideable column, with the
-// last visible data column disabled so the table can never lose every value.
-export function ColumnChoices({ columns, disabledColumnKey, onToggle, visibleColumnKeys }) {
+// One checkbox per hideable column, with the last visible data column disabled
+// so the table can never lose every value. Shared by the rail's Columns
+// popover and the compact rail's one menu.
+export function ColumnChoices({
+  columns,
+  disabledColumnKey,
+  onToggle,
+  visibleColumnKeys,
+}) {
   return columns.map((column) => (
     <label className="table-columns-option" key={column.key}>
       <input
@@ -15,6 +20,27 @@ export function ColumnChoices({ columns, disabledColumnKey, onToggle, visibleCol
       <span>{column.label}</span>
     </label>
   ));
+}
+
+// The heading plus the choices: the content both column menus render, so the
+// two cannot drift apart.
+export function ColumnMenuBody({
+  columns,
+  disabledColumnKey,
+  onToggle,
+  visibleColumnKeys,
+}) {
+  return (
+    <>
+      <p className="table-columns-menu-heading">Visible columns</p>
+      <ColumnChoices
+        columns={columns}
+        disabledColumnKey={disabledColumnKey}
+        onToggle={onToggle}
+        visibleColumnKeys={visibleColumnKeys}
+      />
+    </>
+  );
 }
 
 // The Columns toolbar control and its checkbox menu. The shared popover shell
@@ -62,8 +88,7 @@ export function ColumnPicker({
         </button>
       )}
     >
-      <p className="table-columns-menu-heading">Visible columns</p>
-      <ColumnChoices
+      <ColumnMenuBody
         columns={columns}
         disabledColumnKey={disabledColumnKey}
         onToggle={onToggle}

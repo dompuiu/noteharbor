@@ -1,8 +1,7 @@
 import {
   cellClass,
   noteThumbnailPath,
-  stickyCellClass,
-  stickyCellStyle,
+  stickyCellAttributes,
 } from "./tableCells.jsx";
 import { tagsColumnKey } from "./tableColumns.js";
 import { computeVisibleTagPlan } from "./tagChipPlan.js";
@@ -44,20 +43,17 @@ export function buildNoteRowModel({
   // is rebuilt at that width and never at any other.
 
   for (const column of columns) {
-    const baseClassName = cellClass(column);
-    cells.set(column.key, {
-      className: stickyCellClass(
-        column,
-        baseClassName,
-        lastStickyColumnKey,
+    // Body and header cells read the same pinning path, so a pin's class and
+    // offset cannot disagree between the two.
+    cells.set(
+      column.key,
+      stickyCellAttributes(column, cellClass(column), {
         firstPinnedEndColumnKey,
-      ),
-      style: stickyCellStyle(
-        column,
+        lastStickyColumnKey,
         stickyLeftByColumn,
         stickyRightByColumn,
-      ),
-    });
+      }),
+    );
   }
 
   const tagsColumn = columns.find((column) => column.isTags);

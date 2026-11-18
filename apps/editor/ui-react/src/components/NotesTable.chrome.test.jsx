@@ -199,24 +199,28 @@ describe("NotesTable chrome", () => {
     expect(within(keys).getByText("?")).toBeInTheDocument();
   });
 
-  test("the rail carries the view summary and the footer only the keys", async () => {
+  test("the footer carries the view status beside the keys", async () => {
     const { container } = renderTable();
 
     await screen.findByText("AAAA");
+
+    // The visible line reads the same count and the same sort as the sentence,
+    // and sits in the band below the card, not in the rail.
+    const status = container.querySelector(".table-footer-status");
+    expect(status).not.toBeNull();
+    expect(status).toHaveTextContent("3 of 3 notes · # ascending");
+    expect(container.querySelector(".table-rail").contains(status)).toBe(false);
 
     const summary = screen.getByText(/^Showing /);
     expect(summary).toHaveTextContent(
       "Showing 3 of 3 notes · sorted by # ascending",
     );
+    expect(summary).toHaveClass("table-footer-summary");
+    expect(summary.parentElement).toHaveClass("table-footer-hint");
 
-    // The status rides in the card's own rail now; the band below the card is
-    // only the keyboard hints.
     const shell = container.querySelector(".table-shell");
     expect(shell).not.toBeNull();
-    expect(shell.contains(summary)).toBe(true);
-    expect(
-      container.querySelector(".table-rail").contains(summary),
-    ).toBe(true);
+    expect(shell.contains(summary)).toBe(false);
 
     const hint = screen.getByText(/Drag the handle or press Alt\+Up\/Down to reorder/);
     expect(shell.contains(hint)).toBe(false);

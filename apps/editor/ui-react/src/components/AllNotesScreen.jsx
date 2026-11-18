@@ -700,18 +700,14 @@ export function AllNotesScreen() {
     );
   }
 
-  const railIdentity = (
-    <div className="table-rail-title">
-      <h1>All notes</h1>
-    </div>
-  );
+  const railIdentity = <h1>All notes</h1>;
 
   return (
     <section className="screen-stack all-notes-screen">
       <div className="screen-body" inert={slideshowOpen}>
         {displayError ? (
           <TableCard
-            bodyClassName="table-load-error"
+            cardClassName="table-load-error"
             railIdentity={railIdentity}
           >
             <div className="table-load-error-body">
@@ -734,7 +730,7 @@ export function AllNotesScreen() {
             </div>
           </TableCard>
         ) : loading ? (
-          <TableCard bodyClassName="table-loading" railIdentity={railIdentity}>
+          <TableCard cardClassName="table-loading" railIdentity={railIdentity}>
             <div className="table-loading-body" role="status">
               <p className="table-loading-title">Loading notes…</p>
               <p className="table-loading-detail">

@@ -1388,6 +1388,49 @@ describe("NotesTable filter rail", () => {
       document.querySelector(".table-filter-chips"),
     );
   });
+
+  test("the count chip carries the conditions the line cannot show", async () => {
+    // A narrow card forces the plan to hide the last condition.
+    HTMLElement.prototype.getBoundingClientRect.mockReturnValue({
+      width: 320,
+      height: 600,
+      top: 0,
+      left: 0,
+      right: 320,
+      bottom: 600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Company", "PMG");
+    await commitChip(user, "Serial", "SER-1");
+    await commitChip(user, "Denomination", "100");
+
+    const more = await screen.findByRole("button", {
+      name: /^Show \d+ more filters?$/,
+    });
+    expect(more.textContent).toMatch(/^\+\d+$/);
+    // The hidden chip is not on the line; it lives in the count's panel.
+    expect(
+      screen.queryByRole("button", { name: "Edit Denomination filter 100" }),
+    ).toBeNull();
+
+    await user.click(more);
+
+    const panel = screen.getByRole("dialog", { name: "More filters" });
+    await user.click(
+      within(panel).getByRole("button", {
+        name: "Edit Denomination filter 100",
+      }),
+    );
+    expect(
+      within(panel).getByRole("textbox", { name: "Edit Denomination filter" }),
+    ).toBeInTheDocument();
+  });
 });
 
 // The chips are the filter field's own continuation: Tab reaches them before

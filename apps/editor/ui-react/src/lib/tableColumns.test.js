@@ -106,7 +106,8 @@ describe("table column model", () => {
     }
   });
 
-  test("sorts by the display-order id plus the data columns", () => {    expect(sortableColumnKeys).toEqual([
+  test("sorts by the display-order id plus the data columns", () => {
+    expect(sortableColumnKeys).toEqual([
       "id",
       "catalog_number",
       "denomination",

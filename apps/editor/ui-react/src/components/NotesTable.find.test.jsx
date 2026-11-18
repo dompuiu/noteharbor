@@ -527,8 +527,28 @@ describe("NotesTable find", () => {
     expect(virtualizerCalls.scrollToIndex).not.toHaveBeenCalled();
   });
 
-  test("does not offer Search all notes when no note matches at all", async () => {
+  test("the fallback clears the view and lands on the first match", async () => {
     const user = userEvent.setup();
+    const { container } = renderTable();
+
+    await screen.findByText("Fr. 2,300 Alpha");
+    // PCGS keeps Beta and Omega, so Gamma is hidden by the view.
+    await commitChip(user, "Company", "PCGS");
+    await openFind(user);
+    await user.type(findInput(), "Gamma");
+
+    await expectFindCount("No matches in this view");
+
+    await user.click(screen.getByRole("button", { name: "Search all notes" }));
+
+    // The view is cleared, the query stays, and find lands on the note it
+    // was looking for.
+    await expectFindCount("1 of 1");
+    expect(findInput()).toHaveValue("Gamma");
+    expect(currentFindRow(container)?.textContent).toContain("Fr. 2,300 Gamma");
+  });
+
+  test("does not offer Search all notes when no note matches at all", async () => {    const user = userEvent.setup();
     renderTable();
 
     await screen.findByText("Fr. 2,300 Alpha");

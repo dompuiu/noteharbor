@@ -1,5 +1,5 @@
 import { MemoryRouter } from "react-router-dom";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
@@ -136,13 +136,19 @@ describe("NotesTable hardening: a failed load", () => {
   test("the failure is announced, but the retry control is not part of the alert", async () => {
     getNotes.mockRejectedValue(new Error("Failed to fetch"));
 
-    renderTable();
+    const { container } = renderTable();
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Couldn't load this collection's notes.");
     expect(alert).not.toContainElement(
       screen.getByRole("button", { name: "Try again" }),
     );
+
+    // The rail and its identity hold while the body failed: the screen still
+    // names the collection it could not load.
+    expect(
+      within(container.querySelector(".table-rail")).getByRole("heading"),
+    ).toHaveTextContent("Test");
   });
 
   test("Try again refetches the collection and puts the table back", async () => {

@@ -3,15 +3,15 @@
 // of the Table screen — loaded, loading, failed, empty — is this same card, so
 // the collection's name and the card's footprint hold from the first frame.
 export function TableCard({
-  bodyClassName = "",
+  cardClassName = "",
   children,
   focusAnchorRef,
   onDragOver,
   railActions = null,
   railControls = null,
+  railActionStatus = null,
   railIdentity = null,
   railNotice = null,
-  railStatus = null,
   shellRef,
   shortcuts = null,
 }) {
@@ -19,7 +19,7 @@ export function TableCard({
     <>
       {shortcuts}
       <div
-        className={`table-shell${bodyClassName ? ` ${bodyClassName}` : ""}`}
+        className={`table-shell${cardClassName ? ` ${cardClassName}` : ""}`}
         onDragOver={onDragOver}
         ref={shellRef}
       >
@@ -31,9 +31,11 @@ export function TableCard({
         />
         <div className="table-rail">
           <div className="table-rail-identity">
-            {railIdentity}
-            {railStatus ? (
-              <div className="table-rail-status">{railStatus}</div>
+            {railIdentity ? (
+              <div className="table-rail-title">{railIdentity}</div>
+            ) : null}
+            {railActionStatus ? (
+              <div className="table-rail-status">{railActionStatus}</div>
             ) : null}
           </div>
           {railControls}

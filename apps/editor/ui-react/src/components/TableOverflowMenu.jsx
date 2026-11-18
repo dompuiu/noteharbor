@@ -1,5 +1,5 @@
 import { AnchoredPopover } from "./AnchoredPopover.jsx";
-import { ColumnChoices } from "./ColumnPicker.jsx";
+import { ColumnMenuBody } from "./ColumnPicker.jsx";
 
 // The compact rail's one menu (container < 960px): Reset view and the column
 // choices travel together once the trailing cluster is out of words. The two
@@ -63,8 +63,7 @@ export function TableOverflowMenu({
               Reset view
             </button>
           ) : null}
-          <p className="table-columns-menu-heading">Visible columns</p>
-          <ColumnChoices
+          <ColumnMenuBody
             columns={columns}
             disabledColumnKey={disabledColumnKey}
             onToggle={onToggleColumn}

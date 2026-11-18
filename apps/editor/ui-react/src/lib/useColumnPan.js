@@ -44,7 +44,7 @@ export function useColumnPan({ measureDeps = [], onPanEnd, scrollRef }) {
   // keyboard pan without passing through here.
   function syncColumnScroll(scroller = scrollRef.current) {
     if (!scroller) {
-      return;
+      return false;
     }
 
     const scrollLeft = scroller.scrollLeft ?? 0;
@@ -54,10 +54,7 @@ export function useColumnPan({ measureDeps = [], onPanEnd, scrollRef }) {
     );
     const overflow = maxScrollLeft > 1;
 
-    scroller.classList.toggle(
-      "is-overflowing",
-      overflow,
-    );
+    scroller.classList.toggle("is-overflowing", overflow);
     scroller.classList.toggle(
       "is-scrolled-x",
       isColumnPanShadowVisible(scrollLeft),
@@ -66,6 +63,8 @@ export function useColumnPan({ measureDeps = [], onPanEnd, scrollRef }) {
       "is-scrolled-end",
       overflow && scrollLeft >= maxScrollLeft - 1,
     );
+
+    return overflow;
   }
 
   function scrollColumnsTo(scroller, left) {
@@ -244,8 +243,9 @@ export function useColumnPan({ measureDeps = [], onPanEnd, scrollRef }) {
   // The scroller's content width is the sum of the rendered <col> widths, so
   // the columns only need re-checking when those widths change (a resize, a
   // column toggle, or the scrollbar's gutter) or when the scroller remounts
-  // with the rows. Same overflow test as columnScroller(), so the footer only
-  // offers the arrows when pressing them would actually move the table.
+  // with the rows. `syncColumnScroll` returns the same overflow fact the pan
+  // gesture reads, and paints the pins' state before the first scroll (the
+  // initial paint shows content under the right pin).
   useLayoutEffect(() => {
     const scroller = scrollRef.current;
 
@@ -253,14 +253,11 @@ export function useColumnPan({ measureDeps = [], onPanEnd, scrollRef }) {
       return;
     }
 
-    const overflows = scroller.scrollWidth > scroller.clientWidth + 1;
+    const overflows = syncColumnScroll(scroller);
+
     setColumnPanAvailable((current) =>
       current === overflows ? current : overflows,
     );
-    // The right pin's shadow reads the same overflow fact, and it has to be
-    // right before the first scroll (the initial paint shows content under
-    // the pin).
-    syncColumnScroll(scroller);
     // `measureDeps` is the caller's list of width-changing values.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollRef, ...measureDeps]);

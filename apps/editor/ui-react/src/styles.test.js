@@ -279,6 +279,20 @@ describe("table styles", () => {
     expect(hint[1]).not.toMatch(/position:\s*absolute/);
     expect(hint[1]).not.toMatch(/border-top/);
     expect(hint[1]).toMatch(/white-space:\s*nowrap/);
+    // Status on the left, keys on the right.
+    expect(hint[1]).toMatch(/justify-content:\s*space-between/);
+
+    // The compact count and sort line reads as the summary did: it gives way
+    // first and truncates, so the keys never wrap under it.
+    const status = styles.match(/^\.table-footer-status\s*\{([^}]*)\}/m);
+    expect(status).not.toBeNull();
+    expect(status[1]).toMatch(/flex:\s*1\s+1\s+0/);
+    expect(status[1]).toMatch(/min-width:\s*0/);
+    expect(status[1]).toMatch(/text-overflow:\s*ellipsis/);
+    expect(status[1]).toMatch(/font-variant-numeric:\s*tabular-nums/);
+
+    // The full sentence stays the live region beside it.
+    expect(styles).toMatch(/^\.table-footer-summary\s*\{[^}]*clip:\s*rect/m);
   });
 
   test("sort buttons tint with accent-soft on hover", () => {
@@ -516,7 +530,6 @@ describe("table styles", () => {
     expect(identity[1]).toMatch(/display:\s*flex/);
     expect(identity[1]).toMatch(/flex:\s*0 1 auto/);
     expect(identity[1]).toMatch(/min-width:\s*0/);
-    expect(identity[1]).toMatch(/order:\s*0/);
 
     const status = styles.match(/^\.table-rail-status\s*\{([^}]*)\}/m);
     expect(status).not.toBeNull();
@@ -558,7 +571,7 @@ describe("table styles", () => {
     expect(chips).not.toBeNull();
     expect(chips[1]).toMatch(/flex-wrap:\s*nowrap/);
     expect(chips[1]).toMatch(/flex:\s*1 1 100%/);
-    expect(chips[1]).toMatch(/gap:\s*8px 4px/);
+    expect(chips[1]).toMatch(/gap:\s*4px/);
     expect(chips[1]).toMatch(/min-width:\s*0/);
     expect(chips[1]).toMatch(/margin:\s*0/);
     expect(chips[1]).toMatch(/order:\s*3/);
@@ -588,10 +601,9 @@ describe("table styles", () => {
     expect(narrow).toMatch(/\.table-reset-toggle,\s*\.table-columns-toggle\s*\{[^}]*display:\s*none/);
     expect(narrow).toMatch(/\.table-rail-actions \.button\s*\{[^}]*width:\s*36px/);
 
-    // The status drops its count before its sort.
-    const status = atRule(styles, "@container table-shell (max-width: 1079px)");
-    expect(status).not.toBeNull();
-    expect(status).toMatch(/\.table-status-count\s*\{[^}]*display:\s*none/);
+    // The count and sort left the rail for the footer, outside the query
+    // container, so no rail query can hide half of them any more.
+    expect(styles).not.toMatch(/\.table-status-count/);
 
     // The old 1120 order hack is gone: the chips are always their own row.
     expect(styles).not.toMatch(/@container table-shell \(max-width: 1120px\)/);
@@ -636,8 +648,10 @@ describe("table styles", () => {
   test("find is a rail mode, not an overlay", () => {
     const find = styles.match(/^\.table-find-bar\s*\{([^}]*)\}/m);
     expect(find).not.toBeNull();
-    expect(find[1]).toMatch(/position:\s*static/);
-    expect(find[1]).toMatch(/flex:\s*0 1 400px/);
+    // The bar is in the rail's flow: no absolute placement and no shadow.
+    expect(find[1]).not.toMatch(/position:\s*absolute/);
+    expect(find[1]).toMatch(/flex:\s*0 1 520px/);
+    expect(find[1]).toMatch(/min-width:\s*400px/);
     expect(find[1]).toMatch(/height:\s*36px/);
     expect(find[1]).not.toMatch(/\/\*[\s\S]*\*\//);
     expect(find[1]).not.toMatch(/top:\s*7px/);
@@ -751,9 +765,16 @@ describe("table styles", () => {
   // A failed load keeps the table's footprint instead of leaving the page as a
   // single red line, and its message can carry an unbroken server path.
   test("the load-error panel keeps the card and wraps its detail", () => {
-    const panel = styles.match(/^\.table-load-error\s*\{([^}]*)\}/m);
-    expect(panel).not.toBeNull();
-    expect(panel[1]).toMatch(/justify-content:\s*center/);
+    // The shell is the card and keeps the rail at the top; the body centres
+    // itself in the space the rail leaves, so the shell must not recentre or
+    // shrink that rail.
+    const shell = styles.match(/^\.table-shell\s*\{([^}]*)\}/m);
+    expect(shell).not.toBeNull();
+    expect(shell[1]).toMatch(/flex-direction:\s*column/);
+
+    const body = styles.match(/^\.table-load-error-body\s*\{([^}]*)\}/m);
+    expect(body).not.toBeNull();
+    expect(body[1]).toMatch(/margin:\s*auto/);
 
     const detail = styles.match(/^\.table-load-error-detail\s*\{([^}]*)\}/m);
     expect(detail).not.toBeNull();

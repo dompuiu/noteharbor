@@ -4521,7 +4521,7 @@ function NotesTable({
   );
 
   const railIdentity = (
-    <div className="table-rail-title">
+    <>
       {collectionHeading}
       {isCollectionEditing ? (
         <div className="inline-actions">
@@ -4535,33 +4535,34 @@ function NotesTable({
           </button>
         </div>
       ) : null}
-    </div>
-  );
-
-  const railNotice = (
-    <>
-      {isCollectionEditing && collectionEditDialog
-        ? collectionEditDialog
-        : null}
-      {showingNewCollectionForm ? (
-        newCollectionError ? (
-          <p className="error-text" role="alert">
-            {newCollectionError}
-          </p>
-        ) : null
-      ) : isCollectionEditing ? (
-        collectionEditError ? (
-          <p className="error-text" role="alert">
-            {collectionEditError}
-          </p>
-        ) : null
-      ) : collectionActionError ? (
-        <p className="error-text" id={collectionRenameErrorId} role="alert">
-          {collectionActionError}
-        </p>
-      ) : null}
     </>
   );
+
+  // The error a collection form owns, computed once: only one of the three
+  // drafts can be open, and the strip under the rail is absent when there is
+  // nothing to say.
+  const railErrorText = showingNewCollectionForm
+    ? newCollectionError
+    : isCollectionEditing
+      ? collectionEditError
+      : collectionActionError;
+  const railNotice =
+    (isCollectionEditing && collectionEditDialog) || railErrorText ? (
+      <>
+        {isCollectionEditing && collectionEditDialog
+          ? collectionEditDialog
+          : null}
+        {railErrorText ? (
+          <p
+            className="error-text"
+            id={renamingCollection ? collectionRenameErrorId : undefined}
+            role="alert"
+          >
+            {railErrorText}
+          </p>
+        ) : null}
+      </>
+    ) : null;
 
   // One card in every state: the rail and the collection's name stay mounted
   // while the rows load or fail, so a collection switch never swaps the head
@@ -4599,6 +4600,13 @@ function NotesTable({
     : loadError
       ? "table-load-error"
       : "";
+
+  // The view's status, in the two voices the rail needs: the compact line the
+  // eye reads and the full sentence the live region announces.
+  const shownCount = deferredOrderedNotes.length;
+  const noteNoun = notes.length === 1 ? "note" : "notes";
+  const sortLabel = getTableColumn(sortKey)?.label ?? "#";
+  const sortWord = sortDirection === "asc" ? "ascending" : "descending";
 
   return (
     <section className="screen-stack" ref={tableScreenRef}>
@@ -4689,7 +4697,6 @@ function NotesTable({
         className="screen-body"
         inert={editorOverlayOpen || slideshowOpen}
       >
-
         {collectionsError ? (
           <p className="error-text" role="alert">
             {collectionsError}
@@ -4750,177 +4757,172 @@ function NotesTable({
 
         <NotesTableView
           body={tableBody}
-          bodyClassName={tableBodyClassName}
+          cardClassName={tableBodyClassName}
           bulkBar={
-              selectedIds.length ? (
-                <TableBulkBar
-                  barRef={bulkBarRef}
-                  canMove={canMoveNotes}
-                  canMoveSelectionDown={selectionReorderRun?.canMoveDown ?? false}
-                  canMoveSelectionUp={selectionReorderRun?.canMoveUp ?? false}
-                  canReorder={reorderRail}
-                  onClear={clearSelection}
-                  onDelete={handleBulkDelete}
-                  onMove={openMoveForSelection}
-                  onMoveSelectionDown={() => handleSelectionReorder(1)}
-                  onMoveSelectionUp={() => handleSelectionReorder(-1)}
-                  onOwnership={toggleOwnershipPanel}
-                  onTags={toggleTagsPanel}
-                  onLeaveBackward={() => {
-                    selectionTabArmedRef.current = false;
-                    focusRowActionsButtonByNoteId(bulkBarExitNoteId());
-                  }}
-                  onLeaveForward={() => {
-                    selectionTabArmedRef.current = false;
-                    focusRowCheckboxByNoteId(bulkBarExitNoteId());
-                  }}
-                  selectedCount={selectedIds.length}
-                  selectionContiguous={selectionReorderRun != null}
-                  saving={reorderLoading}
-                  ownershipButtonRef={bulkOwnershipButtonRef}
-                  ownershipOpen={ownershipOpen}
-                  ownershipSaving={ownershipSaving}
-                  tagsButtonRef={bulkTagsButtonRef}
-                  tagsOpen={tagsOpen}
-                  tagsSaving={tagsSaving}
+            selectedIds.length ? (
+              <TableBulkBar
+                barRef={bulkBarRef}
+                canMove={canMoveNotes}
+                canMoveSelectionDown={selectionReorderRun?.canMoveDown ?? false}
+                canMoveSelectionUp={selectionReorderRun?.canMoveUp ?? false}
+                canReorder={reorderRail}
+                onClear={clearSelection}
+                onDelete={handleBulkDelete}
+                onMove={openMoveForSelection}
+                onMoveSelectionDown={() => handleSelectionReorder(1)}
+                onMoveSelectionUp={() => handleSelectionReorder(-1)}
+                onOwnership={toggleOwnershipPanel}
+                onTags={toggleTagsPanel}
+                onLeaveBackward={() => {
+                  selectionTabArmedRef.current = false;
+                  focusRowActionsButtonByNoteId(bulkBarExitNoteId());
+                }}
+                onLeaveForward={() => {
+                  selectionTabArmedRef.current = false;
+                  focusRowCheckboxByNoteId(bulkBarExitNoteId());
+                }}
+                selectedCount={selectedIds.length}
+                selectionContiguous={selectionReorderRun != null}
+                saving={reorderLoading}
+                ownershipButtonRef={bulkOwnershipButtonRef}
+                ownershipOpen={ownershipOpen}
+                ownershipSaving={ownershipSaving}
+                tagsButtonRef={bulkTagsButtonRef}
+                tagsOpen={tagsOpen}
+                tagsSaving={tagsSaving}
                 />
               ) : null
-            }
-            canResetView={canResetView}
-            columns={visibleColumns}
-            emptyContent={emptyTableContent}
-            emptyView={emptyViewSettled}
-            filterBar={{
-              conditions,
-              hasRows: deferredOrderedNotes.length > 0,
-              onConditionsChange: handleConditionsChange,
-              searchColumns,
-              tagNames,
-            }}
-            filterBarRef={filterBarRef}
-            focusAnchorRef={tableFocusAnchorRef}
-            footerAnnouncer={
-              <p
-                aria-atomic="true"
-                aria-live="polite"
-                className="table-announcer"
-              >
-                {reorderAnnouncement}
-              </p>
-            }
-            footerHint={
-              reorderHint ? (
-                <span className="table-footer-segment">{reorderHint}</span>
-              ) : null
-            }
-            footerSummary={
-              <>
-                Showing {deferredOrderedNotes.length} of {notes.length}{" "}
-                {notes.length === 1 ? "note" : "notes"} · sorted by{" "}
-                {getTableColumn(sortKey)?.label ?? "#"}{" "}
-                {sortDirection === "asc" ? "ascending" : "descending"}
-                {find.status}
-                {selectedIds.length
-                  ? ` · ${selectedIds.length} selected`
-                  : ""}
-              </>
-            }
-            statusSummary={
-              <>
-                <span className="table-status-count">
-                  {deferredOrderedNotes.length} of {notes.length}{" "}
-                  {notes.length === 1 ? "note" : "notes"}
-                </span>
-                <span aria-hidden="true"> · </span>
-                {getTableColumn(sortKey)?.label ?? "#"}{" "}
-                {sortDirection === "asc" ? "ascending" : "descending"}
-                {selectedIds.length ? (
-                  <>
-                    <span aria-hidden="true"> · </span>
-                    {selectedIds.length} selected
-                  </>
-                ) : null}
-              </>
-            }
-            railStatus={
-              reorderLoading ? (
-                <span className="table-rail-status-text">
-                  Saving manual order...
-                </span>
-              ) : reorderUndoAvailable ? (
-                <span className="table-rail-status-text">
-                  Moved to position {reorderUndo.position}
+          }
+          canResetView={canResetView}
+          columns={visibleColumns}
+          emptyContent={emptyTableContent}
+          emptyView={emptyViewSettled}
+          filterBar={{
+            conditions,
+            hasRows: deferredOrderedNotes.length > 0,
+            onConditionsChange: handleConditionsChange,
+            searchColumns,
+            tagNames,
+          }}
+          filterBarRef={filterBarRef}
+          focusAnchorRef={tableFocusAnchorRef}
+          footerAnnouncer={
+            <p
+              aria-atomic="true"
+              aria-live="polite"
+              className="table-announcer"
+            >
+              {reorderAnnouncement}
+            </p>
+          }
+          footerHint={
+            reorderHint ? (
+              <span className="table-footer-segment">{reorderHint}</span>
+            ) : null
+          }
+          footerSummary={
+            <>
+              Showing {shownCount} of {notes.length} {noteNoun} · sorted by{" "}
+              {sortLabel} {sortWord}
+              {find.status}
+              {selectedIds.length
+                ? ` · ${selectedIds.length} selected`
+                : ""}
+            </>
+          }
+          statusSummary={
+            <>
+              <span className="table-status-count">
+                {shownCount} of {notes.length} {noteNoun}
+              </span>
+              <span aria-hidden="true"> · </span>
+              {sortLabel} {sortWord}
+              {selectedIds.length ? (
+                <>
                   <span aria-hidden="true"> · </span>
-                  <button
-                    className="table-footer-undo"
-                    onClick={handleUndoReorder}
-                    title="Restore the order from before the last move"
-                    type="button"
-                  >
-                    Undo
-                  </button>
+                  {selectedIds.length} selected
+                </>
+              ) : null}
+            </>
+          }
+          railActionStatus={
+            reorderLoading ? (
+              <span className="table-rail-status-text">
+                Saving manual order...
+              </span>
+            ) : reorderUndoAvailable ? (
+              <span className="table-rail-status-text">
+                <span className="table-rail-status-message">
+                  Moved to position {reorderUndo.position}
                 </span>
-              ) : null
-            }
-            railIdentity={railIdentity}
-            railNotice={railNotice}
-            handlers={rowHandlers}
-            hideableColumns={hideableColumns}
-            lastVisibleDataColumnKey={lastVisibleDataColumnKey}
-            onCloseShortcuts={() => setShowShortcutsHelp(false)}
-            onDragOver={autoScrollTableShell}
-            onResetView={resetTableState}
-            onToggleColumn={toggleColumnVisibility}
-            railStart={
-              !isCollectionEditing && !showingNewCollectionForm ? (
                 <button
-                  aria-label="Add note"
-                  className="button button-primary"
-                  data-shortcut="a"
-                  disabled={noCollections || isNewCollection}
-                  onClick={openCreateNote}
+                  className="table-rail-undo"
+                  onClick={handleUndoReorder}
+                  title="Restore the order from before the last move"
                   type="button"
                 >
-                  <svg
-                    aria-hidden="true"
-                    fill="none"
-                    focusable="false"
-                    height="15"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeWidth="2"
-                    viewBox="0 0 24 24"
-                    width="15"
-                  >
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                  <span className="table-rail-button-label">Add note</span>
+                  Undo
                 </button>
-              ) : null
-            }
-            resetTitle="Clears filters, sort and selection — keeps your columns"
-            rows={deferredOrderedNotes}
-            shellRef={tableShellRef}
-            showShortcutsHelp={showShortcutsHelp}
-            showToolbar={!tableBody}
-            surface={{
-              allVisibleSelected,
-              ariaBusy: rowsPending,
-              canMove: canMoveNotes,
-              canReorder,
-              dragStateRef,
-              loading,
-              onReorder: handleReorder,
-              reorderRail,
-              selectAllRef,
-              selectedIdSet,
-              sortDirection,
-              sortKey,
-              toggleAllVisible,
-              toggleSort,
-            }}
-            table={table}
-            visibleColumnKeys={visibleColumnKeys}
+              </span>
+            ) : null
+          }
+          railIdentity={railIdentity}
+          railNotice={railNotice}
+          handlers={rowHandlers}
+          hideableColumns={hideableColumns}
+          lastVisibleDataColumnKey={lastVisibleDataColumnKey}
+          onCloseShortcuts={() => setShowShortcutsHelp(false)}
+          onDragOver={autoScrollTableShell}
+          onResetView={resetTableState}
+          onToggleColumn={toggleColumnVisibility}
+          railStart={
+            !isCollectionEditing && !showingNewCollectionForm ? (
+              <button
+                aria-label="Add note"
+                className="button button-primary"
+                data-shortcut="a"
+                disabled={noCollections || isNewCollection}
+                onClick={openCreateNote}
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  focusable="false"
+                  height="15"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                  width="15"
+                >
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                <span className="table-rail-button-label">Add note</span>
+              </button>
+            ) : null
+          }
+          rows={deferredOrderedNotes}
+          shellRef={tableShellRef}
+          showShortcutsHelp={showShortcutsHelp}
+          surface={{
+            allVisibleSelected,
+            ariaBusy: rowsPending,
+            canMove: canMoveNotes,
+            canReorder,
+            dragStateRef,
+            loading,
+            onReorder: handleReorder,
+            reorderRail,
+            selectAllRef,
+            selectedIdSet,
+            sortDirection,
+            sortKey,
+            toggleAllVisible,
+            toggleSort,
+          }}
+          table={table}
+          visibleColumnKeys={visibleColumnKeys}
           />
       </div>
     </section>
