@@ -1479,10 +1479,26 @@ describe("NotesTable filter rail", () => {
     expect(chips.nextElementSibling).toHaveClass("table-rail-actions");
   });
 
-  test("the chips take their own line when the field's line cannot hold them", async () => {
-    // 900 − 20 − 400 of field − 380 of controls − the gaps leaves 76px, less
-    // than one chip: the line wraps and the plan gets the full 880px instead.
+  test("the chips still share the field's line in a sliver of room", async () => {
+    // 900 − 20 − 400 of field − 380 of controls − the gaps leaves 76px. The
+    // plan keeps one truncated chip there rather than hiding it behind `+1`,
+    // so the chips stay where they are.
     mockRailWidths(900, 380);
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Catalog", "Fr. 2300");
+
+    const chips = document.querySelector(".table-filter-chips");
+    expect(chips).not.toBeNull();
+    expect(chips).not.toHaveClass("table-filter-chips--own-line");
+  });
+
+  test("the chips take their own line only when none of the line is left", async () => {
+    // 640 − 20 − 400 of field − 260 of controls − the gaps leaves nothing: the
+    // block wraps and the plan gets the full 620px.
+    mockRailWidths(640, 260);
     renderTable();
     const user = userEvent.setup();
 

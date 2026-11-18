@@ -111,25 +111,29 @@ function unitWidth(unit) {
 const railChipPadding = 20;
 const railChipGap = 12;
 const filterFieldWidth = 400;
-// Below this the inline line could not hold one chip with its field label, so
-// the chips take the whole line instead of squeezing the field.
-const minimumInlineWidth = 140;
 
-// Decides where the chips sit and how much width they may use. The own-line
-// case reports the rail's whole content box, because that is what the chip
-// line gets once it wraps under the field.
+// Decides how much width the chips may use and whether they can stay beside
+// the field at all. They leave the field's line only when that line has no
+// room left for them; the plan's one-chip floor still shows a single condition
+// in a narrow gap rather than hiding it behind `+N`. The own-line case reports
+// the rail's whole content box, because that is what the wrapped line gets.
+// Until the trailing cluster is measured the answer is "unknown", which the
+// plan reads as "show everything" and the stylesheet as "wrap if you must".
 export function computeFilterChipBudget({ actionsWidth = null, railWidth = null }) {
   if (!Number.isFinite(railWidth) || railWidth <= 0) {
     return { availableWidth: null, ownLine: false };
   }
 
   const innerWidth = railWidth - railChipPadding;
-  const inlineWidth =
-    Number.isFinite(actionsWidth) && actionsWidth > 0
-      ? innerWidth - filterFieldWidth - actionsWidth - railChipGap * 2
-      : null;
 
-  if (inlineWidth != null && inlineWidth >= minimumInlineWidth) {
+  if (!Number.isFinite(actionsWidth) || actionsWidth <= 0) {
+    return { availableWidth: null, ownLine: false };
+  }
+
+  const inlineWidth =
+    innerWidth - filterFieldWidth - actionsWidth - railChipGap * 2;
+
+  if (inlineWidth > 0) {
     return { availableWidth: inlineWidth, ownLine: false };
   }
 

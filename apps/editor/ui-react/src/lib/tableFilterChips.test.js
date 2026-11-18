@@ -66,20 +66,29 @@ describe("computeFilterChipBudget", () => {
     ).toEqual({ availableWidth: 456, ownLine: false });
   });
 
-  test("gives the chips their own line when the field's line cannot hold them", () => {
+  test("keeps a narrow gap on the field's line, where the plan truncates", () => {
     // 900 card: 880 inside, minus the 400px field, 380px of controls and the
-    // gaps, leaves 76px — not enough for one chip, so the line wraps and the
-    // plan gets the full 880px.
+    // gaps, leaves 76px. The plan always keeps one chip, so a sliver is still
+    // room for that one truncated chip: it does not move down.
     expect(
       computeFilterChipBudget({ actionsWidth: 380, railWidth: 900 }),
-    ).toEqual({ availableWidth: 880, ownLine: true });
+    ).toEqual({ availableWidth: 76, ownLine: false });
   });
 
-  test("takes its own line before the controls have been measured", () => {
-    // An unmeasured cluster cannot vouch for the inline gap; the full line is
-    // always safe and the controls are measured on the next frame.
+  test("gives the chips their own line only when nothing is left over", () => {
+    // 640 card: 620 inside cannot also hold the 400px field, 260px of controls
+    // and the gaps, so the chip line wraps and the plan gets the full 620px.
+    expect(
+      computeFilterChipBudget({ actionsWidth: 260, railWidth: 640 }),
+    ).toEqual({ availableWidth: 620, ownLine: true });
+  });
+
+  test("leaves the answer open until the controls are measured", () => {
+    // Without a measured cluster the line break belongs to the stylesheet,
+    // which wraps the block when its content cannot fit; the plan shows every
+    // chip meanwhile.
     expect(computeFilterChipBudget({ actionsWidth: null, railWidth: 1160 })).toEqual(
-      { availableWidth: 1140, ownLine: true },
+      { availableWidth: null, ownLine: false },
     );
   });
 
