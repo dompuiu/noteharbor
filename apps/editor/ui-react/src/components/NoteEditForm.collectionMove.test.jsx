@@ -5,6 +5,10 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { chooseSelectOption } from "../test/selectField.js";
 
+const { setCollectionNoteCount } = vi.hoisted(() => ({
+  setCollectionNoteCount: vi.fn(),
+}));
+
 vi.mock("../lib/api.js", () => ({
   createNote: vi.fn(),
   getNote: vi.fn(),
@@ -19,9 +23,10 @@ vi.mock("../lib/api.js", () => ({
 vi.mock("../lib/collections.jsx", () => ({
   useCollections: () => ({
     collections: [
-      { id: 1, is_default: 1, name: "Test" },
-      { id: 2, is_default: 0, name: "Other" },
+      { id: 1, is_default: 1, name: "Test", note_count: 3 },
+      { id: 2, is_default: 0, name: "Other", note_count: 2 },
     ],
+    setCollectionNoteCount,
   }),
 }));
 
@@ -163,6 +168,26 @@ describe("changing a note's collection in the editor", () => {
     expect(moveNote).not.toHaveBeenCalled();
     expect(route()).toContain("/catalog/collections/2/view");
     expect(route()).toContain('"toast":"Note added to Other."');
+    // The destination's rail badge learns about the note even though this
+    // screen leaves for it; the source keeps its count, untouched.
+    expect(setCollectionNoteCount).toHaveBeenCalledWith(2, 3);
+    expect(setCollectionNoteCount).toHaveBeenCalledTimes(1);
+  });
+
+  test("a move to another collection moves both rail counts", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+
+    await chooseOther(user);
+    await user.click(
+      await screen.findByRole("button", { name: "Save & close" }),
+    );
+
+    await waitFor(() => {
+      expect(route()).toContain("/catalog/collections/2/view");
+    });
+    expect(setCollectionNoteCount).toHaveBeenCalledWith(1, 2);
+    expect(setCollectionNoteCount).toHaveBeenCalledWith(2, 3);
   });
 
   test("creating in the current collection stays silent", async () => {

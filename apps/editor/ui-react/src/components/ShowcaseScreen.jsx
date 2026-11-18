@@ -995,6 +995,12 @@ function ShowcaseScreen() {
     } catch (error) {
       reportActionError(error, "Could not refresh the showcase.");
     }
+
+    // A save can change what the showcase list row counts: a catalog showcase
+    // prints owned over total entries, so toggling a note's ownership here has
+    // to reach the rail's badge as well as the canvas. The tree above repaints
+    // the cards; this keeps the collapsed row in step with them.
+    refreshShowcases?.().catch(() => {});
   }
 
   // Closing returns focus to the card the menu belonged to, so the canvas

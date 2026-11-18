@@ -27,6 +27,11 @@ function Probe() {
   return (
     <>
       <output data-testid="names">{context.collections.map((c) => c.name).join(",")}</output>
+      <output data-testid="counts">
+        {context.collections
+          .map((c) => `${c.id}:${c.note_count ?? ""}`)
+          .join(",")}
+      </output>
       <output data-testid="pending">{context.pendingCollection?.name ?? ""}</output>
       <output data-testid="reason">{context.collectionsErrorReason ?? ""}</output>
       <output data-testid="connection">{context.connectionLostReason ?? ""}</output>
@@ -110,6 +115,33 @@ describe("CollectionsProvider mutations", () => {
     expect(screen.getByTestId("names")).toHaveTextContent("Archive");
     expect(getCollections.mock.calls.length).toBe(loadsBefore);
     expect(result.nextCollectionId).toBe(2);
+  });
+});
+
+describe("CollectionsProvider note counts", () => {
+  test("takes the landed count from the screen that owns the rows", async () => {
+    renderProvider();
+    await screen.findByText("Default,Archive");
+
+    const loadsBefore = getCollections.mock.calls.length;
+
+    act(() => {
+      context.setCollectionNoteCount(1, 5);
+    });
+
+    expect(screen.getByTestId("counts")).toHaveTextContent("1:5,2:");
+    expect(getCollections.mock.calls.length).toBe(loadsBefore);
+  });
+
+  test("leaves the row alone for an unknown collection", async () => {
+    renderProvider();
+    await screen.findByText("Default,Archive");
+
+    act(() => {
+      context.setCollectionNoteCount(99, 5);
+    });
+
+    expect(screen.getByTestId("counts")).toHaveTextContent("1:,2:");
   });
 });
 

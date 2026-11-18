@@ -109,6 +109,35 @@ function CollectionsProvider({ children }) {
     });
   }
 
+  // The collection rows carry a note count from the list payload. Note
+  // mutations happen on the Table screen, which owns the authoritative rows, so
+  // it reports the landed count back here instead of refetching every
+  // collection — a full refresh would blank the table it just painted and drop
+  // the collector's place. The rail repaints from this one row.
+  function setCollectionNoteCount(collectionId, count) {
+    if (
+      !Number.isInteger(collectionId) ||
+      !Number.isInteger(count) ||
+      count < 0
+    ) {
+      return;
+    }
+
+    setCollections((current) => {
+      let changed = false;
+      const next = current.map((collection) => {
+        if (collection.id !== collectionId || collection.note_count === count) {
+          return collection;
+        }
+
+        changed = true;
+        return { ...collection, note_count: count };
+      });
+
+      return changed ? next : current;
+    });
+  }
+
   // One writer for the staged row: the ref answers synchronously (a discard is
   // one-shot) and the state is what the rail renders, so they never drift.
   function stagePendingCollection(next) {
@@ -208,6 +237,7 @@ function CollectionsProvider({ children }) {
       refreshCollections,
       renameCollection: handleRenameCollection,
       reorderCollections: handleReorderCollections,
+      setCollectionNoteCount,
     }),
     [
       collections,

@@ -38,6 +38,7 @@ function CollectionScreen({ mode }) {
     beginPendingCollection,
     updatePendingCollectionName,
     discardPendingCollection,
+    setCollectionNoteCount,
   } = useCollections();
   // `new` is the not-yet-saved draft from `+ New collection`: no server row;
   // Save POSTs it, Cancel discards it.
@@ -303,6 +304,7 @@ function CollectionScreen({ mode }) {
           onCancelNewCollection={handleCancel}
           savingNewCollection={saving}
           newCollectionError={nameError || saveError}
+          onNoteCountChange={setCollectionNoteCount}
         />
       </section>
     );
@@ -343,6 +345,7 @@ function CollectionScreen({ mode }) {
           loadingCollections={loadingCollections}
           onDeleteCollection={handleInlineDelete}
           onRenameCollection={handleInlineRename}
+          onNoteCountChange={setCollectionNoteCount}
         />
       </section>
     );
@@ -397,6 +400,7 @@ function CollectionScreen({ mode }) {
         deletingCollectionEdit={deleting}
         canSaveCollectionEdit={dirty}
         collectionEditDialog={dialog}
+        onNoteCountChange={setCollectionNoteCount}
       />
     </section>
   );

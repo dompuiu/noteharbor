@@ -335,7 +335,7 @@ function NoteEditForm({
   const [positionReferenceId, setPositionReferenceId] = useState(
     noteId ? null : initialPositionReferenceId,
   );
-  const { collections } = useCollections();
+  const { collections, setCollectionNoteCount } = useCollections();
   const [destinationCollectionId, setDestinationCollectionId] = useState(
     selectedCollectionId,
   );
@@ -1473,7 +1473,15 @@ function NoteEditForm({
   // Landing in another collection: the default is to show it there, while the
   // checkbox's opt-out reports the change here. The edit-move and
   // create-into-another paths both end here, so the two cannot drift.
-  function landInCollection({ collection, collectionId, message, note }) {
+  function landInCollection({
+    collection,
+    collectionId,
+    message,
+    note,
+    removing = false,
+  }) {
+    reportLandedCounts(collectionId, { removing });
+
     if (showCollectionAfterSave) {
       navigate(CATALOG_ROUTES.collection(collectionId), {
         state: { highlightNoteIds: [note.id], toast: message },
@@ -1487,6 +1495,40 @@ function NoteEditForm({
     }
 
     navigate(CATALOG_ROUTES.collection(collectionId));
+  }
+
+  // A cross-collection save leaves the rail behind: with "show after" on, this
+  // screen navigates away before the source table can report the note leaving,
+  // and the showcase editor's table knows nothing about either collection.
+  // One note is worth one either way, so the rows move by one from the counts
+  // the rail already carries. The destination's own table confirms the exact
+  // number when it loads.
+  function reportLandedCounts(collectionId, { removing }) {
+    if (typeof setCollectionNoteCount !== "function") {
+      return;
+    }
+
+    if (removing) {
+      const source =
+        collections.find((entry) => entry.id === selectedCollectionId) ?? null;
+
+      if (source) {
+        setCollectionNoteCount(
+          selectedCollectionId,
+          Math.max(0, Number(source.note_count ?? 0) - 1),
+        );
+      }
+    }
+
+    const destination =
+      collections.find((entry) => entry.id === collectionId) ?? null;
+
+    if (destination) {
+      setCollectionNoteCount(
+        collectionId,
+        Number(destination.note_count ?? 0) + 1,
+      );
+    }
   }
 
   async function handleSubmit(event) {
@@ -1539,6 +1581,7 @@ function NoteEditForm({
           collectionId: destinationCollectionId,
           message: `Moved to ${destinationName}.`,
           note: movedPayload.note,
+          removing: true,
         });
         return;
       }

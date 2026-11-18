@@ -23,7 +23,7 @@ import {
   reorderCollections,
   reorderShowcases,
 } from "../lib/api.js";
-import { CollectionsProvider } from "../lib/collections.jsx";
+import { CollectionsProvider, useCollections } from "../lib/collections.jsx";
 import { sidebarPinStorageKey } from "../lib/sidebarPin.js";
 import { ShowcasesProvider } from "../lib/showcases.jsx";
 import { APP_VERSION } from "../lib/version.js";
@@ -349,6 +349,45 @@ describe("Sidebar collapsed identity", () => {
     );
     const marks = [...catalog.querySelectorAll(".sidebar-link-mark")];
     expect(marks.map((mark) => mark.textContent)).toEqual(["DE", "SP"]);
+  });
+
+  test("a landed count from the table repaints the row's badge", async () => {
+    // A screen that owns a collection's notes reports its landed count back
+    // through the provider; the rail must repaint from that one row rather than
+    // keep the boot-time number.
+    function CountWriter() {
+      const { setCollectionNoteCount } = useCollections();
+      return (
+        <button
+          onClick={() => setCollectionNoteCount(1, 12)}
+          type="button"
+        >
+          Report count
+        </button>
+      );
+    }
+
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={[CATALOG_ROUTES.collection(1)]}>
+        <ToastProvider>
+          <CollectionsProvider>
+            <ShowcasesProvider>
+              <Sidebar pageFocusRef={createRef()} />
+              <CountWriter />
+            </ShowcasesProvider>
+          </CollectionsProvider>
+        </ToastProvider>
+      </MemoryRouter>,
+    );
+
+    const defaultRow = await screen.findByRole("link", { name: "Default" });
+    const mark = () => defaultRow.querySelector(".sidebar-link-mark");
+    expect(mark()).toHaveTextContent("2");
+
+    await user.click(screen.getByRole("button", { name: "Report count" }));
+
+    expect(mark()).toHaveTextContent("12");
   });
 });
 

@@ -24,6 +24,7 @@ function MoveNotesDialog({
   currentCollectionId,
   noteIds,
   onClose,
+  onMoved,
   onStayed,
 }) {
   const navigate = useNavigate();
@@ -169,6 +170,11 @@ function MoveNotesDialog({
         noteIds.length === 1
           ? `Moved to ${collectionName}.`
           : `Moved ${noteIds.length} notes to ${collectionName}.`;
+
+      // The badge counts a move on both sides: this table drops the rows (its
+      // own list reports that), while the destination's badge only learns about
+      // them here when the table stays put instead of following the move.
+      onMoved?.(destinationCollectionId, noteIds.length);
 
       onClose();
 

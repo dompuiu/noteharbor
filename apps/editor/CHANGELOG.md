@@ -6,6 +6,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ### Fixed
 
+- Sidebar: a collection's rail count now follows the notes on its table. Adding, deleting, or moving a note reports the landed count back to the sidebar, so the collapsed badge no longer keeps the number it loaded with at boot. A note moved or added into another collection raises that row's badge too, and saving a note from a Showcase editor refreshes the showcase row's owned count.
+
 - Note editor: Auto Populate no longer reports "no fields were found" on a first scrape in a cold browser. After the navigation settles (or straight away for a reused tab) the server now polls the page every 300 ms until it carries the data the site's parser reads — up to 15 s — instead of reading it after a fixed 2 s delay, so a slow first page load waits for the real page. The shared navigation budget also rose from 30 s to 45 s for slow page loads.
 
 - Note editor: a PMG scrape now keeps the full catalog number from the page's note reference, which lists the region code first. Romanian **M8** lands as `M8` instead of `8`, and `112a1` keeps its trailing digit instead of stopping at `112a`.

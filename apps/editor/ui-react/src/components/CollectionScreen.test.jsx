@@ -36,6 +36,7 @@ vi.mock("./NotesTable.jsx", () => ({
     canSaveCollectionEdit,
     onRenameCollection,
     onDeleteCollection,
+    onNoteCountChange,
   }) =>
     isNewCollection ? (
       <div data-testid="notes-table" data-new-collection="true">
@@ -130,6 +131,9 @@ vi.mock("./NotesTable.jsx", () => ({
         <button onClick={() => onDeleteCollection?.()} type="button">
           Mock delete
         </button>
+        <button onClick={() => onNoteCountChange?.(1, 4)} type="button">
+          Mock note count
+        </button>
       </div>
     ),
 }));
@@ -155,6 +159,7 @@ function collectionsContext(overrides = {}) {
     beginPendingCollection: vi.fn(),
     updatePendingCollectionName: vi.fn(),
     discardPendingCollection: vi.fn(),
+    setCollectionNoteCount: vi.fn(),
     ...overrides,
   };
 }
@@ -219,6 +224,17 @@ describe("CollectionScreen view mode", () => {
       "data-collection-id",
       "2",
     );
+  });
+
+  test("hands the table the provider's note-count writer", async () => {
+    const user = userEvent.setup();
+    const context = collectionsContext();
+    useCollections.mockReturnValue(context);
+
+    renderView(1);
+    await user.click(screen.getByRole("button", { name: "Mock note count" }));
+
+    expect(context.setCollectionNoteCount).toHaveBeenCalledWith(1, 4);
   });
 
   test("hands the table the collection editing state in edit mode", () => {

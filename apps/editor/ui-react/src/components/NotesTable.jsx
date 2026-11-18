@@ -577,6 +577,7 @@ function NotesTable({
   collections,
   collectionsError,
   loadingCollections,
+  onNoteCountChange = null,
   isNewCollection = false,
   newCollectionName = "",
   onNewCollectionNameChange = null,
@@ -1436,6 +1437,39 @@ function NotesTable({
 
   function retryNotesLoad() {
     setLoadAttempt((attempt) => attempt + 1);
+  }
+
+  // The rail's collection badge is painted from the collections list, which is
+  // only read at boot. This table owns the authoritative rows for the open
+  // collection, so each landed list reports its size back: adding, deleting or
+  // moving a note otherwise left the badge on its boot-time count. The owner
+  // marker keeps a list left over from the previous collection from landing on
+  // the new one during a switch.
+  useEffect(() => {
+    if (
+      !Number.isInteger(collectionId) ||
+      notesCollectionIdRef.current !== collectionId
+    ) {
+      return;
+    }
+
+    onNoteCountChange?.(collectionId, notes.length);
+  }, [collectionId, notes, onNoteCountChange]);
+
+  // A note that lands in another collection never appears in this table's
+  // list, so the destination's badge is raised from the count the rail already
+  // shows. The destination's own table reports the exact number when it loads.
+  function bumpCollectionNoteCount(destinationCollectionId, delta) {
+    const destination =
+      collections?.find((entry) => entry.id === destinationCollectionId) ??
+      null;
+
+    if (destination) {
+      onNoteCountChange?.(
+        destinationCollectionId,
+        Number(destination.note_count ?? 0) + delta,
+      );
+    }
   }
 
   useEffect(() => {
@@ -4666,6 +4700,16 @@ function NotesTable({
             currentCollectionId={collectionId}
             noteIds={moveRequest.noteIds}
             onClose={() => setMoveRequest(null)}
+            onMoved={(destinationId, movedCount) => {
+              // Both sides of the move: this table drops the rows and the
+              // destination gains them, whether the move stays here or opens
+              // the destination's table next.
+              onNoteCountChange?.(
+                collectionId,
+                Math.max(0, notes.length - movedCount),
+              );
+              bumpCollectionNoteCount(destinationId, movedCount);
+            }}
             onStayed={handleMoveStayed}
           />
         ) : null}

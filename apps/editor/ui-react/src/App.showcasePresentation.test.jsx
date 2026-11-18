@@ -755,6 +755,20 @@ describe("the note card in view mode", () => {
     expect(screen.queryByText("Note editor screen")).not.toBeInTheDocument();
   });
 
+  test("saving the note refreshes the showcase row behind the rail count", async () => {
+    renderAt(`${SHOWCASE_ROUTES.showcase(1)}#edit/100`);
+    await screen.findByText("Note editor screen");
+
+    const loadsBefore = getShowcases.mock.calls.length;
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save and return" }),
+    );
+
+    await waitFor(() =>
+      expect(getShowcases.mock.calls.length).toBeGreaterThan(loadsBefore),
+    );
+  });
+
   test("a stale ?node= keeps the reloaded #edit editor open", async () => {
     renderAt(`${SHOWCASE_ROUTES.showcase(1)}?node=999#edit/100`);
 
