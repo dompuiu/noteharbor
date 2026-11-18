@@ -645,6 +645,21 @@ async function reorderNodes(showcaseId, parentNodeId, nodeIds) {
   return handleResponse(response);
 }
 
+// Reparent one node. `position` is the final zero-based index in the target
+// sibling list; the server renumbers both lists in one transaction.
+async function moveNode(id, parentNodeId, position) {
+  const response = await request(`/api/nodes/${id}/move`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({
+      parent_node_id: parentNodeId ?? null,
+      position
+    })
+  });
+
+  return handleResponse(response);
+}
+
 const SCRAPE_PREVIEW_TIMEOUT_BUFFER_MS = 5000;
 const SCRAPE_NAVIGATION_TIMEOUT_MAX_MS = 120000;
 
@@ -718,6 +733,7 @@ export {
   importArchive,
   moveNote,
   moveNotes,
+  moveNode,
   renameCategory,
   renameCollection,
   renameShowcase,

@@ -19,11 +19,16 @@ function ShowcaseReorderableCell({
   menu = null,
   children,
   embedded = false,
+  container = false,
+  drawer = null,
+  targetChildren = [],
+  springing = false,
 }) {
   const enabled = reorder != null;
   const {
     draggedId,
     dropTarget,
+    drawerId,
     clear,
     handleDragStart,
     handleDragLeave,
@@ -35,13 +40,15 @@ function ShowcaseReorderableCell({
   const className = `showcase-reorder-cell${enabled ? " showcase-reorder-cell--draggable" : ""}${
     enabled && draggedId === nodeId ? " showcase-reorder-cell--dragging" : ""
   }${placement ? ` showcase-reorder-cell--drop-${placement}` : ""}${
+    enabled && drawerId === nodeId ? " showcase-reorder-cell--nest-open" : ""
+  }${springing ? " showcase-reorder-cell--springing" : ""}${
     embedded ? " showcase-reorder-cell--embedded" : ""
   }`;
   const grip = enabled ? (
     <span
       aria-hidden="true"
       className="showcase-reorder-handle"
-      title={`Drag ${label} to reorder`}
+      title={`Drag ${label} to reorder${container ? " or nest" : ""}`}
     >
       <svg
         aria-hidden="true"
@@ -69,12 +76,23 @@ function ShowcaseReorderableCell({
       draggable={enabled}
       onDragEnd={enabled ? clear : undefined}
       onDragLeave={enabled ? (event) => handleDragLeave(event, nodeId) : undefined}
-      onDragOver={enabled ? (event) => handleDragOver(event, nodeId) : undefined}
+      onDragOver={
+        enabled
+          ? (event) => handleDragOver(event, nodeId, { container })
+          : undefined
+      }
       onDragStart={
         enabled ? (event) => handleDragStart(event, nodeId) : undefined
       }
-      onDrop={enabled ? (event) => handleDrop(event, nodeId) : undefined}
+      onDrop={
+        enabled
+          ? (event) => handleDrop(event, nodeId, { children: targetChildren })
+          : undefined
+      }
     >
+      {springing ? (
+        <span aria-hidden="true" className="showcase-spring-meter" />
+      ) : null}
       {embedded ? (
         // An embedded card draws its own frame, so it places the menu itself:
         // the render function receives it and decides where it sits.
@@ -97,6 +115,7 @@ function ShowcaseReorderableCell({
           {children}
         </>
       )}
+      {drawer}
     </div>
   );
 }

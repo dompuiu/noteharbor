@@ -7,6 +7,7 @@ import {
   deleteNode,
   getCategories,
   getShowcaseTree,
+  moveNode,
   reorderNodes,
   replaceCatalogEntryWithNote,
   updateCatalogEntry,
@@ -33,6 +34,7 @@ import {
 } from "../lib/routes.js";
 import {
   appendChildren,
+  appendPositionFor,
   catalogCounts,
   catalogEntryIdentity,
   catalogPresentationNotes,
@@ -44,10 +46,12 @@ import {
   findParentId,
   isCatalogEntry,
   isNoteNode,
+  moveNodeTree,
   noteOwnedInTree,
   removeNodeTree,
   reorderNodeTree,
   setNoteOwned,
+  showcaseNodeLabel,
   updateNodeTree,
 } from "../lib/showcaseTree.js";
 import {
@@ -69,6 +73,7 @@ import { ShowcaseDialog } from "./ShowcaseDialog.jsx";
 import { ShowcaseItemsGrid } from "./ShowcaseItemsGrid.jsx";
 import { ShowcaseNameDialog } from "./ShowcaseNameDialog.jsx";
 import { ShowcaseNotePicker } from "./ShowcaseNotePicker.jsx";
+import { ShowcaseMoveDialog } from "./ShowcaseMoveDialog.jsx";
 import { ShowcaseLayoutControl } from "./ShowcaseLayoutControl.jsx";
 import { ShowcasePhotoSizeControl } from "./ShowcasePhotoSizeControl.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
@@ -178,6 +183,12 @@ function ShowcaseScreen() {
   const [photoSize, setPhotoSize] = usePhotoSize();
   const [catalogLayout, setCatalogLayout] = useCatalogLayout();
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  // The active grid's drag snapshot: the canvas-level outcome line and the
+  // ancestor rail read it; the move itself stays in the grid's own hook.
+  const [dragState, setDragState] = useState(null);
+  const handleDragState = useCallback((next) => {
+    setDragState(next?.sourceId == null ? null : next);
+  }, []);
 
   // The merged add dialog's insertion point. `parent` is the container whose
   // grid the add tile or item menu belongs to; `afterId` null means append.
@@ -189,6 +200,8 @@ function ShowcaseScreen() {
   const [nameDialog, setNameDialog] = useState(null);
   // The catalog shell whose metadata is being edited.
   const [editShellId, setEditShellId] = useState(null);
+  // The card whose "Move into…" dialog is open.
+  const [moveTargetId, setMoveTargetId] = useState(null);
   // Card to refocus when the overlay closes; not part of the URL.
   const noteEditorReturnNodeIdRef = useRef(null);
   const noteEditorOverlayRef = useRef(null);
@@ -527,6 +540,174 @@ function ShowcaseScreen() {
       setNodes(previous);
       reportActionError(error, "Could not reorder the items.");
     }
+  }
+
+  // Client-side mirror of the move endpoint's placement rules. It keeps an
+  // impossible move from touching the canvas at all; the server stays the
+  // authority for anything this cannot see.
+  function movePlacementError(sourceId, parentId) {
+    const source = findNodeById(nodesRef.current, sourceId);
+
+    if (!source) {
+      return "The card is no longer here.";
+    }
+
+    if (source.node_type === "category" && parentId != null) {
+      return "A category placement stays at the top level.";
+    }
+
+    if (source.node_type !== "category" && parentId == null) {
+      return "That card needs a category or grouping.";
+    }
+
+    if (parentId != null) {
+      const parent = findNodeById(nodesRef.current, parentId);
+
+      if (
+        !parent ||
+        (parent.node_type !== "grouping" && parent.node_type !== "category")
+      ) {
+        return "That level can't hold items.";
+      }
+
+      if (
+        parent.id === sourceId ||
+        findNodeIdPath(nodesRef.current, parent.id).includes(sourceId)
+      ) {
+        return "A grouping can't move inside itself.";
+      }
+    }
+
+    return "";
+  }
+
+  // Reparent one card. The optimistic tree move lands first; a failed write
+  // restores the previous tree so the canvas never claims an order the server
+  // did not accept. `position` is the final zero-based sibling index.
+  async function handleMoveNode(
+    sourceId,
+    parentId,
+    position,
+    { silent = false } = {},
+  ) {
+    const previous = nodesRef.current;
+    const source = findNodeById(previous, sourceId);
+    const destination =
+      parentId == null ? null : findNodeById(previous, parentId);
+    const placementError = movePlacementError(sourceId, parentId);
+
+    if (!source) {
+      return false;
+    }
+
+    if (placementError) {
+      setActionError(placementError);
+      setAnnouncement(`Move refused. ${placementError}`);
+      toastHost?.current?.show(placementError, "danger");
+      return false;
+    }
+
+    const previousParentId = findParentId(previous, sourceId);
+    const previousSiblings =
+      previousParentId == null
+        ? previous
+        : (findNodeById(previous, previousParentId)?.children ?? []);
+    const previousIndex = previousSiblings.findIndex(
+      (node) => node.id === sourceId,
+    );
+
+    setNodes((current) => moveNodeTree(current, sourceId, parentId, position));
+
+    try {
+      await moveNode(sourceId, parentId, position);
+      setActionError("");
+
+      if (silent) {
+        setAnnouncement("Move undone.");
+        return true;
+      }
+
+      const message = `Moved “${showcaseNodeLabel(source)}” ${
+        destination ? `into “${destination.name}”` : "to the top level"
+      }.`;
+      setAnnouncement(message);
+      toastHost?.current?.show(message, "success", {
+        label: "Undo",
+        onClick: () => {
+          handleMoveNode(sourceId, previousParentId, previousIndex, {
+            silent: true,
+          });
+        },
+      });
+
+      if (parentId != null) {
+        focusShowcaseControl(
+          sectionRef,
+          `[data-showcase-node-id="${parentId}"]`,
+        );
+      }
+
+      return true;
+    } catch (error) {
+      setNodes(previous);
+      reportActionError(error, "Could not move the item.");
+      return false;
+    }
+  }
+
+  // The ancestor rail's drop: append to the chosen level, which is the only
+  // outdent gesture when the target level's cards are not on screen.
+  function handleDropAtLevel(levelId) {
+    if (dragState?.sourceId == null) {
+      return;
+    }
+
+    const level =
+      levelId == null ? null : findNodeById(nodesRef.current, levelId);
+    const siblings =
+      levelId == null ? nodesRef.current : (level?.children ?? []);
+    const position = appendPositionFor(siblings, dragState.sourceId);
+    const sourceId = dragState.sourceId;
+
+    setDragState(null);
+    handleMoveNode(sourceId, levelId, position);
+  }
+
+  function dragOutcomeLabel(state) {
+    if (!state) {
+      return "";
+    }
+
+    const source = findNodeById(nodes, state.sourceId);
+    const sourceName = showcaseNodeLabel(source);
+
+    if (state.springId != null) {
+      return `Hold to open “${showcaseNodeLabel(findNodeById(nodes, state.springId))}”`;
+    }
+
+    if (state.drawerTarget) {
+      const group = findNodeById(nodes, state.drawerId);
+
+      if (state.drawerTarget.placement === "into") {
+        return `Into “${showcaseNodeLabel(findNodeById(nodes, state.drawerTarget.parentId))}” · inside`;
+      }
+
+      return `Inside “${showcaseNodeLabel(group)}” · ${
+        state.drawerTarget.placement === "after" ? "after" : "before"
+      } “${showcaseNodeLabel(findNodeById(nodes, state.drawerTarget.childId))}”`;
+    }
+
+    if (state.target?.placement === "into") {
+      return `Into “${showcaseNodeLabel(findNodeById(nodes, state.target.nodeId))}” · end`;
+    }
+
+    if (state.target) {
+      return `${
+        state.target.placement === "after" ? "After" : "Before"
+      } “${showcaseNodeLabel(findNodeById(nodes, state.target.nodeId))}”`;
+    }
+
+    return `Moving “${sourceName}” · edges reorder, middle nests`;
   }
 
   function openAdd(parent, afterId = null, mode = "notes") {
@@ -1714,6 +1895,8 @@ function ShowcaseScreen() {
     replaceNodeId == null ? null : findNodeById(nodes, replaceNodeId);
   const editShellNode =
     editShellId == null ? null : findNodeById(nodes, editShellId);
+  const moveTargetNode =
+    moveTargetId == null ? null : findNodeById(nodes, moveTargetId);
   const ownedPercent = levelTotals.total
     ? Math.round((levelTotals.owned / levelTotals.total) * 100)
     : 0;
@@ -1767,6 +1950,9 @@ function ShowcaseScreen() {
     onRemove: handleRemove,
     onRenameGrouping: openRename,
     onReorder: handleReorder,
+    onMove: handleMoveNode,
+    onMoveInto: (node) => setMoveTargetId(node.id),
+    onDragState: handleDragState,
     onSetCover: handleSetCover,
     photoSize,
     reorderEnabled,
@@ -2015,6 +2201,46 @@ function ShowcaseScreen() {
           />
         ) : null}
 
+        {dragState ? (
+          <div className="showcase-drag-bar">
+            <p aria-hidden="true" className="showcase-drag-outcome">
+              {dragOutcomeLabel(dragState)}
+            </p>
+            {displayPath.length ? (
+              <div
+                aria-label="Move to a level"
+                className="showcase-drag-levels"
+                role="group"
+              >
+                <span className="showcase-drag-levels-label">Move to</span>
+                {displayPath.map((level) => (
+                  <button
+                    className="showcase-drag-level"
+                    key={level.id}
+                    onDragLeave={(event) =>
+                      event.currentTarget.classList.remove("is-target")
+                    }
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                      event.currentTarget.classList.add("is-target");
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      event.currentTarget.classList.remove("is-target");
+                      handleDropAtLevel(level.id);
+                    }}
+                    title={`Move to the end of ${level.name}`}
+                    type="button"
+                  >
+                    {level.name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         {filterEmpty ? (
           <div className="showcase-empty-box showcase-empty-box--quiet">
             <p className="showcase-empty-title">{activeFilter.emptyTitle}</p>
@@ -2115,6 +2341,15 @@ function ShowcaseScreen() {
           suggestions={nameDialogSuggestions}
           suggestionsLabel={nameDialog.suggestionsLabel}
           title={nameDialog.title}
+        />
+      ) : null}
+
+      {moveTargetNode ? (
+        <ShowcaseMoveDialog
+          nodes={nodes}
+          onClose={() => setMoveTargetId(null)}
+          onMove={handleMoveNode}
+          source={moveTargetNode}
         />
       ) : null}
 

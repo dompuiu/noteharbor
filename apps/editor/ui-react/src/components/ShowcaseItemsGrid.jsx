@@ -1,11 +1,10 @@
 import {
-  catalogEntryIdentity,
   isCatalogEntry,
   isNoteNode,
   nodeCatalogState,
   primarySpecimen,
+  showcaseNodeLabel,
 } from "../lib/showcaseTree.js";
-import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
 import { ShowcaseAddCard } from "./ShowcaseAddCard.jsx";
 import { ShowcaseCatalogCard } from "./ShowcaseCatalogCard.jsx";
@@ -13,9 +12,10 @@ import { ShowcaseGrid } from "./ShowcaseGrid.jsx";
 import { ShowcaseGroupingCard } from "./ShowcaseGroupingCard.jsx";
 import { ShowcaseItemMenu } from "./ShowcaseItemMenu.jsx";
 import { ShowcaseReorderableCell } from "./ShowcaseReorderableCell.jsx";
+import { ShowcaseSpringDrawer } from "./ShowcaseSpringDrawer.jsx";
 
-function noteLabel(node) {
-  return showcaseNoteDisplayParts(node.note).join(" ") || "note";
+function isContainer(node) {
+  return node?.node_type === "grouping";
 }
 
 // One level's cards in the always-editable canvas. Every item is draggable and
@@ -30,6 +30,8 @@ function ShowcaseItemsGrid({
   photoSize,
   reorderEnabled = true,
   onReorder,
+  onMove,
+  onDragState,
   onAdd,
   onAddNoteAfter,
   onAddGroupingAfter,
@@ -46,12 +48,37 @@ function ShowcaseItemsGrid({
   onRenameGrouping,
   onSetCover,
   onClearCover,
+  onMoveInto,
 }) {
   const reorder = useShowcaseReorder({
     nodes: items,
+    onDragState,
     onReorder: (orderedIds) => onReorder(parent?.id ?? null, orderedIds),
+    onMove,
   });
   const isGroupingParent = parent?.node_type === "grouping";
+
+  function drawerFor(node) {
+    if (!isContainer(node) || reorder.drawerId !== node.id) {
+      return null;
+    }
+
+    return (
+      <ShowcaseSpringDrawer
+        drawerTarget={reorder.drawerTarget}
+        draggedId={reorder.draggedId}
+        items={node.children ?? []}
+        label={node.name}
+        onDragOverEmpty={reorder.handleDrawerEmptyDragOver}
+        onDragOverInto={reorder.handleDrawerIntoDragOver}
+        onDragOverRow={reorder.handleDrawerDragOver}
+        onDropEmpty={reorder.handleDrawerEmptyDrop}
+        onDropInto={reorder.handleDrawerIntoDrop}
+        onDropRow={reorder.handleDrawerDrop}
+        parentId={node.id}
+      />
+    );
+  }
 
   function moveNode(node, direction) {
     const ids = items.map((entry) => entry.id);
@@ -68,13 +95,7 @@ function ShowcaseItemsGrid({
 
   function menuFor(node, { isGrouping = false, isShell = false } = {}) {
     const index = items.findIndex((entry) => entry.id === node.id);
-    const label = isGrouping
-      ? node.name
-      : isShell
-        ? catalogEntryIdentity(node.entry)
-        : node.node_type === "note"
-          ? noteLabel(node)
-          : node.name;
+    const label = showcaseNodeLabel(node);
     const ownershipNote = isCatalogEntry(node)
       ? primarySpecimen(node)
       : node.node_type === "note"
@@ -114,6 +135,7 @@ function ShowcaseItemsGrid({
         onMoveUp={
           reorderEnabled ? () => moveNode(node, -1) : undefined
         }
+        onMoveInto={reorderEnabled && onMoveInto ? () => onMoveInto(node) : undefined}
         onOpen={() => onOpenGrouping(node)}
         onRemove={() => onRemove(node)}
         onRename={() => onRenameGrouping(node)}
@@ -152,7 +174,7 @@ function ShowcaseItemsGrid({
             <ShowcaseReorderableCell
               embedded
               key={node.id}
-              label={catalogEntryIdentity(node.entry)}
+              label={showcaseNodeLabel(node)}
               menu={menuFor(node, { isShell: true })}
               nodeId={node.id}
               reorder={reorderEnabled ? reorder : null}
@@ -180,7 +202,11 @@ function ShowcaseItemsGrid({
               label={node.name}
               menu={menuFor(node, { isGrouping: true })}
               nodeId={node.id}
+              container
+              drawer={reorderEnabled ? drawerFor(node) : null}
               reorder={reorderEnabled ? reorder : null}
+              springing={reorderEnabled && reorder.springId === node.id}
+              targetChildren={node.children ?? []}
             >
               {({ grip, menu }) => (
                 <ShowcaseGroupingCard
@@ -200,7 +226,7 @@ function ShowcaseItemsGrid({
             <ShowcaseReorderableCell
               embedded
               key={node.id}
-              label={noteLabel(node)}
+              label={showcaseNodeLabel(node)}
               menu={menuFor(node)}
               nodeId={node.id}
               reorder={reorderEnabled ? reorder : null}

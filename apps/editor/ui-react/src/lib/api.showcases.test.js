@@ -4,6 +4,7 @@ import {
   createShowcase,
   deleteShowcase,
   getShowcases,
+  moveNode,
   renameShowcase,
   reorderShowcases,
   updateCatalogEntry,
@@ -104,6 +105,36 @@ describe("showcase API calls", () => {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids: [2, 1, 3] }),
+    });
+  });
+
+  test("moveNode PUTs the new parent and final position", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse(200, { node: { id: 7, parent_node_id: 3 } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await moveNode(7, 3, 2);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/nodes/7/move", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ parent_node_id: 3, position: 2 }),
+    });
+  });
+
+  test("moveNode sends a null parent for the top level", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse(200, { node: { id: 7, parent_node_id: null } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await moveNode(7, null, 0);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/nodes/7/move", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ parent_node_id: null, position: 0 }),
     });
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   appendChildren,
+  appendPositionFor,
   applyChildOrder,
   catalogCounts,
   catalogEntryCaption,
@@ -16,6 +17,7 @@ import {
   findNodeIdPath,
   findNodePath,
   hasSeenPrimary,
+  moveNodeTree,
   nodeCatalogState,
   normalizeCatalogEntry,
   planCatalogMerge,
@@ -29,6 +31,7 @@ import {
   sameCatalogEntry,
   setNoteOwned,
   showcaseCountLabel,
+  showcaseNodeLabel,
   showcaseNoteState,
   specimenNoteIds,
   specimenPayload,
@@ -148,6 +151,71 @@ describe("reorderNodeTree", () => {
     expect(findNodeById(after, 1).children.map((node) => node.id)).toEqual([
       3, 2,
     ]);
+  });
+});
+
+describe("appendPositionFor", () => {
+  test("counts the list as it stands after the source leaves", () => {
+    const children = [grouping(2), noteNode(3), noteNode(4)];
+
+    expect(appendPositionFor(children, 3)).toBe(2);
+    expect(appendPositionFor(children, 99)).toBe(3);
+  });
+});
+
+describe("showcaseNodeLabel", () => {
+  test("names a grouping by its own name", () => {
+    expect(showcaseNodeLabel(grouping(2))).toBe("Group 2");
+  });
+
+  test("names a note by its display parts", () => {
+    const node = {
+      ...noteNode(3),
+      note: { denomination: "1 leu", issue_date: "1915" },
+    };
+
+    expect(showcaseNodeLabel(node)).toContain("1 leu");
+  });
+});
+
+describe("moveNodeTree", () => {
+  test("reparents a note into a grouping at the requested index", () => {
+    const before = tree();
+    const after = moveNodeTree(before, 3, 2, 1);
+
+    expect(findNodeById(after, 1).children.map((node) => node.id)).toEqual([2]);
+    expect(findNodeById(after, 2).children.map((node) => node.id)).toEqual([
+      4, 3,
+    ]);
+    // The caller's tree is untouched.
+    expect(findNodeById(before, 2).children.map((node) => node.id)).toEqual([4]);
+  });
+
+  test("moves a grouping to the top level", () => {
+    const after = moveNodeTree(tree(), 2, null, 0);
+
+    expect(after.map((node) => node.id)).toEqual([2, 1, 5]);
+    expect(findNodeById(after, 1).children.map((node) => node.id)).toEqual([3]);
+  });
+
+  test("clamps the index to the target list", () => {
+    const after = moveNodeTree(tree(), 3, 2, 99);
+
+    expect(findNodeById(after, 2).children.map((node) => node.id)).toEqual([
+      4, 3,
+    ]);
+  });
+
+  test("refuses a target inside the moved subtree", () => {
+    const before = tree();
+
+    expect(moveNodeTree(before, 1, 2, 0)).toBe(before);
+  });
+
+  test("returns the tree unchanged for a missing node", () => {
+    const before = tree();
+
+    expect(moveNodeTree(before, 999, 2, 0)).toBe(before);
   });
 });
 

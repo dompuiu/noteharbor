@@ -27,6 +27,9 @@ function ShowcaseCategorySection({
   photoSize,
   reorderEnabled = true,
   onReorder,
+  onMove,
+  onMoveInto,
+  onDragState,
   onAdd,
   onAddNoteAfter,
   onAddGroupingAfter,
@@ -91,6 +94,9 @@ function ShowcaseCategorySection({
         onRemove={onRemove}
         onRenameGrouping={onRename}
         onReorder={onReorder}
+        onMove={onMove}
+        onMoveInto={onMoveInto}
+        onDragState={onDragState}
         onSetCover={onSetCover}
         parent={category}
         photoSize={photoSize}

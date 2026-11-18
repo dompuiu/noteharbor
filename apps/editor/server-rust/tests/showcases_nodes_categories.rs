@@ -1840,3 +1840,195 @@ async fn legacy_specimen_entries_migrate_to_single_note_cards() {
         .expect("specimen count");
     assert_eq!(remaining, 0);
 }
+
+// --- moves ------------------------------------------------------------------------
+
+fn find_tree_node<'a>(nodes: &'a [Value], id: i64) -> Option<&'a Value> {
+    for node in nodes {
+        if node["id"].as_i64() == Some(id) {
+            return Some(node);
+        }
+        if let Some(children) = node["children"].as_array() {
+            if let Some(found) = find_tree_node(children, id) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
+fn child_ids(node: &Value) -> Vec<i64> {
+    node["children"]
+        .as_array()
+        .map(|children| {
+            children
+                .iter()
+                .map(|child| child["id"].as_i64().unwrap())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+#[tokio::test]
+async fn nodes_move_reparents_between_groupings_and_renumbers() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let showcase = create_showcase(app.clone(), Some("Move children")).await;
+    let showcase_id = showcase["id"].as_i64().unwrap();
+    let category = place_category(app.clone(), showcase_id, "Move").await;
+    let category_id = category["id"].as_i64().unwrap();
+    let (_, group_a) = add_grouping(app.clone(), showcase_id, category_id, "Group A").await;
+    let group_a_id = group_a["node"]["id"].as_i64().unwrap();
+    let (_, group_b) = add_grouping(app.clone(), showcase_id, category_id, "Group B").await;
+    let group_b_id = group_b["node"]["id"].as_i64().unwrap();
+
+    let collection = create_collection(app.clone(), "Move notes").await;
+    let collection_id = collection["id"].as_i64().unwrap();
+    let first = create_note(app.clone(), collection_id, "1").await;
+    let second = create_note(app.clone(), collection_id, "2").await;
+    let third = create_note(app.clone(), collection_id, "3").await;
+
+    let (_, added_a) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/showcases/{showcase_id}/nodes"),
+        Some(json!({
+            "type": "notes",
+            "parent_id": group_a_id,
+            "note_ids": [first["id"], second["id"]],
+        })),
+    )
+    .await;
+    let first_node = added_a["nodes"][0]["id"].as_i64().unwrap();
+    let second_node = added_a["nodes"][1]["id"].as_i64().unwrap();
+    let (_, added_b) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/showcases/{showcase_id}/nodes"),
+        Some(json!({
+            "type": "notes",
+            "parent_id": group_b_id,
+            "note_ids": [third["id"]],
+        })),
+    )
+    .await;
+    let third_node = added_b["nodes"][0]["id"].as_i64().unwrap();
+
+    // Move the first note into Group B at the head.
+    let (status, body) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/nodes/{first_node}/move"),
+        Some(json!({ "parent_node_id": group_b_id, "position": 0 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["node"]["parent_node_id"], json!(group_b_id));
+
+    let (_, tree) = call(app.clone(), "GET", &format!("/api/showcases/{showcase_id}/tree"), None).await;
+    let roots = tree["nodes"].as_array().unwrap();
+    let group_a_node = find_tree_node(roots, group_a_id).unwrap();
+    let group_b_node = find_tree_node(roots, group_b_id).unwrap();
+    assert_eq!(child_ids(group_a_node), vec![second_node]);
+    assert_eq!(child_ids(group_b_node), vec![first_node, third_node]);
+
+    // Move it back to the end of Group A.
+    let (status, body) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/nodes/{first_node}/move"),
+        Some(json!({ "parent_node_id": group_a_id, "position": 1 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["node"]["parent_node_id"], json!(group_a_id));
+
+    let (_, tree) = call(app.clone(), "GET", &format!("/api/showcases/{showcase_id}/tree"), None).await;
+    let roots = tree["nodes"].as_array().unwrap();
+    assert_eq!(child_ids(find_tree_node(roots, group_a_id).unwrap()), vec![second_node, first_node]);
+    assert_eq!(child_ids(find_tree_node(roots, group_b_id).unwrap()), vec![third_node]);
+
+    // Position 0 at the same level still works.
+    let (status, body) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/nodes/{first_node}/move"),
+        Some(json!({ "parent_node_id": group_a_id, "position": 0 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["node"]["position"], json!(1));
+
+    // Guards: a note cannot live at the top level, a category stays at the top,
+    // a grouping cannot move into its own child, and positions must fit.
+    let (status, _) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/nodes/{first_node}/move"),
+        Some(json!({ "parent_node_id": Value::Null, "position": 0 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let (status, _) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/nodes/{category_id}/move"),
+        Some(json!({ "parent_node_id": group_a_id, "position": 0 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let (_, child_group) = add_grouping(app.clone(), showcase_id, group_a_id, "Child").await;
+    let child_group_id = child_group["node"]["id"].as_i64().unwrap();
+    let (status, _) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/nodes/{group_a_id}/move"),
+        Some(json!({ "parent_node_id": child_group_id, "position": 0 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    for position in [json!(-1), json!(99), json!("x"), Value::Null] {
+        let (status, _) = call(
+            app.clone(),
+            "PUT",
+            &format!("/api/nodes/{first_node}/move"),
+            Some(json!({ "parent_node_id": group_a_id, "position": position })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "position {position}");
+    }
+
+    let (status, _) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/nodes/{first_node}/move"),
+        Some(json!({ "parent_node_id": 999999, "position": 0 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let other_showcase = create_showcase(app.clone(), Some("Other showcase")).await;
+    let other_showcase_id = other_showcase["id"].as_i64().unwrap();
+    let other_category = place_category(app.clone(), other_showcase_id, "Other").await;
+    let other_category_id = other_category["id"].as_i64().unwrap();
+    let (status, _) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/nodes/{first_node}/move"),
+        Some(json!({ "parent_node_id": other_category_id, "position": 0 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let (status, _) = call(
+        app.clone(),
+        "PUT",
+        "/api/nodes/999999/move",
+        Some(json!({ "parent_node_id": group_a_id, "position": 0 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

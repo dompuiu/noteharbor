@@ -31,6 +31,7 @@ function ShowcaseItemMenu({
   onEditNote,
   onMoveUp,
   onMoveDown,
+  onMoveInto,
   canMoveUp = false,
   canMoveDown = false,
   onRemove,
@@ -143,6 +144,14 @@ function ShowcaseItemMenu({
           icon: "arrow-down",
           run: onMoveDown,
           disabled: !canMoveDown,
+        }
+      : null,
+    onMoveInto
+      ? {
+          key: "move-into",
+          label: "Move into…",
+          icon: "move",
+          run: onMoveInto,
         }
       : null,
     showCoverActions && canSetCover && onSetCover

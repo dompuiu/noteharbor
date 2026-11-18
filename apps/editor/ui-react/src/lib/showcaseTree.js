@@ -8,6 +8,7 @@
 
 import {
   formatShowcaseCatalogNumber,
+  showcaseNoteDisplayParts,
   showcaseNoteTitleParts,
 } from "./showcaseNoteLabels.js";
 
@@ -63,6 +64,40 @@ function findNodeById(nodes, nodeId) {
   }
 
   return null;
+}
+
+// One label for a card of any kind, shared by drag announcements, the spring
+// drawer, and the move dialog. Catalog entries and notes have no `name`.
+function showcaseNodeLabel(node) {
+  if (!node) {
+    return "item";
+  }
+
+  if (node.node_type === "note") {
+    return showcaseNoteDisplayParts(node.note ?? {}).join(" ") || "note";
+  }
+
+  if (isCatalogEntry(node)) {
+    return catalogEntryIdentity(node.entry);
+  }
+
+  return node.name ?? "item";
+}
+
+function showcaseNodeTypeLabel(node) {
+  if (!node) {
+    return "Item";
+  }
+
+  if (node.node_type === "note") {
+    return "Note";
+  }
+
+  if (isCatalogEntry(node)) {
+    return "Placeholder";
+  }
+
+  return node.node_type === "grouping" ? "Grouping" : "Category";
 }
 
 // The parent id of a node, or null for a top-level node (and for an id that is
@@ -200,6 +235,55 @@ function reorderNodeTree(nodes, parentId, orderedIds) {
     ...parent,
     children: applyChildOrder(parent.children ?? [], orderedIds),
   }));
+}
+
+// Insert one already-removed node under a parent at `index` (the final
+// zero-based position). The top level is `parentId == null`.
+function insertNodeTree(nodes, parentId, index, node) {  if (parentId == null) {
+    const next = [...nodes];
+    next.splice(Math.max(0, Math.min(index, next.length)), 0, node);
+    return next;
+  }
+
+  return updateNodeTree(nodes, parentId, (parent) => {
+    const children = [...(parent.children ?? [])];
+    children.splice(Math.max(0, Math.min(index, children.length)), 0, node);
+    return { ...parent, children };
+  });
+}
+
+// Reparent one node without refetching: remove it from wherever it sits, then
+// insert it under `parentId` at the final index. A target inside the moved
+// subtree is refused on the server, so the helper returns the tree untouched
+// rather than silently duplicating the node.
+function moveNodeTree(nodes, nodeId, parentId, index) {
+  const node = findNodeById(nodes, nodeId);
+
+  if (!node) {
+    return nodes;
+  }
+
+  if (parentId != null) {
+    const targetPath = findNodeIdPath(nodes, parentId);
+
+    if (targetPath.includes(nodeId)) {
+      return nodes;
+    }
+  }
+
+  return insertNodeTree(
+    removeNodeTree(nodes, nodeId),
+    parentId,
+    index,
+    node,
+  );
+}
+
+// The final index for appending a node to a sibling list that may still hold
+// it. The server's `position` counts the list after the source is removed, so
+// both drag drops and the move dialog share this one calculation.
+function appendPositionFor(children, nodeId) {
+  return (children ?? []).filter((child) => child.id !== nodeId).length;
 }
 
 // The number of note nodes anywhere in the tree. The presentation header's
@@ -757,6 +841,7 @@ function showcaseCountLabel(showcase) {
 
 export {
   appendChildren,
+  appendPositionFor,
   applyChildOrder,
   catalogCounts,
   catalogEntryCaption,
@@ -775,6 +860,7 @@ export {
   hasSeenPrimary,
   isCatalogEntry,
   isNoteNode,
+  moveNodeTree,
   nodeCatalogState,
   normalizeCatalogEntry,
   noteOwnedInTree,
@@ -788,6 +874,8 @@ export {
   sameCatalogEntry,
   setNoteOwned,
   showcaseCountLabel,
+  showcaseNodeLabel,
+  showcaseNodeTypeLabel,
   showcaseNoteState,
   specimenNoteIds,
   specimenPayload,

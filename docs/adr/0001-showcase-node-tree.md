@@ -11,6 +11,8 @@ A Showcase is stored as a single self-referential `showcase_nodes` table, where 
 
 - Moving a Grouping or note rewrites only its `position` (and `parent_node_id`); nothing else references its location.
 - The tree is acyclic by construction, so no cycle-prevention invariant is required.
+  Superseded in part by ADR-0006: once a node can be reparented, the move
+  endpoint owns the cycle check.
 - Archive export/import must renumber and remap four reference columns (`showcase_id`, `category_id`, `note_id`, `cover_note_id`) plus the self-referential `parent_node_id`.
 - Category labels follow their placements: a label with no Placement can be deleted, while placements keep `ON DELETE RESTRICT` so a used label is refused. Deleting a Placement still leaves the label in the pool, ready to be reused or deleted from the suggestion list.
 

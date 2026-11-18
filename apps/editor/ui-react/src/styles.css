@@ -11615,3 +11615,335 @@ td.table-col-collection {
     padding: 10px 0 0;
   }
 }
+
+/* ------------------------------------------------------------------------- */
+/* Spring-open nesting (option B)                                            */
+/*                                                                           */
+/* The middle of a container is one drop target: hold it for 450 ms and the  */
+/* card opens a drawer of its direct children. Order stays a vertical line   */
+/* in the column gap; nesting is a full-cell inset ring, then a row-level    */
+/* line inside the drawer. The two can never be mistaken for each other.     */
+/* ------------------------------------------------------------------------- */
+
+.showcase-reorder-cell--drop-into {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.showcase-reorder-cell--nest-open {
+  z-index: 30;
+}
+
+/* The spring's progress is a real element rather than a pseudo: the cell's
+   two pseudo-elements already draw the order target and the focus frame. */
+.showcase-spring-meter {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  z-index: 6;
+  height: 3px;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  background: var(--accent);
+  pointer-events: none;
+  animation: showcase-spring-fill 450ms linear forwards;
+  transform-origin: left center;
+}
+
+@keyframes showcase-spring-fill {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.showcase-spring-drawer {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  z-index: 31;
+  width: max(100%, 272px);
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(37, 40, 43, 0.16);
+}
+
+.showcase-spring-title {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin: 0 0 5px;
+  padding: 0 4px;
+  color: var(--faint);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.showcase-spring-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.showcase-spring-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.showcase-spring-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 3px 7px;
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.76rem;
+}
+
+.showcase-spring-row:hover {
+  background: var(--surface-2);
+}
+
+.showcase-spring-row--source {
+  opacity: 0.45;
+}
+
+.showcase-spring-row::before,
+.showcase-spring-row::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  left: 4px;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.showcase-spring-row::before {
+  top: -1px;
+}
+
+.showcase-spring-row::after {
+  bottom: -1px;
+}
+
+.showcase-spring-row--drop-before::before,
+.showcase-spring-row--drop-after::after {
+  opacity: 1;
+}
+
+.showcase-spring-row-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.showcase-spring-row-type {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.showcase-spring-empty {
+  margin: 2px 0 0;
+  padding: 14px 8px;
+  border: 1px dashed var(--border-control);
+  border-radius: 4px;
+  color: var(--faint);
+  font-size: 0.74rem;
+  text-align: center;
+}
+
+.showcase-spring-empty--target {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Move into… dialog */
+.showcase-move-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 16px;
+}
+
+.showcase-move-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 46vh;
+  padding: 6px;
+  overflow: auto;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+}
+
+.showcase-move-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px 6px calc(8px + var(--showcase-move-depth, 0) * 14px);
+  border-radius: 4px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.showcase-move-option:hover {
+  background: var(--surface-2);
+}
+
+.showcase-move-option input {
+  flex: none;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.showcase-move-option--disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.showcase-move-option--disabled:hover {
+  background: transparent;
+}
+
+.showcase-move-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.showcase-move-why {
+  color: var(--danger);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.showcase-move-kind {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.showcase-move-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.78rem;
+}
+
+.showcase-move-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* During a drag the canvas states the outcome in words and, inside a drilled
+   level, offers its ancestors as level drops. The rail is the outdent gesture:
+   dropping on a chip appends there, the only target the visible grid cannot
+   show. */
+.showcase-drag-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 14px;
+  margin: 0 0 14px;
+  padding: 7px 10px;
+  border: 1px solid rgba(184, 0, 0, 0.28);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+}
+
+.showcase-drag-outcome {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.showcase-drag-levels {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.showcase-drag-levels-label {
+  color: var(--accent-strong);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.showcase-drag-level {
+  max-width: 200px;
+  padding: 2px 9px;
+  overflow: hidden;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.showcase-drag-level.is-target {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.showcase-spring-into {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--border-control);
+  border-radius: 3px;
+  color: var(--faint);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.showcase-spring-into--target {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .showcase-spring-meter {
+    width: 100%;
+    animation: none;
+  }
+}

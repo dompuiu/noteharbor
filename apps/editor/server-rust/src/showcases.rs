@@ -1515,21 +1515,181 @@ fn reorder_showcase_nodes(
         return Err(DbError::Failed(MESSAGE.to_owned()));
     }
     let tx = conn.transaction().map_err(classify)?;
+    write_sibling_positions(&tx, ordered)?;
+    tx.commit().map_err(classify)?;
+    let mut nodes = Vec::with_capacity(ordered.len());
+    for id in ordered {
+        nodes.push(load_node(conn, *id)?);
+    }
+    Ok(nodes)
+}
+
+/// Whether `node_id` sits anywhere inside the subtree rooted at `ancestor_id`
+/// (including the root itself). Used to keep a grouping from moving into its
+/// own subtree.
+fn is_within_subtree(
+    conn: &Connection,
+    node_id: i64,
+    ancestor_id: i64,
+) -> Result<bool, DbError> {
+    let mut cursor = Some(node_id);
+    let mut steps = 0;
+    while let Some(current) = cursor {
+        if current == ancestor_id {
+            return Ok(true);
+        }
+        cursor = get_node_row(conn, current)?.and_then(|row| row.parent_node_id);
+        steps += 1;
+        if steps > 256 {
+            return Err(DbError::Failed(
+                "The showcase tree contains a cycle.".to_owned(),
+            ));
+        }
+    }
+    Ok(false)
+}
+
+fn load_node(conn: &Connection, id: i64) -> Result<ShowcaseNode, DbError> {
+    get_node(conn, id)?.ok_or_else(|| DbError::Failed("Node not found.".to_owned()))
+}
+
+fn write_sibling_positions(
+    conn: &Connection,
+    ordered: &[i64],
+) -> Result<(), DbError> {
     for (index, id) in ordered.iter().enumerate() {
-        tx.execute(
+        conn.execute(
             "UPDATE showcase_nodes SET position = ?1, updated_at = datetime('now') WHERE id = ?2",
             params![(index + 1) as i64, id],
         )
         .map_err(classify)?;
     }
-    tx.commit().map_err(classify)?;
-    let mut nodes = Vec::with_capacity(ordered.len());
-    for id in ordered {
-        nodes.push(
-            get_node(conn, *id)?.ok_or_else(|| DbError::Failed("Node not found.".to_owned()))?,
-        );
+    Ok(())
+}
+
+/// Move one node to another parent and position. `position` is the final
+/// zero-based index in the target sibling list after the source is removed;
+/// both sibling lists are renumbered in one transaction. Placement rules match
+/// creation: categories stay at the top level, and notes, placeholders and
+/// groupings need a category or grouping.
+fn move_showcase_node(
+    conn: &mut Connection,
+    id: i64,
+    body: &Value,
+) -> Result<ShowcaseNode, DbError> {
+    let Some(node) = get_node_row(conn, id)? else {
+        return Err(DbError::Failed("Node not found.".to_owned()));
+    };
+
+    let parent_node_id = match body.get("parent_node_id") {
+        None | Some(Value::Null) => None,
+        Some(value) => match js_number(value) {
+            Some(parent_id) if parent_id > 0 => Some(parent_id),
+            _ => {
+                return Err(DbError::Failed(
+                    "A valid parent node is required.".to_owned(),
+                ));
+            }
+        },
+    };
+
+    let position = match body.get("position") {
+        Some(Value::Number(number)) => number.as_i64(),
+        _ => None,
+    };
+    let Some(position) = position else {
+        return Err(DbError::Failed(
+            "A position is required.".to_owned(),
+        ));
+    };
+    if position < 0 {
+        return Err(DbError::Failed(
+            "Position must be zero or greater.".to_owned(),
+        ));
     }
-    Ok(nodes)
+
+    if node.node_type == "category" {
+        if parent_node_id.is_some() {
+            return Err(DbError::Failed(
+                "A category is placed at the top level.".to_owned(),
+            ));
+        }
+    } else if parent_node_id.is_none() {
+        let message = match node.node_type.as_str() {
+            "grouping" => "A grouping needs a category or grouping.",
+            "catalog_entry" => "A placeholder needs a category or grouping.",
+            _ => "A note needs a category or grouping.",
+        };
+        return Err(DbError::Failed(message.to_owned()));
+    }
+
+    if let Some(parent_id) = parent_node_id {
+        let Some(parent) = get_node_row(conn, parent_id)? else {
+            return Err(DbError::Failed("Parent node not found.".to_owned()));
+        };
+        if parent.showcase_id != node.showcase_id {
+            return Err(DbError::Failed("Parent node not found.".to_owned()));
+        }
+        if parent.node_type != "category" && parent.node_type != "grouping" {
+            return Err(DbError::Failed(
+                "Only a category or grouping can hold items.".to_owned(),
+            ));
+        }
+        if is_within_subtree(conn, parent_id, id)? {
+            return Err(DbError::Failed(
+                "A node cannot move inside itself.".to_owned(),
+            ));
+        }
+    }
+
+    let showcase_id = node.showcase_id;
+    let old_parent = node.parent_node_id;
+    let old_children = child_ids(conn, showcase_id, old_parent)?;
+    let Some(old_index) = old_children.iter().position(|child| *child == id) else {
+        return Err(DbError::Failed("Node not found.".to_owned()));
+    };
+
+    let same_parent = parent_node_id == old_parent;
+    let mut target_children: Vec<i64> = if same_parent {
+        old_children
+            .iter()
+            .copied()
+            .filter(|child| *child != id)
+            .collect()
+    } else {
+        child_ids(conn, showcase_id, parent_node_id)?
+    };
+
+    let index = position as usize;
+    if index > target_children.len() {
+        return Err(DbError::Failed(
+            "Position is out of range.".to_owned(),
+        ));
+    }
+
+    // Dropping an item back where it already sits writes nothing.
+    if same_parent && index == old_index {
+        return load_node(conn, id);
+    }
+
+    target_children.insert(index, id);
+    let tx = conn.transaction().map_err(classify)?;
+    if !same_parent {
+        tx.execute(
+            "UPDATE showcase_nodes SET parent_node_id = ?1, updated_at = datetime('now') WHERE id = ?2",
+            params![parent_node_id, id],
+        )
+        .map_err(classify)?;
+        let remaining: Vec<i64> = old_children
+            .into_iter()
+            .filter(|child| *child != id)
+            .collect();
+        write_sibling_positions(&tx, &remaining)?;
+    }
+    write_sibling_positions(&tx, &target_children)?;
+    tx.commit().map_err(classify)?;
+
+    load_node(conn, id)
 }
 
 // ---------------------------------------------------------------------------
@@ -1751,6 +1911,30 @@ async fn update_node_handler(
     }
 }
 
+/// `PUT /api/nodes/:id/move` — one atomic reparent plus insertion position.
+async fn move_node_handler(
+    State(state): State<AppState>,
+    Path(raw_id): Path<String>,
+    body: Option<Json<Value>>,
+) -> Response {
+    let Some(id) = parse_id(&raw_id) else {
+        return bad_request("Node id must be a positive integer.");
+    };
+    let exists = match db::with_conn(&state.pool, move |conn| get_node_row(conn, id)).await {
+        Ok(node) => node.is_some(),
+        Err(error) => return db_failure(error),
+    };
+    if !exists {
+        return not_found("Node not found.");
+    }
+    let payload = body_or_empty(body);
+    let payload = if payload.is_null() { json!({}) } else { payload };
+    match db::with_conn(&state.pool, move |conn| move_showcase_node(conn, id, &payload)).await {
+        Ok(node) => ok(json!({ "node": node })),
+        Err(error) => db_failure(error),
+    }
+}
+
 async fn update_node_notes_handler(
     State(state): State<AppState>,
     Path(raw_id): Path<String>,
@@ -1882,6 +2066,7 @@ pub fn nodes_router() -> Router<AppState> {
         // `/order` sits before `/:id` so the literal wins.
         .route("/api/nodes/order", put(reorder_nodes_handler))
         .route("/api/nodes/{id}", put(update_node_handler).delete(delete_node_handler))
+        .route("/api/nodes/{id}/move", put(move_node_handler))
         .route("/api/nodes/{id}/notes", put(update_node_notes_handler))
 }
 
