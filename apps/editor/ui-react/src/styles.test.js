@@ -774,6 +774,10 @@ describe("table styles", () => {
     expect(shell).not.toBeNull();
     expect(shell[1]).toMatch(/flex-direction:\s*column/);
 
+    // Neither state may recentre the shell: the rail is the card's head.
+    expect(styles).not.toMatch(/^\.table-loading\s*\{/m);
+    expect(styles).not.toMatch(/^\.table-load-error\s*\{/m);
+
     const body = styles.match(/^\.table-load-error-body\s*\{([^}]*)\}/m);
     expect(body).not.toBeNull();
     expect(body[1]).toMatch(/margin:\s*auto/);
