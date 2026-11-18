@@ -4,6 +4,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.20.0] - 2026-11-18
+
 ### Added
 
 - Showcase note picker: each row now carries the note's grading — the company and the grade it gave, `PMG 66 EPQ` — in its own column, and the column header sorts by grade. The row's checkbox announces the grading too, and narrow windows drop the grading column ahead of the collection so the caption keeps its width.
