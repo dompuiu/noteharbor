@@ -13,7 +13,7 @@
 //! the server attaches to whatever CDP endpoint it is given on every platform.
 
 use std::sync::OnceLock;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use axum::{Json, Router, response::{IntoResponse, Response}, routing::post};
 use regex::Regex;
@@ -26,11 +26,17 @@ use chromiumoxide::cdp::browser_protocol::target::TargetId;
 use crate::routes::bad_request;
 
 pub const DEFAULT_BROWSER_CDP_URL: &str = "http://localhost:9222";
-pub const DEFAULT_WAIT_SECONDS: f64 = 2.0;
 /// Keep in sync with SCRAPE_NAVIGATION_TIMEOUT_MS in ui-react/src/components/NoteEditForm.jsx.
-pub const DEFAULT_NAVIGATION_TIMEOUT_MS: u64 = 30_000;
+pub const DEFAULT_NAVIGATION_TIMEOUT_MS: u64 = 45_000;
 pub const MIN_NAVIGATION_TIMEOUT_MS: u64 = 5_000;
 pub const MAX_NAVIGATION_TIMEOUT_MS: u64 = 120_000;
+/// How long the readiness poll may spend after the navigation settles waiting
+/// for the page to carry parseable data. A cold browser start renders the
+/// grading page well past `goto`'s load event, and reading the shell page then
+/// is what surfaced "no fields were found" on a first scrape.
+pub const READY_TIMEOUT_MS: u64 = 15_000;
+/// Delay between readiness polls.
+pub const READY_POLL_INTERVAL_MS: u64 = 300;
 pub const NO_SCRAPER_MESSAGE: &str = "No scraper is implemented for this grading company yet.";
 
 /// Resolves the browser CDP URL: trimmed env override or
@@ -288,6 +294,29 @@ pub fn scraper_for_note(url: &str, company: &str) -> Option<ScraperKind> {
         return Some(ScraperKind::Tqg);
     }
     None
+}
+
+/// Whether `html` already carries the data the selected parser reads. Drives
+/// the readiness poll so a scrape waits for the real page instead of reading
+/// the shell after a fixed delay. Each marker is the same anchor its parser
+/// uses, so "ready" means "the parser can find fields".
+pub fn content_ready(kind: ScraperKind, html: &str) -> bool {
+    match kind {
+        ScraperKind::Pmg => {
+            html.contains("certlookup-wrapper") || html.contains("certlookup-images-item")
+        }
+        ScraperKind::Pcgs => html.contains("certNo:"),
+        ScraperKind::Tqg => html.contains("query_wrap"),
+    }
+}
+
+/// Time the readiness poll may spend: what is left of the navigation deadline,
+/// capped at `READY_TIMEOUT_MS` so an unparseable page (wrong cert, error page)
+/// still answers promptly instead of burning the whole navigation budget.
+pub fn ready_budget(deadline: Instant) -> Duration {
+    deadline
+        .saturating_duration_since(Instant::now())
+        .min(Duration::from_millis(READY_TIMEOUT_MS))
 }
 
 /// Note fields the parsers fall back to for the cert number, mirroring
@@ -927,24 +956,23 @@ async fn focus_scrape_browser_window() {
 }
 
 /// Attach-only fetch: connect over CDP (never launch),
-/// reuse the last matching tab or open-navigate when `open_if_missing`,
-/// settle `wait_seconds`, then return `page.content()`.
+/// reuse the last matching tab or open-navigate when `open_if_missing`, then
+/// poll until the page carries data the `kind` parser reads (or the budget runs
+/// out) and return `page.content()`.
 /// Dropping `Browser` disconnects without killing the user's browser —
 /// so unlike the launch flow, nothing is closed here.
 pub async fn fetch_html(
     url: &str,
     cdp_url: &str,
-    wait_seconds: f64,
+    kind: ScraperKind,
     open_if_missing: bool,
     navigation_timeout_ms: Option<&Value>,
 ) -> Result<String, String> {
-    if !wait_seconds.is_finite() || wait_seconds < 0.0 {
-        return Err("waitSeconds must be a non-negative number".to_owned());
-    }
     if cdp_url.is_empty() {
         return Err("A CDP URL is required".to_owned());
     }
     let navigation_timeout = normalize_navigation_timeout_ms(navigation_timeout_ms);
+    let deadline = Instant::now() + Duration::from_millis(navigation_timeout);
 
     let (mut browser, mut handler) = chromiumoxide::Browser::connect(cdp_url.to_owned())
         .await
@@ -995,7 +1023,7 @@ pub async fn fetch_html(
                 Some(attached) => attached,
                 // The tab vanished mid-scrape: open fresh when allowed.
                 None if open_if_missing && is_http_url(url) => {
-                    return open_fresh_page(&browser, url, wait_seconds, navigation_timeout)
+                    return open_fresh_page(&browser, url, kind, navigation_timeout, deadline)
                         .await;
                 }
                 None => return Err("Browser tab vanished.".to_owned()),
@@ -1005,26 +1033,44 @@ pub async fn fetch_html(
             // user sees the page used for the scrape.
             let _ = page.bring_to_front().await;
             focus_scrape_browser_window().await;
-            if wait_seconds > 0.0 {
-                tokio::time::sleep(Duration::from_secs_f64(wait_seconds)).await;
-            }
-            page.content().await.map_err(|error| error.to_string())
+            // The reused tab may still be loading from an earlier action, so
+            // wait for its data rather than trusting a fixed delay.
+            read_ready_content(&page, kind, ready_budget(deadline)).await
         }
         Ok(PagePlan::OpenNew) => {
-            open_fresh_page(&browser, url, wait_seconds, navigation_timeout).await
+            open_fresh_page(&browser, url, kind, navigation_timeout, deadline).await
         }
         Err(error) => Err(error),
     }
 }
 
-/// Opens a new tab, navigates it to `url`, settles `wait_seconds`, and
+/// Reads the page until `content_ready` or `budget` runs out. Always returns
+/// the last content read, so a page that never becomes parseable still yields
+/// what it had (and the route reports empty fields) instead of a fetch error.
+async fn read_ready_content(
+    page: &chromiumoxide::Page,
+    kind: ScraperKind,
+    budget: Duration,
+) -> Result<String, String> {
+    let deadline = Instant::now() + budget;
+    loop {
+        let html = page.content().await.map_err(|error| error.to_string())?;
+        if content_ready(kind, &html) || Instant::now() >= deadline {
+            return Ok(html);
+        }
+        tokio::time::sleep(Duration::from_millis(READY_POLL_INTERVAL_MS)).await;
+    }
+}
+
+/// Opens a new tab, navigates it to `url`, waits for the page data, and
 /// returns `page.content()`. A failed navigation leaves the tab open for the
 /// user, and the error propagates — mirroring `openMissingPage`.
 async fn open_fresh_page(
     browser: &chromiumoxide::Browser,
     url: &str,
-    wait_seconds: f64,
+    kind: ScraperKind,
     navigation_timeout: u64,
+    deadline: Instant,
 ) -> Result<String, String> {
     let page = browser
         .new_page("about:blank")
@@ -1036,23 +1082,18 @@ async fn open_fresh_page(
     // A new tab in an existing window does not raise the OS window
     // above the Editor on its own; focus it for bot checks.
     focus_scrape_browser_window().await;
-    let navigated = tokio::time::timeout(
-        Duration::from_millis(navigation_timeout),
-        page.goto(url.to_owned()),
-    )
-    .await
-    .map_err(|_| {
-        format!("Navigation timeout of {navigation_timeout}ms exceeded for {url}")
-    });
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    let navigated = tokio::time::timeout(remaining, page.goto(url.to_owned()))
+        .await
+        .map_err(|_| {
+            format!("Navigation timeout of {navigation_timeout}ms exceeded for {url}")
+        });
     match navigated {
         Ok(Ok(_)) => {}
         Ok(Err(error)) => return Err(error.to_string()),
         Err(error) => return Err(error),
     }
-    if wait_seconds > 0.0 {
-        tokio::time::sleep(Duration::from_secs_f64(wait_seconds)).await;
-    }
-    page.content().await.map_err(|error| error.to_string())
+    read_ready_content(&page, kind, ready_budget(deadline)).await
 }
 
 // ---------------------------------------------------------------------------
@@ -1093,7 +1134,7 @@ async fn preview(body: Option<Json<PreviewPayload>>) -> Response {
     let html = match fetch_html(
         &url,
         &browser_cdp_url(),
-        DEFAULT_WAIT_SECONDS,
+        kind,
         true,
         timeout_value.as_ref(),
     )
@@ -1348,14 +1389,59 @@ mod tests {
 
     #[test]
     fn navigation_timeout_falls_back_for_missing_or_invalid_values() {
-        assert_eq!(normalize_navigation_timeout_ms(None), 30_000);
-        assert_eq!(normalize_navigation_timeout_ms(Some(&Value::Null)), 30_000);
+        assert_eq!(normalize_navigation_timeout_ms(None), 45_000);
+        assert_eq!(normalize_navigation_timeout_ms(Some(&Value::Null)), 45_000);
         assert_eq!(
             normalize_navigation_timeout_ms(Some(&json!("nope"))),
-            30_000
+            45_000
         );
-        assert_eq!(normalize_navigation_timeout_ms(Some(&json!(0))), 30_000);
-        assert_eq!(normalize_navigation_timeout_ms(Some(&json!(-10))), 30_000);
+        assert_eq!(normalize_navigation_timeout_ms(Some(&json!(0))), 45_000);
+        assert_eq!(normalize_navigation_timeout_ms(Some(&json!(-10))), 45_000);
+    }
+
+    #[test]
+    fn content_ready_waits_for_the_marker_each_site_parses() {
+        assert!(content_ready(
+            ScraperKind::Pmg,
+            r#"<div class="certlookup-wrapper"><dl><dt>Grade:</dt><dd>65</dd></dl></div>"#
+        ));
+        assert!(content_ready(
+            ScraperKind::Pcgs,
+            r#"<script>const data = [{certNo:"999"}]; Promise.all([])</script>"#
+        ));
+        assert!(content_ready(
+            ScraperKind::Tqg,
+            r#"<div class="query_wrap"><table></table></div>"#
+        ));
+        // A shell page before the data lands is not ready.
+        assert!(!content_ready(
+            ScraperKind::Pmg,
+            "<html><body></body></html>"
+        ));
+        assert!(!content_ready(
+            ScraperKind::Pcgs,
+            "<html><body></body></html>"
+        ));
+        assert!(!content_ready(
+            ScraperKind::Tqg,
+            "<html><body></body></html>"
+        ));
+        // Another site's marker never satisfies this site.
+        assert!(!content_ready(
+            ScraperKind::Pmg,
+            r#"<div class="query_wrap"></div>"#
+        ));
+    }
+
+    #[test]
+    fn readiness_budget_is_capped_and_never_negative() {
+        let far_deadline = Instant::now() + Duration::from_secs(60);
+        assert_eq!(
+            ready_budget(far_deadline),
+            Duration::from_millis(READY_TIMEOUT_MS)
+        );
+        let spent = Instant::now() - Duration::from_secs(1);
+        assert_eq!(ready_budget(spent), Duration::ZERO);
     }
 
     #[test]

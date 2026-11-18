@@ -573,10 +573,12 @@ The server reads the current HTML from a matching open tab on a CDP-connected br
 
 | Option | Default | Description |
 |---|---|---|
-| `waitSeconds` | `2` | Delay before reading the matching open tab |
+| `timeoutMs` | `45000` | Navigation budget; the content-readiness wait draws from the same deadline (clamped to 5–120 s) |
 | `cdpUrl` | `http://localhost:9222` in the route | CDP endpoint for the browser that already has the page open |
 
 The server reuses the last open tab whose URL matches the requested URL (ignoring `#fragment` and one trailing `/`), falling back to the last tab showing the same graded note when the URLs differ only by site embellishments (e.g. PMG's appended `/<grade>` segment), and only opens a new tab when no tab matches. The reused or new tab is activated via CDP and the Chrome OS window is raised best-effort so bot checks are visible.
+
+After the navigation settles (or immediately for a reused tab) the server polls the page every 300 ms until it carries the marker the site's parser reads — `certlookup-wrapper` for PMG, the embedded `certNo:` literal for PCGS, `query_wrap` for TQG — for up to 15 s. This replaces a fixed 2 s settle, so a cold browser start waits for the real page instead of reading a half-rendered one and reporting "no fields were found". A page that never becomes parseable still answers with whatever it had once the budget runs out.
 
 ### Adding a new scraper
 

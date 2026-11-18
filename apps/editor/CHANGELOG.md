@@ -6,6 +6,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ### Fixed
 
+- Note editor: Auto Populate no longer reports "no fields were found" on a first scrape in a cold browser. After the navigation settles (or straight away for a reused tab) the server now polls the page every 300 ms until it carries the data the site's parser reads — up to 15 s — instead of reading it after a fixed 2 s delay, so a slow first page load waits for the real page. The shared navigation budget also rose from 30 s to 45 s for slow page loads.
+
 - Note editor: a PMG scrape now keeps the full catalog number from the page's note reference, which lists the region code first. Romanian **M8** lands as `M8` instead of `8`, and `112a1` keeps its trailing digit instead of stopping at `112a`.
 
 ## [2.17.0] - 2026-11-17

@@ -112,7 +112,7 @@ describe("Note editor Autopopulate browser handling", () => {
     await waitFor(() => expect(scrapePreview).toHaveBeenCalledTimes(1));
     expect(scrapePreview).toHaveBeenCalledWith(
       NOTE_URL,
-      expect.objectContaining({ timeoutMs: 30000 }),
+      expect.objectContaining({ timeoutMs: 45000 }),
     );
     expect(bridge.openScrapeBrowser).not.toHaveBeenCalled();
   });
