@@ -4,6 +4,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.19.0] - 2026-11-17
+
 ### Added
 
 - Showcase: a note card's `⋯` menu now offers **Replace with a note…**, the same finder a placeholder uses. Picking a library note swaps the card's note in place, keeping the card's id, parent, and position.
