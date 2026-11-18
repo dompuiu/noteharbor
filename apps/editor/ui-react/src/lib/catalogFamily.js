@@ -1,7 +1,9 @@
 // The Catalog-family rule (CONTEXT.md): a base number and an optional single
 // trailing letter. `22` matches `22`, `22a`, `22b`, and `22s`, but never `220`
-// or `221` — the trailing character must be a letter, not a digit. Matching is
-// case-insensitive. An empty query matches everything.
+// or `221` — the trailing character must be a letter, not a digit. A base made
+// only of letters is a prefix instead: `M` matches `M`, `M1`, `M2`, `M10`,
+// `M1a`, and `MA`, because the digit is part of the number rather than a longer
+// base. Matching is case-insensitive. An empty query matches everything.
 function matchesCatalogFamily(catalogNumber, query) {
   const base = String(query ?? "").trim().toUpperCase();
 
@@ -17,6 +19,10 @@ function matchesCatalogFamily(catalogNumber, query) {
 
   if (catalog === base) {
     return true;
+  }
+
+  if (/^[A-Z]+$/.test(base)) {
+    return catalog.startsWith(base);
   }
 
   return (

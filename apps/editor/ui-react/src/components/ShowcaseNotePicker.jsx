@@ -573,7 +573,7 @@ function ShowcaseNotePicker({
         {mode === "catalog"
           ? "A note joins the entry with the same catalog value in this block; a note without one is skipped."
           : column === "catalog"
-            ? "The catalog filter keeps the family rule: 22 matches 22, 22a, 22b, and 22s — never 220."
+            ? "The catalog filter keeps the family rule: 22 matches 22, 22a, 22b, and 22s — never 220. A letters-only catalog base is a prefix, so M matches M1 and MA."
             : "The selection carries across filter changes, so you can pick notes from several collections."}
       </p>
 

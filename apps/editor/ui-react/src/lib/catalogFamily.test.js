@@ -15,6 +15,32 @@ describe("matchesCatalogFamily", () => {
     expect(matchesCatalogFamily("2200", "22")).toBe(false);
   });
 
+  test("a letters-only base matches every number that starts with it", () => {
+    expect(matchesCatalogFamily("M", "M")).toBe(true);
+    expect(matchesCatalogFamily("M1", "M")).toBe(true);
+    expect(matchesCatalogFamily("M2", "M")).toBe(true);
+    expect(matchesCatalogFamily("M10", "M")).toBe(true);
+    expect(matchesCatalogFamily("M1a", "M")).toBe(true);
+    expect(matchesCatalogFamily("MA", "M")).toBe(true);
+  });
+
+  test("a letters-only base still does not match an unrelated number", () => {
+    expect(matchesCatalogFamily("N1", "M")).toBe(false);
+    expect(matchesCatalogFamily("1M", "M")).toBe(false);
+  });
+
+  test("a numeric base with a trailing letter is not a prefix", () => {
+    expect(matchesCatalogFamily("22a1", "22a")).toBe(false);
+    expect(matchesCatalogFamily("22a-1", "22a")).toBe(false);
+    expect(matchesCatalogFamily("22ab", "22a")).toBe(true);
+  });
+
+  test("a base that contains a digit keeps the single trailing letter rule", () => {
+    expect(matchesCatalogFamily("M1", "M1")).toBe(true);
+    expect(matchesCatalogFamily("M1a", "M1")).toBe(true);
+    expect(matchesCatalogFamily("M10", "M1")).toBe(false);
+  });
+
   test("does not match a shorter or different number", () => {
     expect(matchesCatalogFamily("2", "22")).toBe(false);
     expect(matchesCatalogFamily("23", "22")).toBe(false);

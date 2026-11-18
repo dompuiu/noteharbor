@@ -86,9 +86,17 @@ function parseScalarFilters(rawFilterValue, normalizeValue) {
     .filter(({ value }) => value);
 }
 
+// The table's catalog filter is a prefix filter, not the catalog-family rule:
+// it accepts any non-digit suffix (`22-3` matches `22`), which keeps separator
+// notations searchable. A letters-only filter still has to reach letter-prefixed
+// numbers (`M` matches `M1`), so it skips the digit guard entirely.
 function matchesCatalogFilterValue(noteValue, filterValue) {
   if (!noteValue.startsWith(filterValue)) {
     return false;
+  }
+
+  if (/^[a-z]+$/.test(filterValue)) {
+    return true;
   }
 
   const nextCharacter = noteValue.charAt(filterValue.length);

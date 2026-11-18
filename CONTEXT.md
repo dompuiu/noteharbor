@@ -104,7 +104,7 @@ One physical banknote (or banknote group) in the collection: its denomination, i
 _Avoid_: Banknote, note_record, banknote row
 
 **Catalog family**:
-The set of notes whose catalog number shares a base number, each optionally followed by a single trailing letter: `22`, `22a`, `22b`, and `22s` are one family, while `220` and `221` are not.
+The set of notes whose catalog number shares a base number, each optionally followed by a single trailing letter: `22`, `22a`, `22b`, and `22s` are one family, while `220` and `221` are not. A base made only of letters is a prefix instead: `M` is the family of `M`, `M1`, `M2`, `M10`, `M1a`, and `MA`.
 _Avoid_: Variation set
 
 **Catalog value**:

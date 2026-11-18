@@ -91,6 +91,13 @@ const NOTE_D = note({
   catalog_number: "500",
 });
 
+const NOTE_E = note({
+  id: 105,
+  denomination: "5 lei",
+  issue_date: "1950",
+  catalog_number: "M1",
+});
+
 function categoryNode(children = []) {
   return {
     id: 10,
@@ -150,7 +157,10 @@ beforeEach(() => {
   });
   getAllNotes.mockImplementation(async (collections) => ({
     notes: collections.flatMap((collection) =>
-      (collection.id === 1 ? [NOTE_A, NOTE_B, NOTE_C] : [NOTE_D]).map(
+      (collection.id === 1
+        ? [NOTE_A, NOTE_B, NOTE_C]
+        : [NOTE_D, NOTE_E]
+      ).map(
         (entry) => ({
           ...entry,
           collection_id: collection.id,
@@ -176,6 +186,16 @@ describe("the merged add dialog", () => {
     expect(screen.getByText("1 leu · 1920")).toBeInTheDocument();
     expect(screen.queryByText("2 lei · 1920")).not.toBeInTheDocument();
     expect(screen.queryByText("100 lei · 1943")).not.toBeInTheDocument();
+  });
+
+  test("a letter catalog filter finds letter-prefixed numbers", async () => {
+    const { user } = await openAddDialog();
+
+    await user.type(screen.getByLabelText("Filter value"), "M");
+
+    expect(screen.getByText("5 lei · 1950")).toBeInTheDocument();
+    expect(screen.queryByText("100 lei · 1943")).not.toBeInTheDocument();
+    expect(screen.queryByText("1 leu · 1917")).not.toBeInTheDocument();
   });
 
   test("selections accumulate across filters, then Add selected writes at once", async () => {

@@ -36,6 +36,61 @@ describe("applyNoteView", () => {
     expect(result.map((entry) => entry.id)).toEqual([2]);
   });
 
+  test("keeps letter-prefixed catalog numbers under the catalog filter", () => {
+    const notes = [
+      note(1, { catalog_number: "M1" }),
+      note(2, { catalog_number: "M2" }),
+      note(3, { catalog_number: "M10" }),
+      note(4, { catalog_number: "MA" }),
+      note(5, { catalog_number: "N1" }),
+      note(6, { catalog_number: "22" }),
+      note(7, { catalog_number: "220" }),
+    ];
+
+    const result = applyNoteView(notes, {
+      conditions: [
+        { field: "catalog_number", negated: false, value: "m" },
+      ],
+      searchColumns: dataColumns,
+    });
+
+    expect(result.map((entry) => entry.id)).toEqual([1, 2, 3, 4]);
+  });
+
+  test("still excludes a longer number under a numeric catalog filter", () => {
+    const notes = [
+      note(1, { catalog_number: "22" }),
+      note(2, { catalog_number: "22a" }),
+      note(3, { catalog_number: "220" }),
+    ];
+
+    const result = applyNoteView(notes, {
+      conditions: [
+        { field: "catalog_number", negated: false, value: "22" },
+      ],
+      searchColumns: dataColumns,
+    });
+
+    expect(result.map((entry) => entry.id)).toEqual([1, 2]);
+  });
+
+  test("keeps separator notation under the catalog filter", () => {
+    const notes = [
+      note(1, { catalog_number: "22" }),
+      note(2, { catalog_number: "22-3" }),
+      note(3, { catalog_number: "220" }),
+    ];
+
+    const result = applyNoteView(notes, {
+      conditions: [
+        { field: "catalog_number", negated: false, value: "22" },
+      ],
+      searchColumns: dataColumns,
+    });
+
+    expect(result.map((entry) => entry.id)).toEqual([1, 2]);
+  });
+
   test("applies the filter chips before sorting", () => {
     const notes = [
       note(1, { denomination: "beta" }),
