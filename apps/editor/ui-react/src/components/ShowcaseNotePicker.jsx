@@ -1,16 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { getAllNotes } from "../lib/api.js";
-import { matchesCatalogFamily } from "../lib/catalogFamily.js";
 import { showcasePickerFields } from "../lib/noteFields.js";
+import { collectTagNames } from "../lib/tagNames.js";
+import {
+  applyPickerView,
+  defaultPickerSortKey,
+  pickerColumns,
+  pickerSortOptions,
+} from "../lib/showcasePickerView.js";
 import {
   firstAvailableNoteImage,
   pickNoteImage,
 } from "../lib/showcaseImages.js";
 import { SelectField } from "./SelectField.jsx";
+import { TableFilterBar } from "./TableFilterBar.jsx";
 
-// The note picker popup (ticket 10). A filter bar over a virtualized thumbnail
-// list; each row is a checkbox with the note's first available image, and
+// The note picker popup (ticket 10). The Table filter bar over a virtualized
+// thumbnail list: committed chips, Add/Replace, ranges and negation all behave
+// as they do in the Table, and a sort control orders the list by any picker
+// field. Each row is a checkbox with the note's first available image, and
 // hovering (or focusing) the thumbnail shows the full-size image in a preview
 // bubble. The selection accumulates across filter changes, so a user can pull
 // notes from several collections into one batch. "Add selected (N)" adds and
@@ -30,64 +39,14 @@ import { SelectField } from "./SelectField.jsx";
 //
 // Embedded is the specimen manager's append mode: the finder sits inline below
 // the entry's specimens instead of owning a modal shell. It hides notes already
-// attached (`excludeNoteIds`), chips each row Owned/Seen, and sorts owned
-// matches first so a library record is one click away. Selection, filtering,
+// attached (`excludeNoteIds`), chips each row Owned/Seen, and leads with owned
+// matches in the default order so a library record is one click away. Selection, filtering,
 // and virtualization are the same as the standalone picker.
 //
 // Edit mode passes `mode`/`onModeChange`/`notice` to add the Notes ↔ Catalog
 // entries switch and the inline skipped-notes line; `onAdd` then receives the
 // active mode as its third argument. The append-mode finder leaves all three
 // out.
-const COLUMNS = [
-  {
-    value: "collection",
-    label: "Collection",
-    field: "collection_name",
-    placeholder: "e.g. Kingdom",
-  },
-  {
-    value: "catalog",
-    label: "Catalog number",
-    field: "catalog_number",
-    placeholder: "e.g. 22",
-  },
-  {
-    value: "denomination",
-    label: "Denomination",
-    field: "denomination",
-    placeholder: "e.g. 1 leu",
-  },
-  {
-    value: "date",
-    label: "Date",
-    field: "issue_date",
-    placeholder: "e.g. 1917",
-  },
-];
-
-function filterNotes(notes, column, value) {
-  const query = value.trim();
-
-  if (!query) {
-    return notes;
-  }
-
-  if (column === "catalog") {
-    return notes.filter((note) =>
-      matchesCatalogFamily(note.catalog_number, query),
-    );
-  }
-
-  const definition = COLUMNS.find((entry) => entry.value === column);
-  const needle = query.toLowerCase();
-
-  return notes.filter((note) =>
-    String(note[definition.field] ?? "")
-      .toLowerCase()
-      .includes(needle),
-  );
-}
-
 function noteCaption(note) {
   return [String(note.denomination ?? "").trim(), String(note.issue_date ?? "").trim()]
     .filter(Boolean)
@@ -109,40 +68,54 @@ function ShowcaseNotePicker({
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [column, setColumn] = useState("catalog");
-  const [value, setValue] = useState("");
+  const [conditions, setConditions] = useState([]);
+  const [sortKey, setSortKey] = useState(defaultPickerSortKey);
+  const [sortDirection, setSortDirection] = useState("asc");
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [busy, setBusy] = useState(false);
   const [addError, setAddError] = useState("");
   const [thumbPreview, setThumbPreview] = useState(null);
-  const filterRef = useRef(null);
+  const filterBarRef = useRef(null);
   const listRef = useRef(null);
   const thumbElementsRef = useRef(new Map());
-
   const collectionKey = collections.map((collection) => collection.id).join(",");
 
-  // `/` jumps to the filter field from anywhere in the popup (a checkbox, the
-  // column select, a button), while typing a slash inside the field itself is
-  // left alone.
+  // The picker filter bar owns the only filter input, so `/` focuses it from
+  // anywhere in the popup except a field the user is already typing in.
   useEffect(() => {
     function handleKeyDown(event) {
+      const target = event.target;
+      const typing =
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT");
+
       if (
         event.key !== "/" ||
         event.metaKey ||
         event.ctrlKey ||
         event.altKey ||
-        event.target === filterRef.current
+        typing
       ) {
         return;
       }
 
       event.preventDefault();
-      filterRef.current?.focus();
+      filterBarRef.current?.focus();
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  // The standalone picker opens with its one filter input focused, as before.
+  useEffect(() => {
+    if (!embedded) {
+      filterBarRef.current?.focus();
+    }
+  }, [embedded]);
 
   // Escape dismisses the popup, matching the shortcuts overlay and the image
   // popover. A click on the backdrop does the same; clicks inside the dialog
@@ -224,10 +197,9 @@ function ShowcaseNotePicker({
     [excludedIds, notes],
   );
 
-  const filtered = useMemo(
-    () => filterNotes(availableNotes, column, value),
-    [availableNotes, column, value],
-  );
+  // Tag names offered as suggestions by the filter bar. The picker only
+  // suggests tags that some note already carries, exactly like the Table.
+  const tagNames = useMemo(() => collectTagNames(notes), [notes]);
 
   // The catalog finder (the manager's append mode and a replacement finder)
   // treats owned records as the likely pick: their rows chip Owned/Seen and
@@ -235,17 +207,18 @@ function ShowcaseNotePicker({
   const catalogFinder =
     embedded || singleSelect || node?.node_type === "catalog_entry";
 
-  // In append mode a library record is the likelier pick, so owned notes lead.
-  // The sort is stable: within each group the collection order is untouched.
+  // Filter chips use the Table's condition model; the sort control replaces
+  // the picker's default collection order once a field is chosen. Owned-first
+  // stays a default-order affordance, not a competing sort.
   const visible = useMemo(
     () =>
-      catalogFinder
-        ? [...filtered].sort(
-            (left, right) =>
-              Number(Boolean(right.owned)) - Number(Boolean(left.owned)),
-          )
-        : filtered,
-    [catalogFinder, filtered],
+      applyPickerView(availableNotes, {
+        conditions,
+        ownedFirst: catalogFinder,
+        sortDirection,
+        sortKey,
+      }),
+    [availableNotes, catalogFinder, conditions, sortDirection, sortKey],
   );
 
   const rowVirtualizer = useVirtualizer({
@@ -257,11 +230,11 @@ function ShowcaseNotePicker({
   const virtualRows = rowVirtualizer.getVirtualItems();
   const totalSize = rowVirtualizer.getTotalSize();
 
-  // A new filter is a new list: jump back to the top so the window never opens
-  // mid-list on stale scroll.
+  // A new filter or sort is a new list: jump back to the top so the window
+  // never opens mid-list on stale scroll.
   useEffect(() => {
     rowVirtualizer.scrollToOffset(0);
-  }, [column, value, rowVirtualizer]);
+  }, [conditions, rowVirtualizer, sortDirection, sortKey]);
 
   function showThumbPreview(noteId) {
     setThumbPreview({ noteId, offsetY: 0 });
@@ -401,7 +374,13 @@ function ShowcaseNotePicker({
     }
   }
 
-  const activeColumn = COLUMNS.find((entry) => entry.value === column) ?? COLUMNS[1];
+  // Hand the filter bar's Down/Escape off to the first row, matching the Table.
+  function focusFirstRow() {
+    listRef.current
+      ?.querySelector('input[type="checkbox"]:not(:disabled)')
+      ?.focus();
+  }
+
   const nodeLabel = node?.name ?? "this node";
 
   function renderNoteLabel(note) {
@@ -515,34 +494,60 @@ function ShowcaseNotePicker({
         </div>
       )}
 
-      <div className="showcase-picker-filter">
-        <SelectField
-          ariaLabel="Filter column"
-          onChange={setColumn}
-          options={COLUMNS}
-          value={column}
-          wrapperClassName="showcase-picker-column"
+      <div className="showcase-picker-toolbar">
+        <TableFilterBar
+          conditions={conditions}
+          hasRows={visible.length > 0}
+          onConditionsChange={setConditions}
+          onEscape={onClose}
+          onFirstRow={focusFirstRow}
+          ref={filterBarRef}
+          searchColumns={pickerColumns}
+          tagNames={tagNames}
         />
-        <input
-          aria-label="Filter value"
-          autoFocus={!embedded}
-          className="showcase-picker-value"
-          onChange={(event) => setValue(event.target.value)}
-          placeholder={activeColumn.placeholder}
-          ref={filterRef}
-          type="text"
-          value={value}
-        />
-        {singleSelect ? null : (
-          <>
-            <button className="button" onClick={selectAll} type="button">
-              Select all
+        <div className="showcase-picker-toolbar-actions">
+          <div
+            aria-label="Sort notes"
+            className="showcase-picker-sort"
+            role="group"
+          >
+            <span aria-hidden="true" className="showcase-picker-sort-label">
+              Sort
+            </span>
+            <SelectField
+              ariaLabel="Sort notes by"
+              onChange={setSortKey}
+              options={pickerSortOptions}
+              value={sortKey}
+              wrapperClassName="showcase-picker-sort-field"
+            />
+            <button
+              aria-label={
+                sortDirection === "asc" ? "Sort descending" : "Sort ascending"
+              }
+              className="button showcase-picker-sort-direction"
+              onClick={() =>
+                setSortDirection((current) =>
+                  current === "asc" ? "desc" : "asc",
+                )
+              }
+              title={`Currently ${sortDirection === "asc" ? "ascending" : "descending"}`}
+              type="button"
+            >
+              {sortDirection === "asc" ? "Asc" : "Desc"}
             </button>
-            <button className="button" onClick={deselectAll} type="button">
-              Deselect all
-            </button>
-          </>
-        )}
+          </div>
+          {singleSelect ? null : (
+            <div className="showcase-picker-bulk">
+              <button className="button" onClick={selectAll} type="button">
+                Select all
+              </button>
+              <button className="button" onClick={deselectAll} type="button">
+                Deselect all
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {onModeChange ? (
@@ -573,7 +578,9 @@ function ShowcaseNotePicker({
       <p className="showcase-picker-hint">
         {mode === "catalog"
           ? "A note joins the entry with the same catalog value in this block; a note without one is skipped."
-          : column === "catalog"
+          : conditions.some(
+                (condition) => condition.field === "catalog_number",
+              )
             ? "The catalog filter keeps the family rule: 22 matches 22, 22a, 22b, and 22s — never 220. A letters-only catalog base is a prefix, so M matches M1 and MA."
             : "The selection carries across filter changes, so you can pick notes from several collections."}
       </p>
@@ -590,9 +597,9 @@ function ShowcaseNotePicker({
 
       {!loading && !loadError ? (
         <p aria-live="polite" className="muted showcase-picker-count">
-          {filtered.length === availableNotes.length
+          {visible.length === availableNotes.length
             ? `${availableNotes.length} notes`
-            : `${filtered.length} of ${availableNotes.length} notes`}
+            : `${visible.length} of ${availableNotes.length} notes`}
           {selectedIds.size ? ` · ${selectedIds.size} selected` : ""}
         </p>
       ) : null}

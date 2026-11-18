@@ -4,6 +4,10 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+### Added
+
+- Showcase note picker: the Table's chip filter bar now backs the picker — field chips, Add/Replace commit modes, comma/range values and `!` negation, with tag suggestions — and a sort control orders the list by collection or any filterable note field, ascending or descending, including reversing the default order. The picker projection now carries company, grade, serial and owned so those filters and its Owned/Seen chips read the note itself.
+
 ## [2.19.0] - 2026-11-17
 
 ### Added

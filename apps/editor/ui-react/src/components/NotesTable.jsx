@@ -66,6 +66,7 @@ import {
 } from "../lib/noteView.js";
 import { noteThumbnailPath } from "../lib/tableCells.jsx";
 import { makeCondition, parseFilterInput } from "../lib/tableFilters.js";
+import { collectTagNames } from "../lib/tagNames.js";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 import { BulkOwnershipPanel } from "./BulkOwnershipPanel.jsx";
 import { BulkTagPanel } from "./BulkTagPanel.jsx";
@@ -1120,24 +1121,7 @@ function NotesTable({
   });
   // Tag names offered as suggestions when the Tags field is selected. The
   // chips still commit with Enter; the list only saves typing.
-  const tagNames = useMemo(() => {
-    const seen = new Map();
-
-    notes.forEach((note) => {
-      note.tags.forEach((tag) => {
-        const name = String(tag.name ?? "").trim();
-        const key = name.toLowerCase();
-
-        if (name && !seen.has(key)) {
-          seen.set(key, name);
-        }
-      });
-    });
-
-    return Array.from(seen.values()).sort((left, right) =>
-      left.localeCompare(right),
-    );
-  }, [notes]);
+  const tagNames = useMemo(() => collectTagNames(notes), [notes]);
 
   const currentRoute = useMemo(
     () => parseTableHash(location.hash),

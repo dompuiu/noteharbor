@@ -5,6 +5,7 @@ export const defaultFilterField = "catalog_number";
 
 const filterFieldLabels = {
   all: "All fields",
+  collection_name: "Collection",
   catalog_number: "Catalog",
   denomination: "Denomination",
   issue_date: "Date",

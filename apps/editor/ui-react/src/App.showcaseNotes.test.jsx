@@ -175,12 +175,15 @@ beforeEach(() => {
 
 describe("the merged add dialog", () => {
   test("lists notes across collections and keeps the catalog family rule", async () => {
-    const { user } = await openAddDialog();
+    const { user, dialog } = await openAddDialog();
 
     expect(await screen.findByText("1 leu · 1917")).toBeInTheDocument();
     expect(screen.getByText("100 lei · 1943")).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText("Filter value"), "22");
+    await user.type(
+      within(dialog).getByRole("searchbox", { name: "Filter Catalog" }),
+      "22{Enter}",
+    );
 
     expect(screen.getByText("1 leu · 1917")).toBeInTheDocument();
     expect(screen.getByText("1 leu · 1920")).toBeInTheDocument();
@@ -189,9 +192,12 @@ describe("the merged add dialog", () => {
   });
 
   test("a letter catalog filter finds letter-prefixed numbers", async () => {
-    const { user } = await openAddDialog();
+    const { user, dialog } = await openAddDialog();
 
-    await user.type(screen.getByLabelText("Filter value"), "M");
+    await user.type(
+      within(dialog).getByRole("searchbox", { name: "Filter Catalog" }),
+      "M{Enter}",
+    );
 
     expect(screen.getByText("5 lei · 1950")).toBeInTheDocument();
     expect(screen.queryByText("100 lei · 1943")).not.toBeInTheDocument();
@@ -208,13 +214,14 @@ describe("the merged add dialog", () => {
     });
 
     const { user, dialog } = await openAddDialog();
-    const filter = screen.getByLabelText("Filter value");
+    const filter = within(dialog).getByRole("searchbox", {
+      name: "Filter Catalog",
+    });
 
-    await user.type(filter, "22");
+    await user.type(filter, "22{Enter}");
     await user.click(within(dialog).getByRole("button", { name: "Select all" }));
 
-    await user.clear(filter);
-    await user.type(filter, "220");
+    await user.type(filter, "220{Enter}");
     await user.click(
       within(dialog).getByRole("checkbox", { name: /2 lei · 1920/ }),
     );
@@ -250,13 +257,14 @@ describe("the merged add dialog", () => {
     });
 
     const { user, dialog } = await openAddDialog();
-    const filter = screen.getByLabelText("Filter value");
+    const filter = within(dialog).getByRole("searchbox", {
+      name: "Filter Catalog",
+    });
 
-    await user.type(filter, "22");
+    await user.type(filter, "22{Enter}");
     await user.click(within(dialog).getByRole("button", { name: "Select all" }));
 
-    await user.clear(filter);
-    await user.type(filter, "220");
+    await user.type(filter, "220{Enter}");
     await user.click(
       within(dialog).getByRole("checkbox", { name: /2 lei · 1920/ }),
     );

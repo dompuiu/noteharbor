@@ -39,6 +39,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
     defaultField = defaultFilterField,
     hasRows,
     onConditionsChange,
+    onEscape = null,
     onFirstRow,
     searchColumns,
     tagNames,
@@ -358,6 +359,15 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
     }
 
     if (event.key === "Escape") {
+      // A dialog-owned bar dismisses the dialog from its own field; the Table
+      // hands the cursor to the first row instead.
+      if (onEscape) {
+        event.preventDefault();
+        event.stopPropagation();
+        onEscape();
+        return;
+      }
+
       // Escape leaves the field without clearing the draft or reaching the
       // table's row/anchor Escape handling. Like ArrowDown, it lands on the
       // first row so the table has a visible cursor to continue from.
@@ -613,6 +623,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
                           commitConditionEdit();
                         } else if (event.key === "Escape") {
                           event.preventDefault();
+                          event.stopPropagation();
                           cancelConditionEdit();
                         }
                       }}

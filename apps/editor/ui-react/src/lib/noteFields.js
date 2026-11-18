@@ -25,13 +25,19 @@ export const allNotesListFields = [
 ];
 
 // The showcase picker paints a card per note: image, label, description and
-// tags. It never reads the scraped payload.
+// tags, and filters/sorts on the same fields the Table's filter bar offers. It
+// never reads the scraped payload.
 export const showcasePickerFields = [
   "id",
   "collection_id",
+  "display_order",
   "catalog_number",
   "denomination",
   "issue_date",
+  "grading_company",
+  "grade",
+  "serial",
+  "owned",
   "images",
   "updated_at",
   "notes",

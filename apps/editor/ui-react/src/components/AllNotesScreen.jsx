@@ -20,6 +20,7 @@ import {
   serializeConditions,
 } from "../lib/noteView.js";
 import { CATALOG_ROUTES } from "../lib/routes.js";
+import { collectTagNames } from "../lib/tagNames.js";
 import { dataColumns, validSortKeys } from "../lib/tableColumns.js";
 import { AllNotesTable } from "./AllNotesTable.jsx";
 import { Slideshow } from "./Slideshow.jsx";
@@ -212,24 +213,7 @@ export function AllNotesScreen() {
   const deferredConditions = deferredView.conditions;
   const rowsPending = deferredView !== viewInputs;
 
-  const tagNames = useMemo(() => {
-    const seen = new Map();
-
-    notes.forEach((note) => {
-      note.tags.forEach((tag) => {
-        const name = String(tag.name ?? "").trim();
-        const key = name.toLowerCase();
-
-        if (name && !seen.has(key)) {
-          seen.set(key, name);
-        }
-      });
-    });
-
-    return Array.from(seen.values()).sort((left, right) =>
-      left.localeCompare(right),
-    );
-  }, [notes]);
+  const tagNames = useMemo(() => collectTagNames(notes), [notes]);
 
   const countsByCollection = useMemo(() => {
     const counts = new Map();

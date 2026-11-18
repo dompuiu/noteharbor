@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router-dom";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -51,6 +52,20 @@ function note(id, overrides = {}) {
 
 const collections = [{ id: 1, name: "Kingdom" }];
 
+function renderPicker(props = {}) {
+  return render(
+    <MemoryRouter>
+      <ShowcaseNotePicker
+        collections={collections}
+        node={{ id: 10, name: "Group", children: [] }}
+        onAdd={vi.fn()}
+        onClose={vi.fn()}
+        {...props}
+      />
+    </MemoryRouter>,
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   virtualWindow.start = 0;
@@ -66,14 +81,7 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
       ],
     });
 
-    render(
-      <ShowcaseNotePicker
-        collections={collections}
-        node={{ id: 10, name: "Group", children: [] }}
-        onAdd={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
+    renderPicker();
 
     const dialog = await screen.findByRole("dialog", { name: "Add notes" });
     const images = dialog.querySelectorAll(".showcase-note-row-thumb-frame img");
@@ -97,14 +105,7 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
     const notes = Array.from({ length: 50 }, (_, index) => note(100 + index));
     getAllNotes.mockResolvedValue({ notes });
 
-    render(
-      <ShowcaseNotePicker
-        collections={collections}
-        node={{ id: 10, name: "Group", children: [] }}
-        onAdd={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
+    renderPicker();
 
     const dialog = await screen.findByRole("dialog", { name: "Add notes" });
 
@@ -123,14 +124,7 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
     getAllNotes.mockResolvedValue({ notes });
     const user = userEvent.setup();
 
-    render(
-      <ShowcaseNotePicker
-        collections={collections}
-        node={{ id: 10, name: "Group", children: [] }}
-        onAdd={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
+    renderPicker();
 
     const dialog = await screen.findByRole("dialog", { name: "Add notes" });
     const [first] = within(dialog).getAllByRole("checkbox");
@@ -162,14 +156,7 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
     });
     const user = userEvent.setup();
 
-    render(
-      <ShowcaseNotePicker
-        collections={collections}
-        node={{ id: 10, name: "Group", children: [] }}
-        onAdd={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
+    renderPicker();
 
     const dialog = await screen.findByRole("dialog", { name: "Add notes" });
     expect(
@@ -211,14 +198,7 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
     getAllNotes.mockResolvedValue({ notes: [withFull(1), withFull(2), withFull(3)] });
     const user = userEvent.setup();
 
-    render(
-      <ShowcaseNotePicker
-        collections={collections}
-        node={{ id: 10, name: "Group", children: [] }}
-        onAdd={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
+    renderPicker();
 
     const dialog = await screen.findByRole("dialog", { name: "Add notes" });
     const thumbs = dialog.querySelectorAll(".showcase-note-row-thumb");
@@ -235,14 +215,7 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
     getAllNotes.mockResolvedValue({ notes: [note(2, { images: [] })] });
     const user = userEvent.setup();
 
-    render(
-      <ShowcaseNotePicker
-        collections={collections}
-        node={{ id: 10, name: "Group", children: [] }}
-        onAdd={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
+    renderPicker();
 
     const dialog = await screen.findByRole("dialog", { name: "Add notes" });
     const thumb = dialog.querySelector(".showcase-note-row-thumb");
@@ -258,14 +231,7 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
     const onClose = vi.fn();
     const user = userEvent.setup();
 
-    render(
-      <ShowcaseNotePicker
-        collections={collections}
-        node={{ id: 10, name: "Group", children: [] }}
-        onAdd={vi.fn()}
-        onClose={onClose}
-      />,
-    );
+    renderPicker({ onClose });
 
     await screen.findByRole("dialog", { name: "Add notes" });
     await user.keyboard("{Escape}");
@@ -278,14 +244,7 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
     const onClose = vi.fn();
     const user = userEvent.setup();
 
-    render(
-      <ShowcaseNotePicker
-        collections={collections}
-        node={{ id: 10, name: "Group", children: [] }}
-        onAdd={vi.fn()}
-        onClose={onClose}
-      />,
-    );
+    renderPicker({ onClose });
 
     const dialog = await screen.findByRole("dialog", { name: "Add notes" });
     await user.click(within(dialog).getByRole("button", { name: "Select all" }));

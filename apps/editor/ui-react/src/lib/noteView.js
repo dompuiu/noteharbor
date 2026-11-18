@@ -8,14 +8,16 @@ import {
   validSortKeys,
 } from "./tableColumns.js";
 import { makeCondition } from "./tableFilters.js";
+import { matchesCatalogFamily } from "./catalogFamily.js";
 
-// Filtering, sorting, and URL-condition helpers shared by the Table screen and
-// the All notes screen. The logic used to live in NotesTable.jsx; it moved here
-// unchanged so both screens read one definition of filter and sort semantics.
+// Filtering, sorting, and URL-condition helpers shared by the Table screen,
+// the All notes screen, and the Showcase note picker. The logic used to live
+// in NotesTable.jsx; it moved here unchanged so every screen reads one
+// definition of filter and sort semantics.
 
-function valueToString(note, key) {
-  if (getTableColumn(key)?.isTags) {
-    return note.tags.map((tag) => tag.name).join(", ");
+function valueToString(note, key, getColumn = getTableColumn) {
+  if (getColumn(key)?.isTags) {
+    return (note.tags ?? []).map((tag) => tag.name).join(", ");
   }
 
   return String(note[key] ?? "");
@@ -110,9 +112,24 @@ function matchesSingleFilterValue(
 ) {
   return matchMode === "catalogPrefix"
     ? matchesCatalogFilterValue(noteValue, filterValue)
-    : matchMode === "startsWith"
-      ? noteValue.startsWith(filterValue)
-      : noteValue.includes(filterValue);
+    : matchMode === "catalogFamily"
+      ? matchesCatalogFamily(noteValue, filterValue)
+      : matchMode === "startsWith"
+        ? noteValue.startsWith(filterValue)
+        : noteValue.includes(filterValue);
+}
+
+// A screen may own a column set the shared table model does not know (the
+// Showcase note picker adds its cross-collection scope). A caller that passes
+// `columns` resolves through them; everyone else keeps the table model.
+function makeColumnLookup(columns) {
+  if (!columns) {
+    return getTableColumn;
+  }
+
+  const byKey = new Map(columns.map((column) => [column.key, column]));
+
+  return (key) => byKey.get(key) ?? null;
 }
 
 function matchesFilterValue(
@@ -157,7 +174,7 @@ function matchesTagFilter(note, rawFilterValue) {
     return true;
   }
 
-  const noteTagNames = note.tags.map((tag) =>
+  const noteTagNames = (note.tags ?? []).map((tag) =>
     String(tag.name ?? "")
       .trim()
       .toLowerCase(),
@@ -195,12 +212,12 @@ function groupConditions(conditions) {
   return groups;
 }
 
-function conditionMatches(note, condition, searchColumns) {
+function conditionMatches(note, condition, searchColumns, getColumn) {
   if (condition.field === "all") {
     return matchesSearchQuery(note, condition.value, searchColumns);
   }
 
-  const column = getTableColumn(condition.field);
+  const column = getColumn(condition.field);
 
   if (!column) {
     return true;
@@ -211,19 +228,25 @@ function conditionMatches(note, condition, searchColumns) {
   }
 
   return matchesFilterValue(
-    valueToString(note, column.key),
+    valueToString(note, column.key, getColumn),
     condition.value,
     column.matchMode,
     { multiple: false, normalizeFilterValue: column.normalize },
   );
 }
 
-export function filterNotesByConditions(noteList, conditions, searchColumns) {
+export function filterNotesByConditions(
+  noteList,
+  conditions,
+  searchColumns,
+  { columns = null } = {},
+) {
   if (!conditions?.length) {
     return noteList;
   }
 
   const groups = groupConditions(conditions);
+  const getColumn = makeColumnLookup(columns);
 
   return noteList.filter((note) => {
     for (const list of groups.values()) {
@@ -232,7 +255,7 @@ export function filterNotesByConditions(noteList, conditions, searchColumns) {
       if (
         positives.length &&
         !positives.some((condition) =>
-          conditionMatches(note, condition, searchColumns),
+          conditionMatches(note, condition, searchColumns, getColumn),
         )
       ) {
         return false;
@@ -241,7 +264,7 @@ export function filterNotesByConditions(noteList, conditions, searchColumns) {
       for (const condition of list) {
         if (
           condition.negated &&
-          conditionMatches(note, condition, searchColumns)
+          conditionMatches(note, condition, searchColumns, getColumn)
         ) {
           return false;
         }
@@ -273,7 +296,7 @@ export function marksForNote(
       continue;
     }
 
-    if (!conditionMatches(note, condition, searchColumns)) {
+    if (!conditionMatches(note, condition, searchColumns, getTableColumn)) {
       continue;
     }
 
@@ -309,8 +332,19 @@ export function marksForNote(
   return marks;
 }
 
-export function sortNotesBySort(noteList, key, direction) {
-  const sortKey = validSortKeys.has(key) ? key : defaultSortKey;
+export function sortNotesBySort(
+  noteList,
+  key,
+  direction,
+  { columns = null } = {},
+) {
+  const getColumn = makeColumnLookup(columns);
+  const candidate = getColumn(key);
+  const sortable =
+    candidate &&
+    candidate.sortable !== false &&
+    (columns ? true : validSortKeys.has(key));
+  const sortKey = sortable ? key : defaultSortKey;
   const sortDirection = direction === "desc" ? "desc" : "asc";
 
   if (sortKey === defaultSortKey) {
@@ -321,7 +355,7 @@ export function sortNotesBySort(noteList, key, direction) {
     });
   }
 
-  const sortValue = getTableColumn(sortKey)?.sortValue ?? null;
+  const sortValue = getColumn(sortKey)?.sortValue ?? null;
   // Ordering on the printed text is wrong the moment a column carries a
   // number or a date (`1917` vs `01/01/1917`, `1,000 Lei` vs `100 Lei`), so
   // a column that can be read declares its own comparable value. Read both
@@ -329,7 +363,7 @@ export function sortNotesBySort(noteList, key, direction) {
   // times instead of n.
   const decorated = noteList.map((note) => ({
     note,
-    text: valueToString(note, sortKey).toLowerCase(),
+    text: valueToString(note, sortKey, getColumn).toLowerCase(),
     value: sortValue ? sortValue(note) : null,
   }));
 

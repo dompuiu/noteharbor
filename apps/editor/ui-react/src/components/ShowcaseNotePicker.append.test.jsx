@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router-dom";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -28,14 +29,16 @@ const collections = [{ id: 1, name: "Kingdom" }];
 
 function renderEmbedded(props = {}) {
   return render(
-    <ShowcaseNotePicker
-      collections={collections}
-      embedded
-      node={{ id: 10, name: "Pick 22a" }}
-      onAdd={vi.fn()}
-      onClose={vi.fn()}
-      {...props}
-    />,
+    <MemoryRouter>
+      <ShowcaseNotePicker
+        collections={collections}
+        embedded
+        node={{ id: 10, name: "Pick 22a" }}
+        onAdd={vi.fn()}
+        onClose={vi.fn()}
+        {...props}
+      />
+    </MemoryRouter>,
   );
 }
 
@@ -140,12 +143,14 @@ describe("ShowcaseNotePicker append mode", () => {
     });
 
     render(
-      <ShowcaseNotePicker
-        collections={collections}
-        node={{ id: 10, name: "Pick 22a", node_type: "catalog_entry" }}
-        onAdd={vi.fn()}
-        onClose={vi.fn()}
-      />,
+      <MemoryRouter>
+        <ShowcaseNotePicker
+          collections={collections}
+          node={{ id: 10, name: "Pick 22a", node_type: "catalog_entry" }}
+          onAdd={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </MemoryRouter>,
     );
 
     const dialog = await screen.findByRole("dialog", { name: "Add notes" });

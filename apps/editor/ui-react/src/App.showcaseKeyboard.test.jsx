@@ -438,7 +438,9 @@ describe("keyboard add and menus", () => {
 
     fireEvent.keyDown(done, { key: "/" });
 
-    expect(within(dialog).getByLabelText("Filter value")).toHaveFocus();
+    expect(
+      within(dialog).getByRole("searchbox", { name: "Filter Catalog" }),
+    ).toHaveFocus();
   });
 
   test("the item menu opens by keyboard and returns focus to its trigger", async () => {
