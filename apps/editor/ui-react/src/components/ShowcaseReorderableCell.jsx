@@ -91,7 +91,9 @@ function ShowcaseReorderableCell({
       }
     >
       {springing ? (
-        <span aria-hidden="true" className="showcase-spring-meter" />
+        <span aria-hidden="true" className="showcase-spring-hold">
+          Hold to open · release to append
+        </span>
       ) : null}
       {embedded ? (
         // An embedded card draws its own frame, so it places the menu itself:

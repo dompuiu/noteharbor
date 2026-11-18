@@ -1580,6 +1580,7 @@ input[type="radio"] {
 /* The cover keeps the catalog photo plate: the same inset, hairline and 2/1
    ratio, so the header and footer rows of both cards line up. */
 .showcase-grouping-well {
+  position: relative;
   display: flex;
   flex: none;
   align-items: center;
@@ -11634,16 +11635,15 @@ td.table-col-collection {
   z-index: 30;
 }
 
-/* The spring's progress is a real element rather than a pseudo: the cell's
-   two pseudo-elements already draw the order target and the focus frame. */
+/* The spring's progress is a real element rather than a pseudo: it fills along
+   the bottom of the grouping's photo well, where the prototype draws it. */
 .showcase-spring-meter {
   position: absolute;
   right: 0;
-  bottom: -1px;
+  bottom: 0;
   left: 0;
   z-index: 6;
   height: 3px;
-  border-radius: 0 0 var(--radius-md) var(--radius-md);
   background: var(--accent);
   pointer-events: none;
   animation: showcase-spring-fill 450ms linear forwards;
@@ -11659,6 +11659,28 @@ td.table-col-collection {
   }
 }
 
+/* The prototype's hold label: while the 450 ms spring runs, the card says what
+   the press will do. It floats over the card's foot so nothing reflows. */
+.showcase-spring-hold {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  border: 1px solid rgba(184, 0, 0, 0.32);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--accent-strong);
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 .showcase-spring-drawer {
   position: absolute;
   top: calc(100% + 5px);
@@ -11670,6 +11692,26 @@ td.table-col-collection {
   border-radius: var(--radius-md);
   background: var(--surface);
   box-shadow: 0 12px 32px rgba(37, 40, 43, 0.16);
+}
+
+/* The drawer hangs 5px under the card. This invisible bridge belongs to the
+   drawer, so the pointer never leaves it while crossing that gap and the row
+   list cannot vanish under the collector mid-drag. */
+.showcase-spring-drawer::before {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: 8px;
+}
+
+/* The drawer's own surface is a drop target too: title, padding and the gaps
+   between rows append to the open grouping. */
+.showcase-spring-drawer--target {
+  box-shadow:
+    inset 0 0 0 2px var(--accent),
+    0 12px 32px rgba(37, 40, 43, 0.16);
 }
 
 .showcase-spring-title {
@@ -11865,20 +11907,40 @@ td.table-col-collection {
 }
 
 /* During a drag the canvas states the outcome in words and, inside a drilled
-   level, offers its ancestors as level drops. The rail is the outdent gesture:
-   dropping on a chip appends there, the only target the visible grid cannot
-   show. */
-.showcase-drag-bar {
+   level, offers its ancestors as level drops. The dock floats over the canvas
+   instead of sitting in the flow: the grid never jumps when the line appears
+   or changes. Its chips stay clickable; the text lets the pointer through to
+   whatever sits beneath. */
+.showcase-drag-dock {
+  position: fixed;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  z-index: 60;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px 14px;
-  margin: 0 0 14px;
-  padding: 7px 10px;
-  border: 1px solid rgba(184, 0, 0, 0.28);
+  gap: 7px 14px;
+  max-width: min(760px, calc(100vw - 24px));
+  padding: 8px 13px;
+  transform: translateX(-50%);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
   border-radius: var(--radius-md);
-  background: var(--accent-soft);
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(37, 40, 43, 0.16);
+  pointer-events: none;
+  animation: showcase-drag-dock-in 140ms ease-out;
+}
+
+@keyframes showcase-drag-dock-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 
 .showcase-drag-outcome {
@@ -11893,6 +11955,7 @@ td.table-col-collection {
   flex-wrap: wrap;
   align-items: center;
   gap: 5px;
+  pointer-events: auto;
 }
 
 .showcase-drag-levels-label {
@@ -11944,6 +12007,10 @@ td.table-col-collection {
 @media (prefers-reduced-motion: reduce) {
   .showcase-spring-meter {
     width: 100%;
+    animation: none;
+  }
+
+  .showcase-drag-dock {
     animation: none;
   }
 }

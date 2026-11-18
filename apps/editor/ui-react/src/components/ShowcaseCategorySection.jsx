@@ -28,6 +28,7 @@ function ShowcaseCategorySection({
   reorderEnabled = true,
   onReorder,
   onMove,
+  onMoveOut,
   onMoveInto,
   onDragState,
   onAdd,
@@ -95,6 +96,7 @@ function ShowcaseCategorySection({
         onRenameGrouping={onRename}
         onReorder={onReorder}
         onMove={onMove}
+        onMoveOut={onMoveOut}
         onMoveInto={onMoveInto}
         onDragState={onDragState}
         onSetCover={onSetCover}

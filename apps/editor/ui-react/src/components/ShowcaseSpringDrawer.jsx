@@ -12,10 +12,10 @@ function ShowcaseSpringDrawer({
   draggedId,
   items,
   label,
-  onDragOverEmpty,
+  onDragOverSurface,
   onDragOverInto,
   onDragOverRow,
-  onDropEmpty,
+  onDropSurface,
   onDropInto,
   onDropRow,
   parentId,
@@ -25,13 +25,18 @@ function ShowcaseSpringDrawer({
     !empty || !drawerTarget
       ? false
       : drawerTarget.parentId === parentId && drawerTarget.placement === "into";
+  const surfaceTarget =
+    !empty &&
+    drawerTarget?.childId == null &&
+    drawerTarget?.parentId === parentId &&
+    drawerTarget?.placement === "into";
 
   return (
     <div
-      className="showcase-spring-drawer"
+      className={`showcase-spring-drawer${surfaceTarget ? " showcase-spring-drawer--target" : ""}`}
       data-showcase-spring={parentId}
-      onDragOver={empty ? onDragOverEmpty : (event) => event.stopPropagation()}
-      onDrop={empty ? onDropEmpty : undefined}
+      onDragOver={(event) => onDragOverSurface?.(event, { children: items })}
+      onDrop={(event) => onDropSurface?.(event, { children: items })}
     >
       <p className="showcase-spring-title">
         <span>Inside</span>
@@ -76,7 +81,11 @@ function ShowcaseSpringDrawer({
                         : ""
                     }`}
                     onDragOver={(event) => onDragOverInto?.(event, node.id)}
-                    onDrop={(event) => onDropInto?.(event, node.id)}
+                    onDrop={(event) =>
+                      onDropInto?.(event, node.id, {
+                        children: node.children ?? [],
+                      })
+                    }
                   >
                     Into
                   </span>

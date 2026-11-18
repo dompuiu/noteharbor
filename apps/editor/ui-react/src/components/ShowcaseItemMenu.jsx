@@ -11,6 +11,7 @@ import { MenuIcon } from "./MenuIcon.jsx";
 // - note: replace it with another library note in place
 // - grouping: open, rename, set/clear its cover
 // - note inside a grouping: make it the grouping's cover
+// - anything inside a grouping: move out one level, to its grandparent
 // - catalog shell: replace it with a library note, edit its details
 //
 // The trigger is a quiet `⋯` at the far end of the cell's title bar, opposite
@@ -31,6 +32,7 @@ function ShowcaseItemMenu({
   onEditNote,
   onMoveUp,
   onMoveDown,
+  onMoveOut,
   onMoveInto,
   canMoveUp = false,
   canMoveDown = false,
@@ -144,6 +146,14 @@ function ShowcaseItemMenu({
           icon: "arrow-down",
           run: onMoveDown,
           disabled: !canMoveDown,
+        }
+      : null,
+    onMoveOut
+      ? {
+          key: "move-out",
+          label: "Move out one level",
+          icon: "source",
+          run: onMoveOut,
         }
       : null,
     onMoveInto

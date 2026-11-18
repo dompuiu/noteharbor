@@ -31,6 +31,7 @@ function ShowcaseItemsGrid({
   reorderEnabled = true,
   onReorder,
   onMove,
+  onMoveOut,
   onDragState,
   onAdd,
   onAddNoteAfter,
@@ -69,10 +70,10 @@ function ShowcaseItemsGrid({
         draggedId={reorder.draggedId}
         items={node.children ?? []}
         label={node.name}
-        onDragOverEmpty={reorder.handleDrawerEmptyDragOver}
+        onDragOverSurface={reorder.handleDrawerSurfaceDragOver}
         onDragOverInto={reorder.handleDrawerIntoDragOver}
         onDragOverRow={reorder.handleDrawerDragOver}
-        onDropEmpty={reorder.handleDrawerEmptyDrop}
+        onDropSurface={reorder.handleDrawerSurfaceDrop}
         onDropInto={reorder.handleDrawerIntoDrop}
         onDropRow={reorder.handleDrawerDrop}
         parentId={node.id}
@@ -131,6 +132,11 @@ function ShowcaseItemsGrid({
         }
         onMoveDown={
           reorderEnabled ? () => moveNode(node, 1) : undefined
+        }
+        onMoveOut={
+          reorderEnabled && isGroupingParent && onMoveOut
+            ? () => onMoveOut(node)
+            : undefined
         }
         onMoveUp={
           reorderEnabled ? () => moveNode(node, -1) : undefined
@@ -215,6 +221,7 @@ function ShowcaseItemsGrid({
                   menu={menu}
                   node={node}
                   onOpen={() => onOpenGrouping(node)}
+                  springing={reorderEnabled && reorder.springId === node.id}
                 />
               )}
             </ShowcaseReorderableCell>

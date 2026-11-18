@@ -107,8 +107,9 @@ function useShowcaseReorder({
     onDragState,
   ]);
 
-  // Escape cancels the pending spring and every drop target. The browser still
-  // ends the native drag, but nothing is left armed in the canvas.
+  // Escape steps out one layer at a time: the open drawer first (the drag goes
+  // on), then the drag itself. The browser still ends the native drag, but
+  // nothing is left armed in the canvas.
   useEffect(() => {
     if (draggedId == null) {
       return undefined;
@@ -120,12 +121,20 @@ function useShowcaseReorder({
       }
 
       event.preventDefault();
+
+      if (drawerId != null) {
+        setDrawerId(null);
+        setDrawerTarget(null);
+        setDropTarget(null);
+        return;
+      }
+
       clear();
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [draggedId]);
+  }, [draggedId, drawerId]);
 
   function clearSpring() {
     if (springTimer.current) {
@@ -143,7 +152,49 @@ function useShowcaseReorder({
     setDrawerTarget(null);
   }
 
+  // The canvas scrolls inside `.screen-body`, not in the window: the columns
+  // are a viewport and the page never grows. Autoscroll therefore has to find
+  // the scrollable ancestor under the pointer instead of asking `window`.
+  function scrollableAncestor(element) {
+    let node = element;
+
+    while (node && node !== document.body) {
+      const style = getComputedStyle(node);
+
+      if (
+        (style.overflowY === "auto" || style.overflowY === "scroll") &&
+        node.scrollHeight > node.clientHeight
+      ) {
+        return node;
+      }
+
+      node = node.parentElement;
+    }
+
+    return null;
+  }
+
+  // A drag near a scroller's edge nudges it so a destination above or below the
+  // viewport is reachable without letting go.
+  function nudgeScroller(scroller, clientY, top, bottom) {
+    const margin = 80;
+
+    if (clientY < top + margin) {
+      scroller.scrollBy?.(0, -18);
+    } else if (clientY > bottom - margin) {
+      scroller.scrollBy?.(0, 18);
+    }
+  }
+
   function autoScroll(event) {
+    const scroller = scrollableAncestor(event.currentTarget);
+
+    if (scroller) {
+      const bounds = scroller.getBoundingClientRect();
+      nudgeScroller(scroller, event.clientY, bounds.top, bounds.bottom);
+      return;
+    }
+
     if (
       typeof window.scrollBy !== "function" ||
       document.documentElement.scrollHeight <= window.innerHeight
@@ -151,13 +202,7 @@ function useShowcaseReorder({
       return;
     }
 
-    const margin = 80;
-
-    if (event.clientY < margin) {
-      window.scrollBy(0, -18);
-    } else if (event.clientY > window.innerHeight - margin) {
-      window.scrollBy(0, 18);
-    }
+    nudgeScroller(window, event.clientY, 0, window.innerHeight);
   }
 
   function handleDragStart(event, nodeId) {
@@ -175,7 +220,9 @@ function useShowcaseReorder({
     if (springTimer.current) {
       clearTimeout(springTimer.current);
     }
-    setDrawerId(null);
+    // The open drawer stays put while the new spring fills. Swapping it the
+    // moment the pointer touches another card unmounts the rows the collector
+    // may still be aiming at; the 450 ms timer is the only swap point.
     setDrawerTarget(null);
     setSpringId(nodeId);
     springTimer.current = setTimeout(() => {
@@ -207,8 +254,14 @@ function useShowcaseReorder({
       return;
     }
 
-    clearSpring();
-    setDrawerId(null);
+    // Moving off the middle cancels a pending spring, but an open drawer stays
+    // open: the pointer has to cross the card's edge and the gap above the
+    // drawer to reach its rows, and that path is not the middle. The drawer
+    // closes when another spring completes, on Escape, or when the drag ends.
+    if (springId === nodeId) {
+      clearSpring();
+    }
+
     setDrawerTarget(null);
 
     const placement = placementForEvent(event, bounds);
@@ -253,14 +306,12 @@ function useShowcaseReorder({
       clearSpring();
     }
 
-    if (drawerId === nodeId) {
-      setDrawerId(null);
-      setDrawerTarget(null);
-    }
-
-    setDropTarget((current) =>
-      current?.nodeId === nodeId ? null : current,
-    );
+    // A drawer outlives this leave: the pointer crosses the gap between the
+    // card and its rows, and a leave fired there must not unmount the list the
+    // collector is aiming at. The bridge pseudo-element keeps that gap inside
+    // the drawer, so a real leave only clears this cell's highlight.
+    setDrawerTarget(null);
+    setDropTarget((current) => (current?.nodeId === nodeId ? null : current));
   }
 
   function dropOrder(targetId, placement) {
@@ -372,7 +423,10 @@ function useShowcaseReorder({
     onMove?.(sourceId, targetParent, index);
   }
 
-  function handleDrawerEmptyDragOver(event) {
+  // The drawer's own surface (title, padding, gaps between rows): dropping here
+  // appends to the open grouping, the same promise an early release on the card
+  // makes. Rows stop propagation, so they keep their precise before/after.
+  function handleDrawerSurfaceDragOver(event) {
     if (draggedId == null) {
       return;
     }
@@ -380,10 +434,16 @@ function useShowcaseReorder({
     event.stopPropagation();
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
-    setDrawerTarget({ childId: null, parentId: drawerId, placement: "into" });
+    setDrawerTarget((current) =>
+      current?.childId == null &&
+      current?.parentId === drawerId &&
+      current?.placement === "into"
+        ? current
+        : { childId: null, parentId: drawerId, placement: "into" },
+    );
   }
 
-  function handleDrawerEmptyDrop(event) {
+  function handleDrawerSurfaceDrop(event, { children = [] } = {}) {
     if (draggedId == null) {
       return;
     }
@@ -396,11 +456,11 @@ function useShowcaseReorder({
     clear();
 
     if (targetParent != null) {
-      onMove?.(sourceId, targetParent, 0);
+      onMove?.(sourceId, targetParent, appendPositionFor(children, sourceId));
     }
   }
 
-  function handleDrawerIntoDragOver(event, childId) {
+  function handleDrawerIntoDragOver(event, parentId) {
     if (draggedId == null) {
       return;
     }
@@ -409,14 +469,16 @@ function useShowcaseReorder({
     event.stopPropagation();
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
-    setDrawerTarget({
-      childId,
-      parentId: childId,
-      placement: "into",
-    });
+    setDrawerTarget((current) =>
+      current?.childId === parentId &&
+      current?.parentId === parentId &&
+      current?.placement === "into"
+        ? current
+        : { childId: parentId, parentId, placement: "into" },
+    );
   }
 
-  function handleDrawerIntoDrop(event, childId) {
+  function handleDrawerIntoDrop(event, parentId, { children = [] } = {}) {
     if (draggedId == null) {
       return;
     }
@@ -426,7 +488,9 @@ function useShowcaseReorder({
     const sourceId = draggedId;
 
     clear();
-    onMove?.(sourceId, childId, 0);
+    // "Into" always appends, both on the card and on a nested grouping's row,
+    // so the gesture means one thing at every depth.
+    onMove?.(sourceId, parentId, appendPositionFor(children, sourceId));
   }
 
   return {
@@ -442,8 +506,8 @@ function useShowcaseReorder({
     handleDrop,
     handleDrawerDragOver,
     handleDrawerDrop,
-    handleDrawerEmptyDragOver,
-    handleDrawerEmptyDrop,
+    handleDrawerSurfaceDragOver,
+    handleDrawerSurfaceDrop,
     handleDrawerIntoDragOver,
     handleDrawerIntoDrop,
   };

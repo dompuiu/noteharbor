@@ -3,6 +3,12 @@ import { firstAvailableNoteImage } from "../lib/showcaseImages.js";
 import { resolveGroupingCover } from "../lib/showcaseCovers.js";
 import { isCatalogEntry } from "../lib/showcaseTree.js";
 
+// The spring's progress bar is drawn inside the photo well, not on the cell:
+// the hold fills under the picture, the same place the prototype puts it.
+function SpringMeter() {
+  return <span aria-hidden="true" className="showcase-spring-meter" />;
+}
+
 function countLabel(count, singular, plural) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
@@ -73,6 +79,7 @@ function ShowcaseGroupingCard({
   menu = null,
   node,
   onOpen,
+  springing = false,
 }) {
   const coverImage = firstAvailableNoteImage(resolveGroupingCover(node));
   const counts = countContents(node.children ?? []);
@@ -114,7 +121,10 @@ function ShowcaseGroupingCard({
         {rail ? (
           <>
             <span className="showcase-grouping-rail-main">
-              <span className="showcase-grouping-well">{cover}</span>
+              <span className="showcase-grouping-well">
+                {cover}
+                {springing ? <SpringMeter /> : null}
+              </span>
               <span className="showcase-grouping-rail-body">
                 <span
                   aria-hidden="true"
@@ -148,7 +158,10 @@ function ShowcaseGroupingCard({
               <FolderIcon className="showcase-grouping-head-icon" />
               <span className="showcase-grouping-name-text">{node.name}</span>
             </span>
-            <span className="showcase-grouping-well">{cover}</span>
+            <span className="showcase-grouping-well">
+              {cover}
+              {springing ? <SpringMeter /> : null}
+            </span>
             <span className="showcase-grouping-meta">{summary}</span>
             {action}
           </>

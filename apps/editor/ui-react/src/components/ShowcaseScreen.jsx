@@ -673,6 +673,34 @@ function ShowcaseScreen() {
     handleMoveNode(sourceId, levelId, position);
   }
 
+  // The menu's one-level step out. A card inside a grouping lands at the end
+  // of its grandparent (the grouping's category, or the grouping above it);
+  // categories and cards already on a level have nothing to step out of, so
+  // their menu never offers it.
+  function handleMoveOut(node) {
+    const current = nodesRef.current;
+    const parentId = findParentId(current, node.id);
+    const parent = parentId == null ? null : findNodeById(current, parentId);
+
+    if (!parent || parent.node_type !== "grouping") {
+      return;
+    }
+
+    const destinationId = findParentId(current, parentId);
+
+    if (destinationId == null) {
+      return;
+    }
+
+    const destination = findNodeById(current, destinationId);
+    const position = appendPositionFor(
+      destination?.children ?? [],
+      node.id,
+    );
+
+    handleMoveNode(node.id, destinationId, position);
+  }
+
   function dragOutcomeLabel(state) {
     if (!state) {
       return "";
@@ -682,19 +710,23 @@ function ShowcaseScreen() {
     const sourceName = showcaseNodeLabel(source);
 
     if (state.springId != null) {
-      return `Hold to open “${showcaseNodeLabel(findNodeById(nodes, state.springId))}”`;
+      return `Hold to open “${showcaseNodeLabel(findNodeById(nodes, state.springId))}” · release appends`;
     }
 
     if (state.drawerTarget) {
       const group = findNodeById(nodes, state.drawerId);
 
       if (state.drawerTarget.placement === "into") {
-        return `Into “${showcaseNodeLabel(findNodeById(nodes, state.drawerTarget.parentId))}” · inside`;
+        return `Into “${showcaseNodeLabel(findNodeById(nodes, state.drawerTarget.parentId))}” · end`;
       }
 
       return `Inside “${showcaseNodeLabel(group)}” · ${
         state.drawerTarget.placement === "after" ? "after" : "before"
       } “${showcaseNodeLabel(findNodeById(nodes, state.drawerTarget.childId))}”`;
+    }
+
+    if (state.drawerId != null && state.target == null) {
+      return `Inside “${showcaseNodeLabel(findNodeById(nodes, state.drawerId))}” · between rows to place precisely`;
     }
 
     if (state.target?.placement === "into") {
@@ -1951,6 +1983,7 @@ function ShowcaseScreen() {
     onRenameGrouping: openRename,
     onReorder: handleReorder,
     onMove: handleMoveNode,
+    onMoveOut: handleMoveOut,
     onMoveInto: (node) => setMoveTargetId(node.id),
     onDragState: handleDragState,
     onSetCover: handleSetCover,
@@ -2201,46 +2234,6 @@ function ShowcaseScreen() {
           />
         ) : null}
 
-        {dragState ? (
-          <div className="showcase-drag-bar">
-            <p aria-hidden="true" className="showcase-drag-outcome">
-              {dragOutcomeLabel(dragState)}
-            </p>
-            {displayPath.length ? (
-              <div
-                aria-label="Move to a level"
-                className="showcase-drag-levels"
-                role="group"
-              >
-                <span className="showcase-drag-levels-label">Move to</span>
-                {displayPath.map((level) => (
-                  <button
-                    className="showcase-drag-level"
-                    key={level.id}
-                    onDragLeave={(event) =>
-                      event.currentTarget.classList.remove("is-target")
-                    }
-                    onDragOver={(event) => {
-                      event.preventDefault();
-                      event.dataTransfer.dropEffect = "move";
-                      event.currentTarget.classList.add("is-target");
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      event.currentTarget.classList.remove("is-target");
-                      handleDropAtLevel(level.id);
-                    }}
-                    title={`Move to the end of ${level.name}`}
-                    type="button"
-                  >
-                    {level.name}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
         {filterEmpty ? (
           <div className="showcase-empty-box showcase-empty-box--quiet">
             <p className="showcase-empty-title">{activeFilter.emptyTitle}</p>
@@ -2294,6 +2287,46 @@ function ShowcaseScreen() {
           )
         ) : null}
       </div>
+
+      {dragState ? (
+        <div className="showcase-drag-dock">
+          <p aria-hidden="true" className="showcase-drag-outcome">
+            {dragOutcomeLabel(dragState)}
+          </p>
+          {displayPath.length ? (
+            <div
+              aria-label="Move to a level"
+              className="showcase-drag-levels"
+              role="group"
+            >
+              <span className="showcase-drag-levels-label">Move to</span>
+              {displayPath.map((level) => (
+                <button
+                  className="showcase-drag-level"
+                  key={level.id}
+                  onDragLeave={(event) =>
+                    event.currentTarget.classList.remove("is-target")
+                  }
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                    event.currentTarget.classList.add("is-target");
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    event.currentTarget.classList.remove("is-target");
+                    handleDropAtLevel(level.id);
+                  }}
+                  title={`Move to the end of ${level.name}`}
+                  type="button"
+                >
+                  {level.name}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {addTarget ? (
         <ShowcaseAddDialog

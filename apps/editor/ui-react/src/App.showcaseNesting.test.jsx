@@ -258,7 +258,13 @@ describe("showcase nesting", () => {
     mockRect(target);
     const dataTransfer = await drag(source, target);
 
-    expect(document.querySelector(".showcase-spring-meter")).not.toBeNull();
+    const meter = document.querySelector(".showcase-spring-meter");
+    expect(meter).not.toBeNull();
+    // The hold fills under the picture, inside the grouping's photo well.
+    expect(meter.closest(".showcase-grouping-well")).not.toBeNull();
+    expect(document.querySelector(".showcase-spring-hold")).toHaveTextContent(
+      /hold to open/i,
+    );
 
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 520));
@@ -288,6 +294,194 @@ describe("showcase nesting", () => {
     await waitFor(() => {
       expect(moveNode).toHaveBeenCalledWith(11, 21, 0);
     });
+  });
+
+  test("the open spring drawer survives the pointer crossing its card's edge", async () => {
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    await screen.findByRole("button", { name: "Open grouping Gold" });
+
+    const source = cellFor("2020 · 1");
+    const target = cellFor("Open grouping Gold");
+    mockRect(target);
+    const dataTransfer = await drag(source, target);
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 520));
+    });
+
+    const drawer = document.querySelector(".showcase-spring-drawer");
+    expect(drawer).not.toBeNull();
+
+    // The card ends above its drawer and a gap separates them; the browser
+    // fires a leave on the cell there, which must not unmount the rows.
+    await act(async () => {
+      target.dispatchEvent(
+        dragEvent("dragleave", {
+          dataTransfer,
+          relatedTarget: document.body,
+        }),
+      );
+    });
+
+    expect(document.querySelector(".showcase-spring-drawer")).not.toBeNull();
+
+    // The drawer's own surface (its title and padding) is a drop target too:
+    // releasing there appends to the grouping rather than doing nothing.
+    mockRect(drawer, 240, 120);
+    act(() => {
+      drawer.dispatchEvent(
+        dragEvent("dragover", {
+          clientX: 100,
+          clientY: 10,
+          dataTransfer,
+        }),
+      );
+    });
+    act(() => {
+      drawer.dispatchEvent(
+        dragEvent("drop", { clientX: 100, clientY: 10, dataTransfer }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(moveNode).toHaveBeenCalledWith(11, 21, 2);
+    });
+  });
+
+  test("the open drawer survives a pass over another container's middle", async () => {
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    await screen.findByRole("button", { name: "Open grouping Gold" });
+
+    const source = cellFor("2020 · 1");
+    const target = cellFor("Open grouping Gold");
+    mockRect(target);
+    const dataTransfer = await drag(source, target);
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 520));
+    });
+
+    expect(
+      document.querySelector(".showcase-spring-drawer"),
+    ).toHaveAttribute("data-showcase-spring", "21");
+
+    const other = cellFor("Open grouping Empty");
+    mockRect(other);
+    await act(async () => {
+      other.dispatchEvent(
+        dragEvent("dragover", {
+          clientX: 100,
+          clientY: 50,
+          dataTransfer,
+        }),
+      );
+    });
+
+    // The new spring is still filling; the rows already open must not unmount
+    // until the 450 ms swap.
+    expect(
+      document.querySelector(".showcase-spring-drawer"),
+    ).toHaveAttribute("data-showcase-spring", "21");
+  });
+
+  test("Escape closes the open drawer before it ends the drag", async () => {
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    await screen.findByRole("button", { name: "Open grouping Gold" });
+
+    const source = cellFor("2020 · 1");
+    const target = cellFor("Open grouping Gold");
+    mockRect(target);
+    const dataTransfer = await drag(source, target);
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 520));
+    });
+
+    expect(document.querySelector(".showcase-spring-drawer")).not.toBeNull();
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+
+    expect(document.querySelector(".showcase-spring-drawer")).toBeNull();
+    expect(document.querySelector(".showcase-drag-outcome")).not.toBeNull();
+  });
+
+  test("a nested grouping's Into row appends to the end of that grouping", async () => {    const tree = summerTree();
+    const gold = tree.children.find((node) => node.id === 21);
+    gold.children = [
+      noteNode(30, NOTE_C, 21),
+      groupingNode({
+        id: 31,
+        name: "Deep",
+        children: [noteNode(13, NOTE_B, 31)],
+      }),
+    ];
+    getShowcaseTree.mockResolvedValue({ showcase_id: 1, nodes: [tree] });
+
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    await screen.findByRole("button", { name: "Open grouping Gold" });
+
+    const source = cellFor("2020 · 1");
+    const target = cellFor("Open grouping Gold");
+    mockRect(target);
+    const dataTransfer = await drag(source, target);
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 520));
+    });
+
+    const drawer = document.querySelector(".showcase-spring-drawer");
+    const into = drawer.querySelector(".showcase-spring-into");
+    expect(into).not.toBeNull();
+    mockRect(into, 40, 20);
+
+    act(() => {
+      into.dispatchEvent(
+        dragEvent("dragover", { clientX: 20, clientY: 10, dataTransfer }),
+      );
+    });
+    act(() => {
+      into.dispatchEvent(
+        dragEvent("drop", { clientX: 20, clientY: 10, dataTransfer }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(moveNode).toHaveBeenCalledWith(11, 31, 1);
+    });
+  });
+
+  test("the menu moves an item out of its grouping in one level", async () => {
+    const user = userEvent.setup();
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    await screen.findByRole("button", { name: "Open grouping Gold" });
+    await user.click(screen.getByRole("button", { name: "Open grouping Gold" }));
+
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for 10 1910" }),
+    );
+    await user.click(
+      screen.getByRole("menuitem", { name: "Move out one level" }),
+    );
+
+    await waitFor(() => {
+      expect(moveNode).toHaveBeenCalledWith(30, 10, 4);
+    });
+  });
+
+  test("a card already on its level has no Move out action", async () => {
+    const user = userEvent.setup();
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    await screen.findByRole("button", { name: "Open grouping Gold" });
+
+    await user.click(
+      screen.getByRole("button", { name: "Actions for 1 2020" }),
+    );
+
+    expect(
+      screen.queryByRole("menuitem", { name: "Move out one level" }),
+    ).not.toBeInTheDocument();
   });
 
   test("the item menu moves a card into another grouping", async () => {
