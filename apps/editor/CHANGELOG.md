@@ -4,6 +4,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.18.0] - 2026-11-17
+
 ### Fixed
 
 - Sidebar: a collection's rail count now follows the notes on its table. Adding, deleting, or moving a note reports the landed count back to the sidebar, so the collapsed badge no longer keeps the number it loaded with at boot. A note moved or added into another collection raises that row's badge too, and saving a note from a Showcase editor refreshes the showcase row's owned count.
