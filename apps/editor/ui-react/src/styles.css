@@ -1012,6 +1012,7 @@ input[type="radio"] {
 .showcase-photo-size-control {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin: 0;
   padding: 0;
@@ -1101,6 +1102,7 @@ input[type="radio"] {
 .showcase-layout-control {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin: 0;
   padding: 0;
@@ -2555,8 +2557,12 @@ input[type="radio"] {
    metrics and adds only the three state cues (check, SEEN tag, empty well). */
 
 .showcase-progress {
-  flex: none;
+  /* The full 120px rail is the default; it gives width back (down to 40px)
+     before the owned reading wraps, so a narrow toolbar keeps the meter
+     instead of pushing the row past its edge. */
+  flex: 0 1 auto;
   width: 120px;
+  min-width: 40px;
   height: 4px;
   overflow: hidden;
   border-radius: var(--radius-pill);
@@ -2572,12 +2578,16 @@ input[type="radio"] {
 }
 
 /* The rail rides the filter row's far end, beside the view controls, so the
-   chips are the only place the three counts appear. */
+   chips are the only place the three counts appear. It wraps its own parts
+   (words, bar, percent, Complete) once the bar cannot give it a full line. */
 .showcase-filter-progress {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 7px;
   margin-left: auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .showcase-progress-label {
@@ -2597,12 +2607,17 @@ input[type="radio"] {
 
 /* Photo size, card layout, and Slideshow keep the toolbar's trailing cluster on
    the view row, so the counts, the meter, and the view controls read as one
-   toolbar. The meter keeps its slot at every level, empty or not. */
+   toolbar. The meter keeps its slot at every level, empty or not. The cluster
+   may wrap its own controls (and never shrink below them), so a narrow canvas
+   stacks CARD LAYOUT / PHOTO SIZE / Slideshow instead of clipping the last
+   one off the edge. */
 .showcase-filter-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   flex: none;
+  max-width: 100%;
 }
 
 .showcase-filter-actions .button {
@@ -2631,7 +2646,7 @@ input[type="radio"] {
 .showcase-filter-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 8px 12px;
   padding: 11px 0 12px;
   margin-bottom: 4px;
   border-bottom: 1px solid var(--border-soft);
@@ -2643,6 +2658,36 @@ input[type="radio"] {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  /* The chips take the row's spare width. That keeps the rail and the view
+     controls packed at the far end on one row, and it means the two
+     `margin-left: auto` declarations below can never split the free space
+     between them — flex growth spends it first. */
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The three clusters — filters, the owned reading, the view controls — share
+   one row while the canvas can hold all of them. Today's widest one-row
+   toolbar (chips 352 + rail 337 + labeled controls 610 + 24 of gaps) needs
+   about 1323px, so below that the view controls take their own line and keep
+   the bar's right edge instead of dropping to the left under the chips while
+   the meter hangs alone at the right. */
+@container showcase-shell (max-width: 1322px) {
+  .showcase-filter-actions {
+    margin-left: auto;
+  }
+}
+
+/* A phone-width canvas stacks whole rows — chips, then the owned reading,
+   then the view controls. The chips and a shrunk rail stop sharing a line at
+   roughly 593px (352 + 229 + 12), so below 600 every row starts at the same
+   edge and each cluster wraps inside its own row. */
+@container showcase-shell (max-width: 600px) {
+  .showcase-filter-progress,
+  .showcase-filter-actions {
+    margin-left: 0;
+  }
 }
 
 .showcase-filter-chip {
@@ -3423,19 +3468,6 @@ input[type="radio"] {
   .showcase-card-state {
     top: 9px;
     left: 9px;
-  }
-
-  .showcase-filter-bar {
-    gap: 6px;
-  }
-
-  /* The rail joins the chips' flow instead of holding the far right alone. */
-  .showcase-filter-progress {
-    margin-left: 0;
-  }
-
-  .showcase-filter-actions {
-    margin-left: auto;
   }
 }
 
