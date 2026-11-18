@@ -5,6 +5,7 @@ import {
   createShowcaseNode,
   deleteCategory,
   deleteNode,
+  duplicateNode,
   getCategories,
   getShowcaseTree,
   moveNode,
@@ -70,6 +71,7 @@ import { ShowcaseAddDialog } from "./ShowcaseAddDialog.jsx";
 import { ShowcaseBreadcrumb } from "./ShowcaseBreadcrumb.jsx";
 import { ShowcaseCatalogShellForm } from "./ShowcaseCatalogShellForm.jsx";
 import { ShowcaseDialog } from "./ShowcaseDialog.jsx";
+import { ShowcaseDuplicateDialog } from "./ShowcaseDuplicateDialog.jsx";
 import { ShowcaseItemsGrid } from "./ShowcaseItemsGrid.jsx";
 import { ShowcaseNameDialog } from "./ShowcaseNameDialog.jsx";
 import { ShowcaseNotePicker } from "./ShowcaseNotePicker.jsx";
@@ -202,6 +204,8 @@ function ShowcaseScreen() {
   const [editShellId, setEditShellId] = useState(null);
   // The card whose "Move into…" dialog is open.
   const [moveTargetId, setMoveTargetId] = useState(null);
+  // The top-level Category whose subtree is being copied to another Showcase.
+  const [duplicateSourceId, setDuplicateSourceId] = useState(null);
   // Card to refocus when the overlay closes; not part of the URL.
   const noteEditorReturnNodeIdRef = useRef(null);
   const noteEditorOverlayRef = useRef(null);
@@ -920,6 +924,37 @@ function ShowcaseScreen() {
       submitLabel: "Save name",
       suggestionsLabel: isCategory ? "Category suggestions" : undefined,
     });
+  }
+
+  async function handleDuplicateCategory(targetShowcaseId) {
+    const source =
+      duplicateSourceId == null
+        ? null
+        : findNodeById(nodesRef.current, duplicateSourceId);
+
+    if (!source || !showcase) {
+      return;
+    }
+
+    const target = showcases.find((entry) => entry.id === targetShowcaseId);
+
+    // The copy lives in the target: the source canvas stays exactly as it is.
+    const { node } = await duplicateNode(source.id, targetShowcaseId);
+    setDuplicateSourceId(null);
+    setActionError("");
+    toastHost?.current?.show(
+      `Duplicated ${node?.name ?? source.name} to ${target?.name ?? "showcase"}`,
+      "success",
+    );
+
+    try {
+      const pool = await getCategories();
+      setCategories(pool.categories ?? []);
+    } catch {
+      // The copy is committed; a lagging pool must not read as a failure.
+    }
+
+    refreshShowcases?.().catch(() => {});
   }
 
   async function handleMoveCategory(node, direction) {
@@ -1929,6 +1964,14 @@ function ShowcaseScreen() {
     editShellId == null ? null : findNodeById(nodes, editShellId);
   const moveTargetNode =
     moveTargetId == null ? null : findNodeById(nodes, moveTargetId);
+  const duplicateSourceNode =
+    duplicateSourceId == null
+      ? null
+      : findNodeById(nodes, duplicateSourceId);
+  const otherShowcases = useMemo(
+    () => showcases.filter((entry) => entry.id !== showcaseId),
+    [showcaseId, showcases],
+  );
   const ownedPercent = levelTotals.total
     ? Math.round((levelTotals.owned / levelTotals.total) * 100)
     : 0;
@@ -2264,11 +2307,13 @@ function ShowcaseScreen() {
 
                 return (
                   <ShowcaseCategorySection
+                    canDuplicate={otherShowcases.length > 0}
                     canMoveDown={rootIndex >= 0 && rootIndex < nodes.length - 1}
                     canMoveUp={rootIndex > 0}
                     category={node}
                     key={node.id}
                     {...gridProps}
+                    onDuplicate={(target) => setDuplicateSourceId(target.id)}
                     onMoveDown={(target) => handleMoveCategory(target, 1)}
                     onMoveUp={(target) => handleMoveCategory(target, -1)}
                     onRemove={handleRemove}
@@ -2359,6 +2404,15 @@ function ShowcaseScreen() {
           onAdd={handleReplaceNode}
           onClose={() => setReplaceNodeId(null)}
           singleSelect
+        />
+      ) : null}
+
+      {duplicateSourceNode ? (
+        <ShowcaseDuplicateDialog
+          category={duplicateSourceNode}
+          onClose={() => setDuplicateSourceId(null)}
+          onDuplicate={handleDuplicateCategory}
+          showcases={otherShowcases}
         />
       ) : null}
 

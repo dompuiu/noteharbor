@@ -2032,3 +2032,300 @@ async fn nodes_move_reparents_between_groupings_and_renumbers() {
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+// --- duplicating a category placement ----------------------------------------
+
+fn note_count(dir: &tempfile::TempDir) -> i64 {
+    let conn = rusqlite::Connection::open(dir.path().join("banknotes.db")).expect("db opens");
+    conn.query_row("SELECT COUNT(*) FROM banknotes", [], |row| row.get(0))
+        .expect("note count")
+}
+
+#[tokio::test]
+async fn duplicate_category_copies_the_whole_subtree_and_appends_it() {
+    let (dir, state) = fresh_state();
+    let app = create_app(state);
+    let source = create_showcase(app.clone(), Some("Source")).await;
+    let source_id = source["id"].as_i64().unwrap();
+    let target = create_showcase(app.clone(), Some("Target")).await;
+    let target_id = target["id"].as_i64().unwrap();
+    let collection = create_collection(app.clone(), "Duplicated notes").await;
+    let collection_id = collection["id"].as_i64().unwrap();
+    let first = create_note(app.clone(), collection_id, "1 leu").await;
+    let second = create_note(app.clone(), collection_id, "2 lei").await;
+
+    let root = place_category(app.clone(), source_id, "Themed").await;
+    let root_id = root["id"].as_i64().unwrap();
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/showcases/{source_id}/nodes"),
+        Some(json!({
+            "type": "notes",
+            "parent_id": root_id,
+            "note_ids": [first["id"]],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let (status, body) = add_grouping(app.clone(), source_id, root_id, "Proofs").await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let grouping_id = body["node"]["id"].as_i64().unwrap();
+    let (status, body) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/nodes/{grouping_id}"),
+        Some(json!({ "cover_note_id": first["id"] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let (status, body) = add_catalog_entry(
+        app.clone(),
+        source_id,
+        grouping_id,
+        Some(json!([second["id"], first["id"]])),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let entry_id = body["node"]["id"].as_i64().unwrap();
+
+    // A target that already has a category: the copy appends after it.
+    place_category(app.clone(), target_id, "Other").await;
+    let before_notes = note_count(&dir);
+
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/nodes/{root_id}/duplicate"),
+        Some(json!({ "showcase_id": target_id })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let copy = body["node"].clone();
+    assert_eq!(copy["node_type"], json!("category"));
+    assert_eq!(copy["name"], json!("Themed"));
+    assert_eq!(copy["category_id"], root["category_id"]);
+    assert_eq!(copy["parent_node_id"], Value::Null);
+    assert_eq!(copy["position"], json!(2));
+    assert_ne!(copy["id"], root["id"]);
+
+    let children = copy["children"].as_array().expect("copy children");
+    assert!(children.is_empty());
+
+    // The target tree carries the whole copied subtree.
+    let (status, tree) = call(
+        app.clone(),
+        "GET",
+        &format!("/api/showcases/{target_id}/tree"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{tree:?}");
+    let roots = tree["nodes"].as_array().unwrap();
+    assert_eq!(roots.len(), 2);
+    assert_eq!(roots[0]["name"], json!("Other"));
+    assert_eq!(roots[1]["id"], copy["id"]);
+    let children = roots[1]["children"].as_array().expect("copy children");
+    assert_eq!(children.len(), 2);
+    assert_eq!(children[0]["node_type"], json!("note"));
+    assert_eq!(children[0]["note_id"], first["id"]);
+    let grouping_copy = &children[1];
+    assert_eq!(grouping_copy["node_type"], json!("grouping"));
+    assert_eq!(grouping_copy["name"], json!("Proofs"));
+    assert_ne!(grouping_copy["id"], json!(grouping_id));
+    assert_eq!(grouping_copy["cover_note_id"], first["id"]);
+    let entry_copy = &grouping_copy["children"][0];
+    assert_eq!(entry_copy["node_type"], json!("catalog_entry"));
+    assert_ne!(entry_copy["id"], json!(entry_id));
+    assert_eq!(entry_copy["entry"]["catalog_number"], json!("22a"));
+    assert_eq!(entry_copy["entry"]["denomination"], json!("20 lei"));
+    assert_eq!(entry_copy["entry"]["issue_date"], json!("1877"));
+    assert_eq!(entry_copy["entry"]["source"], json!("Pick catalog"));
+    assert_eq!(
+        specimen_ids(entry_copy),
+        vec![second["id"].clone(), first["id"].clone()]
+    );
+    assert_eq!(entry_copy["primary_note_id"], second["id"]);
+
+    // The source is untouched and no Note was cloned.
+    let (_, source_tree) = call(
+        app.clone(),
+        "GET",
+        &format!("/api/showcases/{source_id}/tree"),
+        None,
+    )
+    .await;
+    assert_eq!(source_tree["nodes"].as_array().unwrap().len(), 1);
+    assert_eq!(source_tree["nodes"][0]["id"], root["id"]);
+    assert_eq!(note_count(&dir), before_notes);
+
+    // An empty Category copies as an empty placement at the target's end.
+    let empty = place_category(app.clone(), source_id, "Quiet").await;
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/nodes/{}/duplicate", empty["id"]),
+        Some(json!({ "showcase_id": target_id })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_eq!(body["node"]["position"], json!(3));
+    assert_eq!(body["node"]["children"], json!([]));
+
+    // A second copy of the same label is refused and writes nothing.
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/nodes/{root_id}/duplicate"),
+        Some(json!({ "showcase_id": target_id })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["error"],
+        json!("This category is already in the showcase.")
+    );
+    let (_, tree) = call(
+        app.clone(),
+        "GET",
+        &format!("/api/showcases/{target_id}/tree"),
+        None,
+    )
+    .await;
+    assert_eq!(tree["nodes"].as_array().unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn duplicate_category_reports_unknown_and_invalid_targets() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let source = create_showcase(app.clone(), Some("Source")).await;
+    let source_id = source["id"].as_i64().unwrap();
+    let target = create_showcase(app.clone(), Some("Target")).await;
+    let target_id = target["id"].as_i64().unwrap();
+    let root = place_category(app.clone(), source_id, "Themed").await;
+    let root_id = root["id"].as_i64().unwrap();
+
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        "/api/nodes/999999/duplicate",
+        Some(json!({ "showcase_id": target_id })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["error"], json!("Node not found."));
+
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/nodes/{root_id}/duplicate"),
+        Some(json!({ "showcase_id": 999999 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["error"], json!("Showcase not found."));
+
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/nodes/{root_id}/duplicate"),
+        Some(json!({})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"], json!("A valid showcase ID is required."));
+
+    let (status, _) = call(
+        app.clone(),
+        "POST",
+        "/api/nodes/not-a-number/duplicate",
+        Some(json!({ "showcase_id": target_id })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // The source showcase already places the label.
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/nodes/{root_id}/duplicate"),
+        Some(json!({ "showcase_id": source_id })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["error"],
+        json!("This category is already in the showcase.")
+    );
+
+    // Only a top-level Category is a source.
+    let (status, body) = add_grouping(app.clone(), source_id, root_id, "Nested").await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/nodes/{}/duplicate", body["node"]["id"]),
+        Some(json!({ "showcase_id": target_id })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["error"],
+        json!("Only a top-level category can be duplicated.")
+    );
+}
+
+#[tokio::test]
+async fn duplicate_category_rolls_back_when_a_copy_clashes() {
+    let (dir, state) = fresh_state();
+    let app = create_app(state);
+    let source = create_showcase(app.clone(), Some("Source")).await;
+    let source_id = source["id"].as_i64().unwrap();
+    let target = create_showcase(app.clone(), Some("Target")).await;
+    let target_id = target["id"].as_i64().unwrap();
+    let root = place_category(app.clone(), source_id, "Root").await;
+    let root_id = root["id"].as_i64().unwrap();
+    let (_, nested) =
+        call(app.clone(), "POST", "/api/categories", Some(json!({ "name": "Nested" }))).await;
+    let nested_id = nested["category"]["id"].as_i64().unwrap();
+    place_category(app.clone(), target_id, "Nested").await;
+
+    // A category row nested in the source (only reachable through the store)
+    // clashes with the target's own placement part-way through the copy.
+    let conn = rusqlite::Connection::open(dir.path().join("banknotes.db")).expect("db opens");
+    conn.execute(
+        "INSERT INTO showcase_nodes (
+           showcase_id, parent_node_id, node_type, category_id, position,
+           created_at, updated_at
+         )
+         VALUES (?1, ?2, 'category', ?3, 1, datetime('now'), datetime('now'))",
+        rusqlite::params![source_id, root_id, nested_id],
+    )
+    .expect("nested category inserts");
+
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/nodes/{root_id}/duplicate"),
+        Some(json!({ "showcase_id": target_id })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
+    assert_eq!(
+        body["error"],
+        json!("This category is already in the showcase.")
+    );
+
+    // The root insert rolled back with the failing descendant.
+    let (_, tree) = call(
+        app.clone(),
+        "GET",
+        &format!("/api/showcases/{target_id}/tree"),
+        None,
+    )
+    .await;
+    let roots = tree["nodes"].as_array().unwrap();
+    assert_eq!(roots.len(), 1);
+    assert_eq!(roots[0]["name"], json!("Nested"));
+}

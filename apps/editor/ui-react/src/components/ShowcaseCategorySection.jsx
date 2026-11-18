@@ -45,6 +45,8 @@ function ShowcaseCategorySection({
   onPresent,
   onRemove,
   onRename,
+  onDuplicate,
+  canDuplicate = false,
   onMoveUp,
   onMoveDown,
   canMoveUp = false,
@@ -67,8 +69,10 @@ function ShowcaseCategorySection({
         <ShowcaseItemMenu
           canMoveDown={canMoveDown}
           canMoveUp={canMoveUp}
+          duplicateDisabled={!canDuplicate}
           isCategory
           label={category.name}
+          onDuplicate={() => onDuplicate?.(category)}
           onMoveDown={() => onMoveDown?.(category)}
           onMoveUp={() => onMoveUp?.(category)}
           onRemove={() => onRemove(category)}

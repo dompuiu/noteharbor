@@ -8,6 +8,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 - Showcase note picker: each row now carries the note's grading — the company and the grade it gave, `PMG 66 EPQ` — in its own column, and the column header sorts by grade. The row's checkbox announces the grading too, and narrow windows drop the grading column ahead of the collection so the caption keeps its width.
 
+- Showcase: a top-level category's `⋯` menu now offers **Duplicate to showcase…**, which copies the whole subtree — groupings, note cards, placeholders, specimens, covers, and sibling order — into another showcase as a separate placement. The shared pool label is reused, notes are referenced rather than cloned, and the copy appends after the target's last category. Targets that already place the label are disabled, and the server refuses a clash without writing anything. The source showcase stays open.
+
 - Showcase note picker: the Table's chip filter bar now backs the picker — field chips, Add/Replace commit modes, comma/range values and `!` negation, with tag suggestions — and a sort control orders the list by collection or any filterable note field, ascending or descending, including reversing the default order. The picker projection now carries company, grade, serial and owned so those filters and its Owned/Seen chips read the note itself.
 
 ### Changed

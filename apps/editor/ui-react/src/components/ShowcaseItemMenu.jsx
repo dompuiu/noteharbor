@@ -10,6 +10,7 @@ import { MenuIcon } from "./MenuIcon.jsx";
 // - note, or an entry's displayed note: edit the note
 // - note: replace it with another library note in place
 // - grouping: open, rename, set/clear its cover
+// - category: duplicate to another showcase
 // - note inside a grouping: make it the grouping's cover
 // - anything inside a grouping: move out one level, to its grandparent
 // - catalog shell: replace it with a library note, edit its details
@@ -30,6 +31,8 @@ function ShowcaseItemMenu({
   onReplaceNote,
   onEditDetails,
   onEditNote,
+  onDuplicate,
+  duplicateDisabled = false,
   onMoveUp,
   onMoveDown,
   onMoveOut,
@@ -128,6 +131,15 @@ function ShowcaseItemMenu({
           label: "Edit details…",
           icon: "details",
           run: onEditDetails,
+        }
+      : null,
+    isCategory && onDuplicate
+      ? {
+          key: "duplicate",
+          label: "Duplicate to showcase…",
+          icon: "copy",
+          run: onDuplicate,
+          disabled: duplicateDisabled,
         }
       : null,
     onMoveUp

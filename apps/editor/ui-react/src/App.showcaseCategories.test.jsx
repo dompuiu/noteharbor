@@ -15,6 +15,7 @@ vi.mock("./lib/api.js", () => ({
   deleteCategory: vi.fn(),
   deleteCollection: vi.fn(),
   deleteNode: vi.fn(),
+  duplicateNode: vi.fn(),
   getCategories: vi.fn(),
   getCollections: vi.fn(),
   getHealth: vi.fn(),
@@ -52,6 +53,7 @@ import {
   createShowcaseNode,
   deleteCategory,
   deleteNode,
+  duplicateNode,
   getCategories,
   getCollections,
   getHealth,
@@ -580,5 +582,123 @@ describe("the showcase category canvas", () => {
     expect(
       screen.queryByRole("button", { name: /Move Summer/ }),
     ).not.toBeInTheDocument();
+  });
+
+  test("the duplicate item is disabled when there is no other showcase", async () => {
+    const user = userEvent.setup();
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for Summer" }),
+    );
+
+    expect(
+      screen.getByRole("menuitem", { name: "Duplicate to showcase…" }),
+    ).toBeDisabled();
+  });
+
+  test("duplicates a category into another showcase and confirms with a toast", async () => {
+    const user = userEvent.setup();
+    getShowcases.mockResolvedValue({
+      showcases: [
+        { id: 1, name: "My showcase", entry_count: 3 },
+        { id: 2, name: "Second", entry_count: 0 },
+        { id: 3, name: "Third", entry_count: 2 },
+      ],
+    });
+    getShowcaseTree.mockImplementation(async (id) => {
+      if (id === 1) {
+        return { showcase_id: 1, nodes: [SUMMER_NODE] };
+      }
+      if (id === 3) {
+        return { showcase_id: 3, nodes: [{ ...SUMMER_NODE, id: 30 }] };
+      }
+      return { showcase_id: id, nodes: [] };
+    });
+    duplicateNode.mockResolvedValue({
+      node: {
+        id: 70,
+        node_type: "category",
+        name: "Summer",
+        category_id: 1,
+        parent_node_id: null,
+        position: 1,
+        children: [],
+      },
+    });
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for Summer" }),
+    );
+    await user.click(
+      screen.getByRole("menuitem", { name: "Duplicate to showcase…" }),
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      await within(dialog).findByText("Already in this showcase"),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("radio", { name: /Third/ })).toBeDisabled();
+    expect(within(dialog).getByRole("radio", { name: /Second/ })).toBeChecked();
+    expect(within(dialog).getByText("0 entries")).toBeInTheDocument();
+    expect(within(dialog).getByText("2 entries")).toBeInTheDocument();
+
+    const duplicateButton = within(dialog).getByRole("button", {
+      name: "Duplicate",
+    });
+    await waitFor(() => expect(duplicateButton).toBeEnabled());
+    await user.click(duplicateButton);
+
+    await waitFor(() => {
+      expect(duplicateNode).toHaveBeenCalledWith(10, 2);
+    });
+    expect(
+      await screen.findByText("Duplicated Summer to Second"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Summer" }),
+    ).toBeInTheDocument();
+  });
+
+  test("a refused duplicate keeps the dialog open and shows the message", async () => {
+    const user = userEvent.setup();
+    getShowcases.mockResolvedValue({
+      showcases: [
+        { id: 1, name: "My showcase", entry_count: 3 },
+        { id: 2, name: "Second", entry_count: 0 },
+      ],
+    });
+    getShowcaseTree.mockImplementation(async (id) =>
+      id === 1
+        ? { showcase_id: 1, nodes: [SUMMER_NODE] }
+        : { showcase_id: id, nodes: [] },
+    );
+    duplicateNode.mockRejectedValue(
+      new Error("This category is already in the showcase."),
+    );
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for Summer" }),
+    );
+    await user.click(
+      screen.getByRole("menuitem", { name: "Duplicate to showcase…" }),
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    const duplicateButton = within(dialog).getByRole("button", {
+      name: "Duplicate",
+    });
+    await waitFor(() => expect(duplicateButton).toBeEnabled());
+    await user.click(duplicateButton);
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "This category is already in the showcase.",
+    );
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 });

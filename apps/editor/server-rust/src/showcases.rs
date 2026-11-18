@@ -959,6 +959,168 @@ fn add_category_placement(
     get_node(conn, node_id)?.ok_or_else(|| DbError::Failed("Node not found.".to_owned()))
 }
 
+fn showcase_places_category(
+    conn: &Connection,
+    showcase_id: i64,
+    category_id: i64,
+) -> Result<bool, DbError> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT 1 FROM showcase_nodes
+             WHERE showcase_id = ?1 AND category_id = ?2 AND node_type = 'category'",
+        )
+        .map_err(classify)?;
+    match stmt.query_row(params![showcase_id, category_id], |_| Ok(())) {
+        Ok(()) => Ok(true),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+        Err(error) => Err(classify(error)),
+    }
+}
+
+/// The source subtree in preorder: the root followed by every descendant,
+/// sibling groups ordered `position, id`. Rows arrive already sorted, so
+/// grouping them by parent keeps each level's order without a second sort.
+fn subtree_rows(conn: &Connection, root: NodeRow) -> Result<Vec<NodeRow>, DbError> {
+    let mut stmt = conn
+        .prepare(&node_rows_sql(LIST_NODES_TAIL))
+        .map_err(classify)?;
+    let rows = stmt
+        .query_map(params![root.showcase_id], map_node_row)
+        .map_err(classify)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(classify)?;
+    let mut by_parent: HashMap<i64, Vec<NodeRow>> = HashMap::new();
+    for row in rows {
+        if let Some(parent_id) = row.parent_node_id {
+            by_parent.entry(parent_id).or_default().push(row);
+        }
+    }
+    fn walk(
+        row: NodeRow,
+        by_parent: &mut HashMap<i64, Vec<NodeRow>>,
+        ordered: &mut Vec<NodeRow>,
+    ) {
+        let id = row.id;
+        ordered.push(row);
+        if let Some(children) = by_parent.remove(&id) {
+            for child in children {
+                walk(child, by_parent, ordered);
+            }
+        }
+    }
+    let mut ordered = Vec::new();
+    walk(root, &mut by_parent, &mut ordered);
+    Ok(ordered)
+}
+
+/// Insert one copied node. A label clash that slipped past the pre-check (a
+/// stale client, or a category row nested in the source) answers the same
+/// conflict message as a direct placement.
+fn insert_copied_node(
+    conn: &Connection,
+    showcase_id: i64,
+    row: &NodeRow,
+    parent_node_id: Option<i64>,
+    position: i64,
+) -> Result<i64, DbError> {
+    match conn.execute(
+        "INSERT INTO showcase_nodes (
+           showcase_id, parent_node_id, node_type, category_id, name,
+           note_id, cover_note_id, catalog_number, denomination, issue_date,
+           source, position, created_at, updated_at
+         )
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
+                 datetime('now'), datetime('now'))",
+        params![
+            showcase_id,
+            parent_node_id,
+            row.node_type,
+            row.category_id,
+            row.name,
+            row.note_id,
+            row.cover_note_id,
+            row.catalog_number,
+            row.denomination,
+            row.issue_date,
+            row.source,
+            position,
+        ],
+    ) {
+        Ok(_) => Ok(conn.last_insert_rowid()),
+        Err(error) if is_unique_violation(&error) => Err(DbError::Failed(
+            "This category is already in the showcase.".to_owned(),
+        )),
+        Err(error) => Err(classify(error)),
+    }
+}
+
+/// Copy a top-level Category placement and its whole subtree into another
+/// Showcase, inside one transaction. Notes are referenced, never cloned; the
+/// shared pool label is reused. The copy appends after the target's last
+/// top-level Category and keeps every sibling order below it.
+pub fn duplicate_category_placement(
+    conn: &mut Connection,
+    node_id: i64,
+    target_showcase_id: i64,
+) -> Result<ShowcaseNode, DbError> {
+    let source = get_node_row(conn, node_id)?
+        .ok_or_else(|| DbError::Failed("Node not found.".to_owned()))?;
+    if source.node_type != "category" || source.parent_node_id.is_some() {
+        return Err(DbError::Failed(
+            "Only a top-level category can be duplicated.".to_owned(),
+        ));
+    }
+    // The source Showcase already places the label, so this reads as the same
+    // conflict a second placement would.
+    if target_showcase_id == source.showcase_id {
+        return Err(DbError::Failed(
+            "This category is already in the showcase.".to_owned(),
+        ));
+    }
+    ensure_showcase(conn, target_showcase_id)?;
+    let Some(category_id) = source.category_id else {
+        return Err(DbError::Failed("Category not found.".to_owned()));
+    };
+    if showcase_places_category(conn, target_showcase_id, category_id)? {
+        return Err(DbError::Failed(
+            "This category is already in the showcase.".to_owned(),
+        ));
+    }
+    let source_showcase_id = source.showcase_id;
+    let rows = subtree_rows(conn, source)?;
+    let specimens = fetch_specimens(conn, source_showcase_id)?;
+    let tx = conn.transaction().map_err(classify)?;
+    let root_position = next_position(&tx, target_showcase_id, None)?;
+    let mut copied: HashMap<i64, i64> = HashMap::with_capacity(rows.len());
+    for row in &rows {
+        let parent_node_id = match row.parent_node_id {
+            None => None,
+            Some(old_parent) => Some(*copied.get(&old_parent).ok_or_else(|| {
+                DbError::Failed("Only a top-level category can be duplicated.".to_owned())
+            })?),
+        };
+        // The root takes the target's next top-level slot; every descendant
+        // keeps the position it had under its now-copied parent.
+        let position = if row.parent_node_id.is_none() {
+            root_position
+        } else {
+            row.position.unwrap_or(0)
+        };
+        let new_id = insert_copied_node(&tx, target_showcase_id, row, parent_node_id, position)?;
+        if row.node_type == "catalog_entry" {
+            if let Some(set) = specimens.get(&row.id) {
+                insert_specimens(&tx, new_id, &set.ordered, set.primary)?;
+            }
+        }
+        copied.insert(row.id, new_id);
+    }
+    let root_id = *copied
+        .get(&node_id)
+        .ok_or_else(|| DbError::Failed("Node not found.".to_owned()))?;
+    tx.commit().map_err(classify)?;
+    get_node(conn, root_id)?.ok_or_else(|| DbError::Failed("Node not found.".to_owned()))
+}
+
 /// Grouping under a category placement or another grouping.
 fn add_grouping(
     conn: &mut Connection,
@@ -1958,6 +2120,48 @@ async fn update_node_notes_handler(
     }
 }
 
+async fn duplicate_node_handler(
+    State(state): State<AppState>,
+    Path(raw_id): Path<String>,
+    body: Option<Json<Value>>,
+) -> Response {
+    let Some(id) = parse_id(&raw_id) else {
+        return bad_request("Node id must be a positive integer.");
+    };
+    let payload = body_or_empty(body);
+    let Some(target_showcase_id) = payload
+        .get("showcase_id")
+        .and_then(js_number)
+        .filter(|id| *id > 0)
+    else {
+        return bad_request("A valid showcase ID is required.");
+    };
+    let exists = match db::with_conn(&state.pool, move |conn| get_node_row(conn, id)).await {
+        Ok(node) => node.is_some(),
+        Err(error) => return db_failure(error),
+    };
+    if !exists {
+        return not_found("Node not found.");
+    }
+    let target_exists =
+        match db::with_conn(&state.pool, move |conn| get_showcase(conn, target_showcase_id)).await
+        {
+            Ok(showcase) => showcase.is_some(),
+            Err(error) => return db_failure(error),
+        };
+    if !target_exists {
+        return not_found("Showcase not found.");
+    }
+    match db::with_conn(&state.pool, move |conn| {
+        duplicate_category_placement(conn, id, target_showcase_id)
+    })
+    .await
+    {
+        Ok(node) => created(json!({ "node": node })),
+        Err(error) => db_failure(error),
+    }
+}
+
 async fn delete_node_handler(
     State(state): State<AppState>,
     Path(raw_id): Path<String>,
@@ -2068,6 +2272,7 @@ pub fn nodes_router() -> Router<AppState> {
         .route("/api/nodes/{id}", put(update_node_handler).delete(delete_node_handler))
         .route("/api/nodes/{id}/move", put(move_node_handler))
         .route("/api/nodes/{id}/notes", put(update_node_notes_handler))
+        .route("/api/nodes/{id}/duplicate", post(duplicate_node_handler))
 }
 
 pub fn categories_router() -> Router<AppState> {
