@@ -90,6 +90,7 @@ export function TableFindBar({
         <button
           className="table-find-all"
           onClick={onSearchAll}
+          title="Clear the filters and search every note"
           type="button"
         >
           Search all notes

@@ -71,14 +71,14 @@ export function NotesTableView({
       </td>
     </tr>
   ) : null;
-  // The compact count and sort line sits in the footer, where the summary
-  // used to, with the full sentence kept as the live region so assistive tech
-  // still hears the count, the sort and the selection exactly as before.
+  // The compact line the eye reads, with the full sentence kept as the live
+  // region so assistive tech still hears the count, the sort and the selection
+  // exactly as before.
   const status =
     statusSummary || footerSummary ? (
       <>
         {statusSummary ? (
-          <span aria-hidden="true" className="table-footer-status">
+          <span aria-hidden="true" className="table-rail-status-visible">
             {statusSummary}
           </span>
         ) : null}
@@ -196,7 +196,14 @@ export function NotesTableView({
         }
         railIdentity={railIdentity}
         railNotice={railNotice}
-        railActionStatus={railActionStatus}
+        railActionStatus={
+          status || railActionStatus ? (
+            <>
+              {status}
+              {railActionStatus}
+            </>
+          ) : null
+        }
         shellRef={shellRef}
         shortcuts={
           showShortcutsHelp ? (
@@ -258,7 +265,6 @@ export function NotesTableView({
       {body ? null : (
         <div className="table-footer-hint">
           {footerAnnouncer}
-          {status}
           <span className="table-footer-keys">
             {footerHint}
             {columnPan.columnPanAvailable ? (

@@ -324,7 +324,7 @@ input[type="radio"] {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 16px 24px 6px;
+  padding: 16px 24px;
 }
 
 /* ── Catalog sidebar: hover-expanding rail ──────────────────────────────
@@ -4960,7 +4960,11 @@ input[type="radio"] {
 }
 
 .table-find-all {
-  flex: none;
+  /* It gives way before the close controls do; the count and the bar's border
+     still say why the action is there. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
   height: 26px;
   padding: 0 9px;
   border: 0;
@@ -4969,6 +4973,7 @@ input[type="radio"] {
   color: var(--accent);
   font-size: 0.66rem;
   font-weight: 800;
+  text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -6854,6 +6859,8 @@ th[aria-sort="descending"] .sort-chevron {
   letter-spacing: -0.01em;
   text-transform: uppercase;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .table-rail-title .collection-title-button {
@@ -6863,9 +6870,9 @@ th[aria-sort="descending"] .sort-chevron {
   white-space: nowrap;
 }
 
-/* The rail's quiet status slot carries the reorder report only: "Saving manual
-   order…", "Moved to position N · Undo". The count and the sort line sit in
-   the footer. */
+/* The rail's quiet status slot: the compact count and sort line, the reorder
+   report, and the reorder undo. The full sentence sits beside the compact line
+   as the live region, so the announcement is unchanged. */
 .table-rail-status {
   display: flex;
   align-items: center;
@@ -6877,11 +6884,20 @@ th[aria-sort="descending"] .sort-chevron {
   line-height: 1.5;
 }
 
+.table-rail-status-visible {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .table-rail-status-text {
   display: flex;
   align-items: center;
   gap: 4px;
   min-width: 0;
+  white-space: nowrap;
 }
 
 /* The position message gives way; Undo is the action and always shows. */
@@ -7652,6 +7668,14 @@ th[aria-sort="descending"] .sort-chevron {
   }
 }
 
+/* The status drops its count before its sort: the sort is what makes the
+   order legible, the count is implied by the rows. */
+@container table-shell (max-width: 1079px) {
+  .table-status-count {
+    display: none;
+  }
+}
+
 @container table-shell (max-width: 959px) {
   /* Add note keeps its red but loses its word, and the two view controls
      travel in the overflow menu the caller renders at this width. */
@@ -7667,12 +7691,6 @@ th[aria-sort="descending"] .sort-chevron {
 
   .table-reset-toggle,
   .table-columns-toggle {
-    display: none;
-  }
-
-  /* The find entry is at its 400px floor here; the recovery the count names
-     is still reachable by clearing a chip on the line below. */
-  .table-find-all {
     display: none;
   }
 }
@@ -7695,7 +7713,7 @@ th[aria-sort="descending"] .sort-chevron {
   flex: 0 0 auto;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 2px 16px;
   margin: 8px 0 0;
   padding: 0;
@@ -7706,20 +7724,6 @@ th[aria-sort="descending"] .sort-chevron {
   font-size: 0.75rem;
   line-height: 1.5;
   white-space: nowrap;
-}
-
-/* The compact line the eye reads. A zero basis keeps it from forcing the hint
-   block onto its own line: it shrinks first and only the hints themselves wrap
-   when even they cannot fit. */
-.table-footer-status {
-  flex: 1 1 0;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  /* The counts change on every keystroke in the filter field; tabular digits
-     keep the status from shuffling its words as the result set narrows. */
-  font-variant-numeric: tabular-nums;
 }
 
 /* The full "Showing … · sorted by …" sentence stays the live region, so the
@@ -7741,6 +7745,7 @@ th[aria-sort="descending"] .sort-chevron {
   appearance: none;
   display: inline-flex;
   align-items: center;
+  flex: none;
   min-height: 24px;
   margin: 0;
   padding: 0 2px;

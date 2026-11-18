@@ -1411,7 +1411,7 @@ describe("NotesTable filter rail", () => {
     await commitChip(user, "Denomination", "100");
 
     const more = await screen.findByRole("button", {
-      name: /^Show \d+ more filters?$/,
+      name: /^\+\d+ more filters?$/,
     });
     expect(more.textContent).toMatch(/^\+\d+$/);
     // The hidden chip is not on the line; it lives in the count's panel.

@@ -676,7 +676,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
               renderTrigger={({ open, triggerProps }) => (
                 <button
                   {...triggerProps}
-                  aria-label={`Show ${hiddenChipUnits.length} more filter${hiddenChipUnits.length === 1 ? "" : "s"}`}
+                  aria-label={`+${hiddenChipUnits.length} more filter${hiddenChipUnits.length === 1 ? "" : "s"}`}
                   className={`table-filter-more${open ? " table-filter-more--open" : ""}`}
                   title={`Show the other ${hiddenChipUnits.length} filter${hiddenChipUnits.length === 1 ? "" : "s"}`}
                   type="button"

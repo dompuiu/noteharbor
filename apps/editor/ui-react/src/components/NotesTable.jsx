@@ -4855,6 +4855,7 @@ function NotesTable({
                 <span className="table-rail-status-message">
                   Moved to position {reorderUndo.position}
                 </span>
+                <span aria-hidden="true"> · </span>
                 <button
                   className="table-rail-undo"
                   onClick={handleUndoReorder}

@@ -279,14 +279,15 @@ describe("table styles", () => {
     expect(hint[1]).not.toMatch(/position:\s*absolute/);
     expect(hint[1]).not.toMatch(/border-top/);
     expect(hint[1]).toMatch(/white-space:\s*nowrap/);
-    // Status on the left, keys on the right.
-    expect(hint[1]).toMatch(/justify-content:\s*space-between/);
+    // The keys keep the right edge; the view status lives in the rail above.
+    expect(hint[1]).toMatch(/justify-content:\s*flex-end/);
 
-    // The compact count and sort line reads as the summary did: it gives way
-    // first and truncates, so the keys never wrap under it.
-    const status = styles.match(/^\.table-footer-status\s*\{([^}]*)\}/m);
+    // The compact count and sort line gives way before the keys do.
+    const status = styles.match(
+      /^\.table-rail-status-visible\s*\{([^}]*)\}/m,
+    );
     expect(status).not.toBeNull();
-    expect(status[1]).toMatch(/flex:\s*1\s+1\s+0/);
+    expect(status[1]).toMatch(/overflow:\s*hidden/);
     expect(status[1]).toMatch(/min-width:\s*0/);
     expect(status[1]).toMatch(/text-overflow:\s*ellipsis/);
     expect(status[1]).toMatch(/font-variant-numeric:\s*tabular-nums/);
@@ -601,9 +602,10 @@ describe("table styles", () => {
     expect(narrow).toMatch(/\.table-reset-toggle,\s*\.table-columns-toggle\s*\{[^}]*display:\s*none/);
     expect(narrow).toMatch(/\.table-rail-actions \.button\s*\{[^}]*width:\s*36px/);
 
-    // The count and sort left the rail for the footer, outside the query
-    // container, so no rail query can hide half of them any more.
-    expect(styles).not.toMatch(/\.table-status-count/);
+    // The status drops its count before its sort.
+    const status = atRule(styles, "@container table-shell (max-width: 1079px)");
+    expect(status).not.toBeNull();
+    expect(status).toMatch(/\.table-status-count\s*\{[^}]*display:\s*none/);
 
     // The old 1120 order hack is gone: the chips are always their own row.
     expect(styles).not.toMatch(/@container table-shell \(max-width: 1120px\)/);
@@ -775,6 +777,8 @@ describe("table styles", () => {
     const body = styles.match(/^\.table-load-error-body\s*\{([^}]*)\}/m);
     expect(body).not.toBeNull();
     expect(body[1]).toMatch(/margin:\s*auto/);
+    // The shell centres nothing: the rail must stay the card's head.
+    expect(styles).not.toMatch(/^\.table-load-error\s*\{/m);
 
     const detail = styles.match(/^\.table-load-error-detail\s*\{([^}]*)\}/m);
     expect(detail).not.toBeNull();
