@@ -79,9 +79,10 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
     () => groupConditions(conditions),
     [conditions],
   );
-  // The rail shows one line of chips. Each unit is one connector (or field
-  // label) plus its chip, in table order; the plan decides how many whole
-  // units fit before the `+N` count takes over.
+  // The chips are one line, on the field's own line while they fit there.
+  // Each unit is one connector (or field label) plus its chip, in table order;
+  // the plan decides how many whole units fit before the `+N` count takes
+  // over.
   const chipUnits = useMemo(
     () =>
       conditionGroups.flatMap(({ field, items }, groupIndex) =>
@@ -488,125 +489,125 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
   return (
     <Fragment>
       <div className="table-search table-search--scoped" ref={fieldRef}>
-          <svg
-            aria-hidden="true"
-            className="table-search-icon"
-            fill="none"
-            focusable="false"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeWidth="1.9"
-            viewBox="0 0 24 24"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <FilterFieldMenu
-            onChange={(field) => {
-              setFilterField(field);
-              searchInputRef.current?.focus();
-            }}
-            options={[
-              { key: "all", label: filterFieldLabel("all") },
-              ...searchColumns.map((column) => ({
-                key: column.key,
-                label: filterFieldLabel(column.key),
-              })),
-            ]}
-            value={filterField}
-          />
-          <span aria-hidden="true" className="table-search-divider" />
-          <input
-            aria-autocomplete={
-              filterField === tagsColumnKey ? "list" : undefined
-            }
-            aria-controls={
-              tagListVisible ? "table-filter-tag-suggestions" : undefined
-            }
-            aria-expanded={
-              filterField === tagsColumnKey ? tagListVisible : undefined
-            }
-            aria-label={`Filter ${filterFieldLabel(filterField)}`}
-            autoComplete="off"
-            className="table-search-input"
-            onBlur={
-              filterField === tagsColumnKey
-                ? () => closeTagSuggestions()
-                : undefined
-            }
-            onChange={(event) => {
-              setFilterDraft(event.target.value);
-              setRangeRefused(false);
+        <svg
+          aria-hidden="true"
+          className="table-search-icon"
+          fill="none"
+          focusable="false"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeWidth="1.9"
+          viewBox="0 0 24 24"
+        >
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
+        </svg>
+        <FilterFieldMenu
+          onChange={(field) => {
+            setFilterField(field);
+            searchInputRef.current?.focus();
+          }}
+          options={[
+            { key: "all", label: filterFieldLabel("all") },
+            ...searchColumns.map((column) => ({
+              key: column.key,
+              label: filterFieldLabel(column.key),
+            })),
+          ]}
+          value={filterField}
+        />
+        <span aria-hidden="true" className="table-search-divider" />
+        <input
+          aria-autocomplete={
+            filterField === tagsColumnKey ? "list" : undefined
+          }
+          aria-controls={
+            tagListVisible ? "table-filter-tag-suggestions" : undefined
+          }
+          aria-expanded={
+            filterField === tagsColumnKey ? tagListVisible : undefined
+          }
+          aria-label={`Filter ${filterFieldLabel(filterField)}`}
+          autoComplete="off"
+          className="table-search-input"
+          onBlur={
+            filterField === tagsColumnKey
+              ? () => closeTagSuggestions()
+              : undefined
+          }
+          onChange={(event) => {
+            setFilterDraft(event.target.value);
+            setRangeRefused(false);
 
-              if (filterField === tagsColumnKey) {
+            if (filterField === tagsColumnKey) {
+              openTagSuggestions();
+            }
+          }}
+          onKeyDown={handleSearchKeyDown}
+          placeholder={filterPlaceholder}
+          ref={searchInputRef}
+          type="search"
+          value={filterDraft}
+        />
+        {filterField === tagsColumnKey ? (
+          // The list opens on demand: this chevron sits before the shortcut
+          // and says "press Down to see the suggestions".
+          <TagSuggestionsToggle
+            className="table-filter-tags-toggle"
+            controlsId="table-filter-tag-suggestions"
+            expanded={tagListVisible}
+            onClick={() => {
+              if (tagSuggestionOpen) {
+                closeTagSuggestions();
+              } else {
                 openTagSuggestions();
               }
+              searchInputRef.current?.focus();
             }}
-            onKeyDown={handleSearchKeyDown}
-            placeholder={filterPlaceholder}
-            ref={searchInputRef}
-            type="search"
-            value={filterDraft}
+            strokeWidth={2.4}
           />
-          {filterField === tagsColumnKey ? (
-            // The list opens on demand: this chevron sits before the shortcut
-            // and says "press Down to see the suggestions".
-            <TagSuggestionsToggle
-              className="table-filter-tags-toggle"
-              controlsId="table-filter-tag-suggestions"
-              expanded={tagListVisible}
-              onClick={() => {
-                if (tagSuggestionOpen) {
-                  closeTagSuggestions();
-                } else {
-                  openTagSuggestions();
-                }
-                searchInputRef.current?.focus();
-              }}
-              strokeWidth={2.4}
-            />
-          ) : null}
-          {rangeRefused ? (
-            // The refusal takes the commit hint's slot and height, so a rejected
-            // range says why without moving the table.
-            <span className="table-filter-note" role="status">
-              Up to {maxRangeValues} values per range
-            </span>
-          ) : filterDraft.trim() ? (
-            // While typing the hint names the commit and the latch together: the
-            // mode word stays plain and `flip` is the button.
-            <span className="table-filter-enter">
-              <kbd className="table-search-hint">⏎</kbd> {commitMode}
-              <span aria-hidden="true">·</span>
-              <button aria-label={flipButtonName} {...modeButtonProps}>
-                flip
-              </button>
-              <kbd className="table-search-hint">⇧⏎</kbd>
-            </span>
-          ) : (
-            // At rest the mode reads before the `/` keycap, so the field states
-            // what ⏎ will do before anything is typed.
-            <Fragment>
-              <button aria-label={modeButtonName} {...modeButtonProps}>
-                <svg
-                  aria-hidden="true"
-                  className="table-filter-mode-icon"
-                  fill="none"
-                  focusable="false"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="1.6"
-                  viewBox="0 0 12 12"
-                >
-                  <path d="M1 4h8.5L7.5 2M11 8H2.5L4.5 10" />
-                </svg>
-                {commitMode}
-              </button>
-              <kbd className="table-search-hint">/</kbd>
-            </Fragment>
-          )}
-        </div>
+        ) : null}
+        {rangeRefused ? (
+          // The refusal takes the commit hint's slot and height, so a rejected
+          // range says why without moving the table.
+          <span className="table-filter-note" role="status">
+            Up to {maxRangeValues} values per range
+          </span>
+        ) : filterDraft.trim() ? (
+          // While typing the hint names the commit and the latch together: the
+          // mode word stays plain and `flip` is the button.
+          <span className="table-filter-enter">
+            <kbd className="table-search-hint">⏎</kbd> {commitMode}
+            <span aria-hidden="true">·</span>
+            <button aria-label={flipButtonName} {...modeButtonProps}>
+              flip
+            </button>
+            <kbd className="table-search-hint">⇧⏎</kbd>
+          </span>
+        ) : (
+          // At rest the mode reads before the `/` keycap, so the field states
+          // what ⏎ will do before anything is typed.
+          <Fragment>
+            <button aria-label={modeButtonName} {...modeButtonProps}>
+              <svg
+                aria-hidden="true"
+                className="table-filter-mode-icon"
+                fill="none"
+                focusable="false"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.6"
+                viewBox="0 0 12 12"
+              >
+                <path d="M1 4h8.5L7.5 2M11 8H2.5L4.5 10" />
+              </svg>
+              {commitMode}
+            </button>
+            <kbd className="table-search-hint">/</kbd>
+          </Fragment>
+        )}
+      </div>
       {/* A mode flip moves focus back to the input, so the change needs its
           own polite announcement: the page never re-reads the button. */}
       <p

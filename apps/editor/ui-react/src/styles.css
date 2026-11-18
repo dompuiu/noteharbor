@@ -4951,7 +4951,7 @@ input[type="radio"] {
 }
 
 .table-find-bar:focus-within {
-  border-color: var(--text-muted);
+  border-color: var(--accent);
 }
 
 .table-find-input::-webkit-search-cancel-button {
@@ -7580,14 +7580,6 @@ th[aria-sort="descending"] .sort-chevron {
     width: 36px;
     padding: 0;
     justify-content: center;
-  }
-}
-
-/* The status drops its count before its sort: the sort is what makes the
-   order legible, the count is implied by the rows. */
-@container table-shell (max-width: 1079px) {
-  .table-status-count {
-    display: none;
   }
 }
 

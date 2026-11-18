@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
-  computeFilterChipLayout,
+  computeFilterChipBudget,
   computeFilterChipPlan,
 } from "./tableFilterChips.js";
 
@@ -57,12 +57,12 @@ describe("computeFilterChipPlan", () => {
   });
 });
 
-describe("computeFilterChipLayout", () => {
+describe("computeFilterChipBudget", () => {
   test("keeps the chips on the field's line when they fit beside it", () => {
     // 1160 card: 1140 inside, minus a 400px field, 260px of controls and the
     // two 12px gaps, leaves 456px for the chips.
     expect(
-      computeFilterChipLayout({ actionsWidth: 260, railWidth: 1160 }),
+      computeFilterChipBudget({ actionsWidth: 260, railWidth: 1160 }),
     ).toEqual({ availableWidth: 456, ownLine: false });
   });
 
@@ -71,20 +71,20 @@ describe("computeFilterChipLayout", () => {
     // gaps, leaves 76px — not enough for one chip, so the line wraps and the
     // plan gets the full 880px.
     expect(
-      computeFilterChipLayout({ actionsWidth: 380, railWidth: 900 }),
+      computeFilterChipBudget({ actionsWidth: 380, railWidth: 900 }),
     ).toEqual({ availableWidth: 880, ownLine: true });
   });
 
   test("takes its own line before the controls have been measured", () => {
     // An unmeasured cluster cannot vouch for the inline gap; the full line is
     // always safe and the controls are measured on the next frame.
-    expect(computeFilterChipLayout({ actionsWidth: null, railWidth: 1160 })).toEqual(
+    expect(computeFilterChipBudget({ actionsWidth: null, railWidth: 1160 })).toEqual(
       { availableWidth: 1140, ownLine: true },
     );
   });
 
   test("plans nothing against an unknown rail", () => {
-    expect(computeFilterChipLayout({ actionsWidth: 200, railWidth: null })).toEqual(
+    expect(computeFilterChipBudget({ actionsWidth: 200, railWidth: null })).toEqual(
       { availableWidth: null, ownLine: false },
     );
   });

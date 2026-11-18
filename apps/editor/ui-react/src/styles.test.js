@@ -606,12 +606,13 @@ describe("table styles", () => {
     expect(narrow).toMatch(/\.table-reset-toggle,\s*\.table-columns-toggle\s*\{[^}]*display:\s*none/);
     expect(narrow).toMatch(/\.table-rail-actions \.button\s*\{[^}]*width:\s*36px/);
 
-    // The status drops its count before its sort.
-    const status = atRule(styles, "@container table-shell (max-width: 1079px)");
-    expect(status).not.toBeNull();
-    expect(status).toMatch(/\.table-status-count\s*\{[^}]*display:\s*none/);
+    // The count and the sort live in the footer, outside this query container,
+    // so no rail query hides half of them any more.
+    expect(atRule(styles, "@container table-shell (max-width: 1079px)")).toBeNull();
+    expect(styles).not.toMatch(/\.table-status-count/);
 
-    // The old 1120 order hack is gone: the chips are always their own row.
+    // The old 1120 order hack is gone, and no query forces the chip row: the
+    // planner decides the wrap from the measured line.
     expect(styles).not.toMatch(/@container table-shell \(max-width: 1120px\)/);
     expect(styles).not.toMatch(/@container table-shell \(max-width: 900px\)/);
   });

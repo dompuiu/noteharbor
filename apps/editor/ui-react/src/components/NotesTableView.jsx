@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { computeFilterChipLayout } from "../lib/tableFilterChips.js";
+import { computeFilterChipBudget } from "../lib/tableFilterChips.js";
 import { ColumnPicker } from "./ColumnPicker.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { TableCard } from "./TableCard.jsx";
@@ -47,8 +47,6 @@ export function NotesTableView({
   resetTitle = "Clears filters, sort and selection — keeps your columns",
   rows,
   shellRef,
-  showBrowse = true,
-  showPan = true,
   showShortcutsHelp = false,
   showToolbar = true,
   showToolbarShortcuts = true,
@@ -95,7 +93,7 @@ export function NotesTableView({
     return () => observer.disconnect();
   }, [railChrome]);
 
-  const chipLayout = computeFilterChipLayout({
+  const chipLayout = computeFilterChipBudget({
     actionsWidth: railActionsWidth,
     railWidth,
   });
@@ -272,12 +270,12 @@ export function NotesTableView({
             {footerStatus}
             <span className="table-footer-keys">
               {footerHint}
-              {showBrowse && rows.length ? (
+              {rows.length ? (
                 <span className="table-footer-segment">
                   <kbd>&uarr;</kbd> <kbd>&darr;</kbd> to browse
                 </span>
               ) : null}
-              {showPan && columnPan.columnPanAvailable ? (
+              {columnPan.columnPanAvailable ? (
                 <span className="table-footer-segment">
                   <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to pan
                 </span>

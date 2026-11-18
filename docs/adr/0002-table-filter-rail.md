@@ -22,3 +22,15 @@ The collection table's filter field, chips, column picker, `Reset view` and `Add
 - A card narrower than 1120px stops sharing one line between the field, the chips and the trailing controls: `.table-shell` is an `inline-size` query container and the narrow query puts the chips on a row of their own (`order: 2`, `flex: 1 1 100%`) while the field and the controls keep the first row. Without it the three competed for width, so the same six filters wrapped into a different, ragged shape at every width. Chips stay before the controls in the DOM, so `order` moves them only visually and Tab still walks chips first; the one cost is that focus steps down to the chip row and back up to `Add note`. The idle OR/AND hint takes that same row (same `order`/`flex`) and the field is a fixed 400px, so the rail has one narrow shape at every width and in both filter states: the hint's length never sets the primary control's width, the trailing cluster never floats alone beside a half-empty line, and the rail is 49px above the breakpoint and 81px below it, whether or not a chip exists (the hint's 24px row is the chip line's own height).
 - A connector and its field label travel with the chip they introduce: one `.table-filter-unit` per chip, so a wrapped line may start with `and Company PM` or `or 29` but never ends on a bare connector. One chip per unit is also what lets a long run of ORed values wrap between chips; as a single nowrap facet it ran past the chip block and under the trailing controls at ~1400px.
 - The rail is part of the table's keyboard contract, not a separate key scope. `isScreenChromeTarget` treats focus inside `.table-rail` as table chrome, so Escape on `Add note`, `Columns`, `Reset view`, a chip or the filter field still clears the selection or filters, and the arrow keys still walk the rows. This preserves the behaviour those controls had in the toolbar band above the card.
+
+## Superseded in part (T135)
+
+The horizontal-query bullet above no longer holds. The rail does not switch the chips to a
+row of their own at a container breakpoint: the chips start on the filter field's line and
+take a full-width line of their own only when that line cannot hold them, decided by the
+measured budget in `lib/tableFilterChips.js` (the field's 400px basis plus the measured
+trailing cluster and the two gaps). The one-line rule stands in either placement, with `+N`
+carrying the rest, so the rail is 49px with the chips inline and 81px when they wrap. The
+1120px shape rule and its `order`-based pairing with the idle hint are gone with the hint
+itself. The page head is the collection's title and menu again, outside the card; the rail
+carries the view's controls.

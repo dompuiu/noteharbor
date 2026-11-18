@@ -105,7 +105,9 @@ function unitWidth(unit) {
 // The chips share the filter field's line while they fit beside it and take a
 // line of their own only when they do not. These are the rail's fixed costs:
 // its 10px paddings, the 12px gap between the field, the chips and the
-// trailing controls, and the field's 400px default width.
+// trailing controls, and the field's width. The field never grows past its
+// 400px basis, so reserving the basis is the safe side: a narrower field only
+// leaves the planned line more room than it asked for.
 const railChipPadding = 20;
 const railChipGap = 12;
 const filterFieldWidth = 400;
@@ -116,7 +118,7 @@ const minimumInlineWidth = 140;
 // Decides where the chips sit and how much width they may use. The own-line
 // case reports the rail's whole content box, because that is what the chip
 // line gets once it wraps under the field.
-export function computeFilterChipLayout({ actionsWidth = null, railWidth = null }) {
+export function computeFilterChipBudget({ actionsWidth = null, railWidth = null }) {
   if (!Number.isFinite(railWidth) || railWidth <= 0) {
     return { availableWidth: null, ownLine: false };
   }
