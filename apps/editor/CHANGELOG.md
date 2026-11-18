@@ -4,6 +4,10 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+### Fixed
+
+- Note editor: a PMG scrape now keeps the full catalog number from the page's note reference, which lists the region code first. Romanian **M8** lands as `M8` instead of `8`, and `112a1` keeps its trailing digit instead of stopping at `112a`.
+
 ## [2.17.0] - 2026-11-17
 
 ### Added

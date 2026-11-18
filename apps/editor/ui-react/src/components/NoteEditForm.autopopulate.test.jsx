@@ -245,6 +245,40 @@ describe("Note editor Autopopulate browser handling", () => {
     expect(within(gradeBlock).queryByText("Scraped")).not.toBeInTheDocument();
   });
 
+  test("keeps a PMG catalog prefix that follows the region code", async () => {
+    const user = userEvent.setup();
+    getNote.mockResolvedValue({
+      note: {
+        ...notePayload(),
+        denomination: "",
+        issue_date: "",
+        catalog_number: "",
+        grade: "",
+        serial: "",
+      },
+    });
+    // PMG cert 2268927-003: the note reference is the region code (ROM)
+    // plus the catalog number (M8), so the catalog is M8, not 8.
+    scrapePreview.mockResolvedValue({
+      scraped_data: {
+        pmg_cert: "2268927-003",
+        note_description: "Romania / German Occupation WWI, 1000 Lei ND (1917)",
+        note: "ROMM8",
+        region: "ROM",
+        serial: "A574029",
+        grade: "65 EPQ",
+      },
+      images: [],
+    });
+    const button = await renderForm();
+
+    await waitFor(() => expect(bridge.getScrapeBrowserStatus).toHaveBeenCalled());
+    await user.click(button);
+
+    await findScrapeStatus("Filled 5 fields from PMG.");
+    expect(screen.getByLabelText("Catalog #")).toHaveValue("M8");
+  });
+
   test("marks a scraped Notes field too", async () => {
     const user = userEvent.setup();
     getNote.mockResolvedValue({

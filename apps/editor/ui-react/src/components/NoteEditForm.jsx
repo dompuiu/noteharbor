@@ -21,6 +21,7 @@ import {
 import { isDesktopRuntime } from "../lib/appMode.js";
 import { isEditableElement } from "../lib/editableElement.js";
 import { normalizePastedImageFile } from "../lib/pastedImages.js";
+import { extractCatalogNumberFromPmNote } from "../lib/pmgCatalogNumber.js";
 import { extractPmgDescriptionFields } from "../lib/pmgDescription.js";
 import { CATALOG_ROUTES } from "../lib/routes.js";
 import { NoteCounter } from "./NoteCounter.jsx";
@@ -1031,17 +1032,6 @@ function NoteEditForm({
     return [numericGrade, hasPpq ? "PPQ" : null].filter(Boolean).join(" ");
   }
 
-  function extractCatalogNumberFromPmNote(noteValue) {
-    const normalized = String(noteValue ?? "").trim();
-    if (!normalized) {
-      return null;
-    }
-
-    const compact = normalized.replace(/[\s_-]+/g, "");
-    const match = compact.match(/(\d+[A-Za-z]*)/);
-    return match ? match[1] : null;
-  }
-
   function extractWatermarkFromPmSignaturesVignettes(value) {
     const normalized = String(value ?? "").trim();
     if (!normalized) {
@@ -1075,7 +1065,10 @@ function NoteEditForm({
       d.serial;
     if (serial) updates.serial = serial;
 
-    const pmgNoteCatalogNumber = extractCatalogNumberFromPmNote(d.note);
+    const pmgNoteCatalogNumber = extractCatalogNumberFromPmNote(
+      d.note,
+      d.region,
+    );
     const catalogNumber =
       (company === "PCGS" ? d.catalog_number : null) ??
       (company === "TQG" ? d.world_pick : null) ??
