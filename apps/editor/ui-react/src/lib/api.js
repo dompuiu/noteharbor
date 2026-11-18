@@ -460,6 +460,20 @@ async function downloadArchive(collectionIds = null, showcaseIds = undefined) {
   return { filename, omittedShowcases };
 }
 
+// The desktop shell owns a real file system: it asks for a destination with
+// the OS save dialog and writes the archive there, so no browser download
+// happens. `null` means the save dialog was cancelled and nothing was
+// written; the browser build keeps the blob download and never returns null.
+async function exportArchive(collectionIds = null, showcaseIds = undefined) {
+  const bridge = window.noteHarborDesktop;
+
+  if (bridge && typeof bridge.exportArchive === 'function') {
+    return bridge.exportArchive(collectionIds, showcaseIds);
+  }
+
+  return downloadArchive(collectionIds, showcaseIds);
+}
+
 async function getOperationStatus() {
   const response = await request('/api/operations/status');
   return handleResponse(response);
@@ -695,6 +709,7 @@ export {
   deleteNote,
   deleteShowcase,
   downloadArchive,
+  exportArchive,
   getCategories,
   getCollections,
   getHealth,
