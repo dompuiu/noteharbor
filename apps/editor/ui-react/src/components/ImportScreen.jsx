@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   clearAppData,
-  downloadArchive,
+  exportArchive,
   getOperationStatus,
   importArchive,
 } from "../lib/api.js";
@@ -25,6 +25,118 @@ function getDroppedArchiveFile(event) {
 
 function formatOperationLabel(operation) {
   return String(operation || "idle").replace(/_/g, " ");
+}
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) {
+    return "";
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/* Shared line-art shell: every glyph on this screen draws on the same 24px
+   grid, so only the paths and the stroke weight differ. */
+function Glyph({ children, strokeWidth = 1.7 }) {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={strokeWidth}
+      viewBox="0 0 24 24"
+    >
+      {children}
+    </svg>
+  );
+}
+
+function ImportGlyph() {
+  return (
+    <Glyph>
+      <path d="M12 3v10.5" />
+      <path d="m8 9.5 4 4 4-4" />
+      <path d="M4 15.5V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3.5" />
+    </Glyph>
+  );
+}
+
+function ExportGlyph() {
+  return (
+    <Glyph>
+      <path d="M12 13.5V3" />
+      <path d="m8 7 4-4 4 4" />
+      <path d="M4 15.5V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3.5" />
+    </Glyph>
+  );
+}
+
+function ArchiveGlyph() {
+  return (
+    <Glyph strokeWidth={1.6}>
+      <path d="M4 7.5h16v12a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19.5Z" />
+      <path d="M3 4h18v3.5H3z" />
+      <path d="M10 12h4" />
+    </Glyph>
+  );
+}
+
+/* One record picker: the collections list and the showcases list are the same
+   control over different data, so the label, the count and the chip row are
+   written once. `onToggle` owns the selection rules, including the showcase's
+   pull on its collections. */
+function ExportSelectionList({
+  ariaLabel,
+  disabled,
+  emptyText,
+  items,
+  label,
+  onToggle,
+  selectedIds,
+  help,
+}) {
+  return (
+    <div className="field-block">
+      <span>
+        {label}
+        <span className="import-count" aria-hidden="true">
+          {selectedIds.length}/{items.length}
+        </span>
+      </span>
+      <div
+        className="export-collection-list"
+        role="group"
+        aria-label={ariaLabel}
+      >
+        {items.length ? (
+          items.map((item) => {
+            const id = Number(item.id);
+
+            return (
+              <label className="export-collection-option" key={item.id}>
+                <input
+                  checked={selectedIds.includes(id)}
+                  disabled={disabled}
+                  onChange={(event) => onToggle(id, event.target.checked)}
+                  type="checkbox"
+                />
+                <span>{item.name}</span>
+              </label>
+            );
+          })
+        ) : (
+          <p className="import-empty">{emptyText}</p>
+        )}
+      </div>
+      {help ? <p className="field-help">{help}</p> : null}
+    </div>
+  );
 }
 
 function ImportScreen({
@@ -276,6 +388,18 @@ function ImportScreen({
     : "";
   const isExportBlocked = blockedShowcases.length > 0;
 
+  function handleCollectionToggle(collectionId, checked) {
+    setSelectedExportCollectionIds((current) => {
+      if (checked) {
+        return current.includes(collectionId)
+          ? current
+          : [...current, collectionId];
+      }
+
+      return current.filter((id) => id !== collectionId);
+    });
+  }
+
   function handleShowcaseToggle(showcaseId, checked) {
     if (checked) {
       setSelectedExportShowcaseIds((current) => {
@@ -319,12 +443,20 @@ function ImportScreen({
     setArchiveResult(null);
 
     try {
-      const payload = await downloadArchive(
+      const payload = await exportArchive(
         selectedExportCollectionIds,
         selectedExportShowcaseIds,
       );
+
+      // A null payload means the desktop shell's save dialog was dismissed:
+      // there is no file to report and nothing to explain.
+      if (!payload) {
+        return;
+      }
+
       setArchiveResult({
         exported: payload.filename,
+        path: payload.path ?? "",
         selectedCount: selectedExportCollectionIds.length,
         selectedShowcaseCount: selectedExportShowcaseIds.length,
         omittedShowcases: payload.omittedShowcases ?? [],
@@ -374,6 +506,8 @@ function ImportScreen({
         : canScrollDown
           ? " import-panel-scroll--fade-bottom"
           : "";
+  const archiveSize = formatFileSize(archiveSource?.size);
+  const exportSummary = `${selectedExportCollectionIds.length} of ${collections.length} collections · ${selectedExportShowcaseIds.length} of ${showcases.length} showcases`;
 
   return (
     <section className="screen-stack narrow-stack import-screen">
@@ -384,64 +518,79 @@ function ImportScreen({
           onScroll={updatePanelScrollFades}
           ref={panelScrollRef}
         >
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Import and Export</p>
-              <h1>Manage your collection data</h1>
-              <p>
-                Archive export can include selected collections only, and
-                archive import either replaces all current data (the default)
-                or merges: replacing local collections that exist in the
-                archive (matched by name) while leaving other collections
-                untouched. Archive import is destructive for collections
-                present in the archive: local data for those collections is
-                replaced.
+          <header className="import-head">
+            <div className="import-head-copy">
+              <p className="eyebrow">Archive Import and Export</p>
+              <h1>Move your archive in and out</h1>
+              <p className="import-lede">
+                One .zip carries your collections, your showcases, and only the
+                pictures they reference. An import can replace data, so export
+                a copy first if you need one.
               </p>
             </div>
-          </div>
+            <dl className="import-facts" aria-label="Current catalog">
+              <div className="import-fact">
+                <dt>Collections</dt>
+                <dd>{loadingCollections ? "—" : collections.length}</dd>
+              </div>
+              <div className="import-fact">
+                <dt>Showcases</dt>
+                <dd>{loadingShowcases ? "—" : showcases.length}</dd>
+              </div>
+              <div className="import-fact">
+                <dt>Archive</dt>
+                <dd>.zip</dd>
+              </div>
+            </dl>
+          </header>
 
-          {loadingCollections ? <p>Loading collections...</p> : null}
+          {loadingCollections ? (
+            <p className="import-status-line">Loading collections…</p>
+          ) : null}
           {collectionsError ? (
             <p className="error-text">{collectionsError}</p>
           ) : null}
-          {loadingShowcases ? <p>Loading showcases...</p> : null}
+          {loadingShowcases ? (
+            <p className="import-status-line">Loading showcases…</p>
+          ) : null}
           {showcasesError ? (
             <p className="error-text">{showcasesError}</p>
           ) : null}
-          {isBusy ? <p className="warning-text">{busyMessage}</p> : null}
+          {isBusy && !isTransferring ? (
+            <p className="warning-text">{busyMessage}</p>
+          ) : null}
+          {error ? (
+            <p className="error-text" role="alert">
+              {error}
+            </p>
+          ) : null}
 
-          <div className="import-sections">
+          <div className="import-grid">
             <form
-              className="form-grid import-card"
+              className="import-card"
               onSubmit={handleArchiveImport}
             >
-              <div className="full-span">
-                <p className="eyebrow">Archive Import and Export</p>
-                <h2>Download or import archive data</h2>
-                <p>
-                  Export downloads a `.zip` with `banknotes.db` and only images
-                  referenced by selected collections. Only selected showcases
-                  are included: selecting a showcase also selects the
-                  collections it needs, and the export is blocked while a
-                  selected showcase needs a collection outside the selection.
-                  A replace import reads all collections from the archive and
-                  deletes everything else; a merge import replaces matching
-                  collection names in the current data and keeps the rest.
-                </p>
-                <p className="warning-text import-card-warning">
-                  You can also delete the current app data and start from an
-                  empty collection.
-                </p>
+              <div className="import-card-head">
+                <span className="import-card-glyph" aria-hidden="true">
+                  <ImportGlyph />
+                </span>
+                <div className="import-card-copy">
+                  <p className="eyebrow">Bring data in</p>
+                  <h2>Import an archive</h2>
+                  <p>
+                    Restore a backup or move a catalog between machines.
+                  </p>
+                </div>
               </div>
 
-              <div className="field-block full-span">
-                <span>Import mode</span>
+              <div className="field-block">
+                <span>How to apply it</span>
                 <div
-                  className="export-collection-list"
+                  className="import-mode-grid"
                   role="radiogroup"
                   aria-label="Import mode"
                 >
-                  <label className="export-collection-option">
+                  <label className="import-mode-option">
                     <input
                       checked={importMode === "replace"}
                       disabled={isBusy || submittingArchive}
@@ -450,9 +599,15 @@ function ImportScreen({
                       type="radio"
                       value="replace"
                     />
-                    <span>Replace all current data</span>
+                    <span className="import-mode-copy">
+                      <strong>Replace everything</strong>
+                      <span>
+                        The archive becomes the catalog. Whatever it does not
+                        contain is deleted.
+                      </span>
+                    </span>
                   </label>
-                  <label className="export-collection-option">
+                  <label className="import-mode-option">
                     <input
                       checked={importMode === "merge"}
                       disabled={isBusy || submittingArchive}
@@ -461,15 +616,21 @@ function ImportScreen({
                       type="radio"
                       value="merge"
                     />
-                    <span>Merge into current data</span>
+                    <span className="import-mode-copy">
+                      <strong>Merge by name</strong>
+                      <span>
+                        Collections named in the archive are rebuilt; everything
+                        else stays as it is.
+                      </span>
+                    </span>
                   </label>
                 </div>
               </div>
 
-              <div className="field-block full-span">
-                <span>Archive source</span>
+              <div className="field-block">
+                <span>Archive file</span>
                 <div
-                  className={`image-dropzone import-dropzone${archiveDropActive ? " image-dropzone--active" : ""}`}
+                  className={`image-dropzone import-dropzone${archiveDropActive ? " image-dropzone--active" : ""}${archiveSource ? " import-dropzone--filled" : ""}`}
                   onClick={() => {
                     if (!isBusy) {
                       archiveInputRef.current?.click();
@@ -517,12 +678,16 @@ function ImportScreen({
                   tabIndex={0}
                 >
                   <div className="import-dropzone-content">
+                    <span className="import-dropzone-glyph" aria-hidden="true">
+                      <ArchiveGlyph />
+                    </span>
                     <strong>
-                      {archiveSource?.name ||
-                        "Drop archive here or choose a file"}
+                      {archiveSource?.name || "Drop a .zip archive here"}
                     </strong>
-                    <p className="muted import-dropzone-help">
-                      Supports `.zip` archives exported from Note Harbor Editor.
+                    <p className="import-dropzone-help">
+                      {archiveSource
+                        ? `${archiveSize ? `${archiveSize} · ` : ""}ready to import`
+                        : "or choose a file from your computer"}
                     </p>
                   </div>
                 </div>
@@ -536,7 +701,7 @@ function ImportScreen({
                     Choose archive
                   </button>
                   <button
-                    className="button"
+                    className="import-clear"
                     disabled={!archiveSource || isBusy}
                     onClick={() => {
                       setArchiveImportSource(null);
@@ -546,7 +711,7 @@ function ImportScreen({
                     }}
                     type="button"
                   >
-                    Clear
+                    Clear file
                   </button>
                   <input
                     accept=".zip,application/zip"
@@ -563,95 +728,84 @@ function ImportScreen({
                 </div>
               </div>
 
-              {collections.length ? (
-                <div className="field-block full-span">
-                  <span>Collections to export</span>
-                  <div
-                    className="export-collection-list"
-                    role="group"
-                    aria-label="Collections to export"
-                  >
-                    {collections.map((collection) => {
-                      const collectionId = Number(collection.id);
-                      const checked =
-                        selectedExportCollectionIds.includes(collectionId);
+              <div className="import-card-footer">
+                <p className="import-footnote">
+                  If the import fails, nothing changes. The archive is checked
+                  before it is applied.
+                </p>
+                <button
+                  className="button button-primary"
+                  disabled={submittingArchive || isBusy || !archiveSource}
+                  type="submit"
+                >
+                  Import archive
+                </button>
+              </div>
+            </form>
 
-                      return (
-                        <label
-                          className="export-collection-option"
-                          key={collection.id}
-                        >
-                          <input
-                            checked={checked}
-                            disabled={isBusy || exportingArchive}
-                            onChange={(event) => {
-                              setSelectedExportCollectionIds((current) => {
-                                if (event.target.checked) {
-                                  if (current.includes(collectionId)) {
-                                    return current;
-                                  }
-                                  return [...current, collectionId];
-                                }
-
-                                return current.filter(
-                                  (id) => id !== collectionId,
-                                );
-                              });
-                            }}
-                            type="checkbox"
-                          />
-                          <span>{collection.name}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
+            <section
+              aria-labelledby="import-export-title"
+              className="import-card"
+            >
+              <div className="import-card-head">
+                <span className="import-card-glyph" aria-hidden="true">
+                  <ExportGlyph />
+                </span>
+                <div className="import-card-copy">
+                  <p className="eyebrow">Take data out</p>
+                  <h2 id="import-export-title">Export an archive</h2>
+                  <p>
+                    Pack the collections and showcases you choose into one
+                    portable .zip. Only the pictures they use travel with them.
+                  </p>
                 </div>
-              ) : null}
+              </div>
 
-              {showcases.length ? (
-                <div className="field-block full-span">
-                  <span>Showcases to export</span>
-                  <div
-                    className="export-collection-list"
-                    role="group"
-                    aria-label="Showcases to export"
-                  >
-                    {showcases.map((showcase) => {
-                      const showcaseId = Number(showcase.id);
-                      const checked =
-                        selectedExportShowcaseIds.includes(showcaseId);
+              <ExportSelectionList
+                ariaLabel="Collections to export"
+                disabled={isBusy || exportingArchive}
+                emptyText="No collections yet. Import an archive, or create a collection first."
+                items={collections}
+                label="Collections to export"
+                onToggle={handleCollectionToggle}
+                selectedIds={selectedExportCollectionIds}
+              />
 
-                      return (
-                        <label
-                          className="export-collection-option"
-                          key={showcase.id}
-                        >
-                          <input
-                            checked={checked}
-                            disabled={isBusy || exportingArchive}
-                            onChange={(event) => {
-                              handleShowcaseToggle(
-                                showcaseId,
-                                event.target.checked,
-                              );
-                            }}
-                            type="checkbox"
-                          />
-                          <span>{showcase.name}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
+              <ExportSelectionList
+                ariaLabel="Showcases to export"
+                disabled={isBusy || exportingArchive}
+                emptyText="No showcases yet. A showcase exports together with the collections it uses."
+                help="Picking a showcase also picks the collections it needs. The export waits until every one of them is selected."
+                items={showcases}
+                label="Showcases to export"
+                onToggle={handleShowcaseToggle}
+                selectedIds={selectedExportShowcaseIds}
+              />
+
+              <div className="import-archive-contents">
+                <p className="import-archive-contents-title">Inside the .zip</p>
+                <ul>
+                  <li>
+                    <code>banknotes.db</code>
+                    <span>The collections and showcases you picked</span>
+                  </li>
+                  <li>
+                    <code>images/</code>
+                    <span>Only the pictures those collections use</span>
+                  </li>
+                </ul>
+              </div>
 
               {isExportBlocked ? (
-                <p className="error-text full-span">{blockedExportMessage}</p>
+                <p className="error-text">{blockedExportMessage}</p>
               ) : null}
 
-              <div className="import-actions full-span">
+              <div className="import-card-footer">
+                <p className="import-summary" aria-live="polite">
+                  {exportSummary}
+                </p>
                 <button
-                  className="button"
+                  className="button button-primary"
                   disabled={
                     exportingArchive ||
                     isBusy ||
@@ -663,48 +817,57 @@ function ImportScreen({
                 >
                   Download archive
                 </button>
-                <button
-                  className="button button-primary"
-                  disabled={submittingArchive || isBusy || !archiveSource}
-                  type="submit"
-                >
-                  Import archive
-                </button>
-                <button
-                  className="button button-danger"
-                  disabled={clearingData || isBusy}
-                  onClick={handleClearData}
-                  type="button"
-                >
-                  {clearingData ? "Deleting data..." : "Delete current data"}
-                </button>
               </div>
-            </form>
+            </section>
           </div>
 
-          {error ? <p className="error-text">{error}</p> : null}
-
           {archiveResult?.exported ? (
-            <div className="result-card">
-              <h2>Archive export started</h2>
-              <p>Downloaded: {archiveResult.exported}</p>
-              <p>
-                Collections included:{" "}
-                {archiveResult.selectedCount ?? collections.length}
-              </p>
-              {archiveResult.selectedShowcaseCount != null ? (
-                <p>
-                  Showcases included: {archiveResult.selectedShowcaseCount}
+            <section className="import-result" role="status">
+              <span className="import-result-glyph" aria-hidden="true">
+                <ArchiveGlyph />
+              </span>
+              <div className="import-result-copy">
+                <h2>Your archive is ready</h2>
+                {archiveResult.path ? (
+                  <p className="import-result-file">
+                    Saved to {archiveResult.path}
+                  </p>
+                ) : (
+                  <p className="import-result-file">{archiveResult.exported}</p>
+                )}
+                <p className="import-result-meta">
+                  Collections included:{" "}
+                  {archiveResult.selectedCount ?? collections.length} · Showcases
+                  included: {archiveResult.selectedShowcaseCount ?? 0}
                 </p>
-              ) : null}
-              {archiveResult.omittedShowcases?.length ? (
-                <p className="warning-text">
-                  Omitted showcases (they use notes outside the selection):{" "}
-                  {archiveResult.omittedShowcases.join(", ")}
-                </p>
-              ) : null}
-            </div>
+                {archiveResult.omittedShowcases?.length ? (
+                  <p className="warning-text">
+                    Omitted showcases (they use notes outside the selection):{" "}
+                    {archiveResult.omittedShowcases.join(", ")}
+                  </p>
+                ) : null}
+              </div>
+            </section>
           ) : null}
+
+          <section className="import-danger-card">
+            <div className="import-danger-copy">
+              <p className="eyebrow">Danger zone</p>
+              <h2>Start over with an empty catalog</h2>
+              <p>
+                Deletes every collection, showcase, and picture stored in this
+                app. Export an archive first if you may want them back.
+              </p>
+            </div>
+            <button
+              className="button button-danger-soft"
+              disabled={clearingData || isBusy}
+              onClick={handleClearData}
+              type="button"
+            >
+              {clearingData ? "Deleting data..." : "Delete current data"}
+            </button>
+          </section>
         </div>
       </div>
       {isTransferring ? (
@@ -750,9 +913,11 @@ function ImportScreen({
               </div>
             ) : (
               <p className="muted import-progress-detail">
-                {archiveUploadProgress?.phase === "processing"
-                  ? "Upload complete. Processing on server..."
-                  : "Working..."}
+                {exportingArchive
+                  ? "Packing the selected records..."
+                  : archiveUploadProgress?.phase === "processing"
+                    ? "Upload complete. Processing on server..."
+                    : "Working..."}
               </p>
             )}
           </div>

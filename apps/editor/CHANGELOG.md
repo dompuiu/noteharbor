@@ -10,6 +10,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ### Changed
 
+- Import screen: the screen now reads as two facing tasks, **Bring data in** and **Take data out**, with the import mode written as two outcomes, the export selection drawn as checkbox chips, an **Inside the .zip** summary, and the destructive reset set apart at the foot behind its own danger edge. Copy is shorter, the page reports the catalog's counts, and the archive file shows its size and ready state once chosen.
+
 - Showcase: a category's `⋯` menu now offers **Rename category…**, and its name field is a combobox over the category pool. Picking a label adopts it for this Showcase; typing a new name creates a label and uses it here. The label left behind is pruned once no Showcase places it. Renaming no longer changes every Showcase that used the label, and a name clash inside the same Showcase reads "This category is already in the showcase."
 
 ### Fixed

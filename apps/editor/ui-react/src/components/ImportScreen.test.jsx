@@ -6,7 +6,7 @@ import { ImportScreen } from "./ImportScreen.jsx";
 
 vi.mock("../lib/api.js", () => ({
   clearAppData: vi.fn(),
-  downloadArchive: vi.fn(),
+  exportArchive: vi.fn(),
   getOperationStatus: vi.fn(),
   importArchive: vi.fn(),
 }));
@@ -15,7 +15,7 @@ vi.mock("../lib/navigation.js", () => ({
   assignLocation: vi.fn(),
 }));
 
-import { downloadArchive, getOperationStatus, importArchive } from "../lib/api.js";
+import { exportArchive, getOperationStatus, importArchive } from "../lib/api.js";
 import { assignLocation } from "../lib/navigation.js";
 
 const collections = [
@@ -97,7 +97,7 @@ describe("ImportScreen CSV removal", () => {
 describe("ImportScreen export reporting", () => {
   test("reports the showcases a filtered export omitted", async () => {
     const user = userEvent.setup();
-    downloadArchive.mockResolvedValue({
+    exportArchive.mockResolvedValue({
       filename: "noteharbor-archive-2026-01-01.zip",
       omittedShowcases: ["Outside Show"],
     });
@@ -146,7 +146,7 @@ describe("ImportScreen showcase export", () => {
 
   test("the export carries the selected showcase ids", async () => {
     const user = userEvent.setup();
-    downloadArchive.mockResolvedValue({
+    exportArchive.mockResolvedValue({
       filename: "noteharbor-archive-2026-01-01.zip",
       omittedShowcases: [],
     });
@@ -156,13 +156,45 @@ describe("ImportScreen showcase export", () => {
     await user.click(screen.getByRole("checkbox", { name: "Show Two" }));
     await user.click(screen.getByRole("button", { name: "Download archive" }));
 
-    expect(downloadArchive).toHaveBeenCalledWith([1, 2], [10]);
+    expect(exportArchive).toHaveBeenCalledWith([1, 2], [10]);
     expect(await screen.findByText(/Showcases included: 1/)).toBeInTheDocument();
+  });
+
+  test("a cancelled save dialog leaves no result card", async () => {
+    const user = userEvent.setup();
+    exportArchive.mockResolvedValue(null);
+    renderImportScreen();
+
+    await screen.findByText("Archive Import and Export");
+    await user.click(screen.getByRole("button", { name: "Download archive" }));
+
+    expect(exportArchive).toHaveBeenCalled();
+    expect(screen.queryByText("Your archive is ready")).toBeNull();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  test("reports where the desktop shell saved the archive", async () => {
+    const user = userEvent.setup();
+    exportArchive.mockResolvedValue({
+      filename: "noteharbor-archive-2026-01-01.zip",
+      path: "/home/collector/Downloads/noteharbor-archive-2026-01-01.zip",
+      omittedShowcases: [],
+    });
+    renderImportScreen();
+
+    await screen.findByText("Archive Import and Export");
+    await user.click(screen.getByRole("button", { name: "Download archive" }));
+
+    expect(
+      await screen.findByText(
+        "Saved to /home/collector/Downloads/noteharbor-archive-2026-01-01.zip",
+      ),
+    ).toBeInTheDocument();
   });
 
   test("deselecting a needed collection blocks the export", async () => {
     const user = userEvent.setup();
-    downloadArchive.mockResolvedValue({
+    exportArchive.mockResolvedValue({
       filename: "noteharbor-archive-2026-01-01.zip",
       omittedShowcases: [],
     });
@@ -177,7 +209,7 @@ describe("ImportScreen showcase export", () => {
     expect(
       screen.getByRole("button", { name: "Download archive" }),
     ).toBeDisabled();
-    expect(downloadArchive).not.toHaveBeenCalled();
+    expect(exportArchive).not.toHaveBeenCalled();
   });
 });
 
