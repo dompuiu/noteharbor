@@ -424,11 +424,11 @@ GET /api/tags/suggestions
 
 ### Showcases
 
-A Showcase is a presentation tree of Category Placements, Groupings, and notes (see [ADR 0001](docs/adr/0001-showcase-node-tree.md)). `GET /api/showcases` includes a `note_count` per showcase.
+A Showcase is a presentation tree of Category Placements, Groupings, and notes (see [ADR 0001](docs/adr/0001-showcase-node-tree.md)). `GET /api/showcases` includes a `note_count` per showcase and the `category_ids` of the labels it places.
 
 ```
 GET /api/showcases
--> { showcases: [{ id, name, display_order, note_count, created_at, updated_at }, ...] }
+-> { showcases: [{ id, name, display_order, note_count, created_at, updated_at, category_ids }, ...] }
 
 POST /api/showcases
 Body: { name? }   // omitted name gets a unique default ("Showcase", "Showcase 2", …)
@@ -465,6 +465,17 @@ Body: { name? }                     // a Grouping's name, or a Category Placemen
 -> { node }   // for a Category Placement, name sets this Showcase's label:
               // reusing a pool name adopts that label, a new name creates one,
               // and the label left behind is pruned when it has no placements.
+
+PUT /api/nodes/:nodeId/notes
+Body: { note_ids: [id, ...], primary_note_id? }   // a Catalog entry's whole specimen set
+-> { node }
+
+POST /api/nodes/:nodeId/duplicate
+Body: { showcase_id }
+-> 201 { node }   // copies a top-level Category Placement's whole subtree into
+                  // another Showcase as a separate placement: the pool label is
+                  // reused, notes are referenced, and the copy appends after the
+                  // target's last top-level Category
 
 DELETE /api/nodes/:nodeId
 -> { success: true }   // removes the node and its subtree; a Category label stays in the pool

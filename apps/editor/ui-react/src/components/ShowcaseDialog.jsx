@@ -52,6 +52,16 @@ function ShowcaseDialog({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
+  // A dialog with no autofocused control would otherwise leave focus on the
+  // trigger behind the backdrop, outside the Tab trap.
+  useEffect(() => {
+    const panel = panelRef.current;
+
+    if (panel && !panel.contains(document.activeElement)) {
+      panel.focus();
+    }
+  }, []);
+
   return (
     <div className="showcase-manager-backdrop" onClick={onClose} role="presentation">
       <div
@@ -61,6 +71,7 @@ function ShowcaseDialog({
         onClick={(event) => event.stopPropagation()}
         ref={panelRef}
         role="dialog"
+        tabIndex={-1}
       >
         <div className="showcase-manager-head">
           <h2 className="showcase-manager-title" id={titleId}>

@@ -601,19 +601,10 @@ describe("the showcase category canvas", () => {
     const user = userEvent.setup();
     getShowcases.mockResolvedValue({
       showcases: [
-        { id: 1, name: "My showcase", entry_count: 3 },
-        { id: 2, name: "Second", entry_count: 0 },
-        { id: 3, name: "Third", entry_count: 2 },
+        { id: 1, name: "My showcase", entry_count: 3, category_ids: [1] },
+        { id: 2, name: "Second", entry_count: 0, category_ids: [] },
+        { id: 3, name: "Third", entry_count: 2, category_ids: [1] },
       ],
-    });
-    getShowcaseTree.mockImplementation(async (id) => {
-      if (id === 1) {
-        return { showcase_id: 1, nodes: [SUMMER_NODE] };
-      }
-      if (id === 3) {
-        return { showcase_id: 3, nodes: [{ ...SUMMER_NODE, id: 30 }] };
-      }
-      return { showcase_id: id, nodes: [] };
     });
     duplicateNode.mockResolvedValue({
       node: {
@@ -636,6 +627,9 @@ describe("the showcase category canvas", () => {
     );
 
     const dialog = await screen.findByRole("dialog");
+    await waitFor(() =>
+      expect(dialog).toContainElement(document.activeElement),
+    );
     expect(
       await within(dialog).findByText("Already in this showcase"),
     ).toBeInTheDocument();
@@ -656,6 +650,10 @@ describe("the showcase category canvas", () => {
     expect(
       await screen.findByText("Duplicated Summer to Second"),
     ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(getShowcases).toHaveBeenCalledTimes(2);
+      expect(getCategories).toHaveBeenCalledTimes(2);
+    });
     expect(
       screen.queryByRole("dialog"),
     ).not.toBeInTheDocument();
@@ -668,15 +666,10 @@ describe("the showcase category canvas", () => {
     const user = userEvent.setup();
     getShowcases.mockResolvedValue({
       showcases: [
-        { id: 1, name: "My showcase", entry_count: 3 },
-        { id: 2, name: "Second", entry_count: 0 },
+        { id: 1, name: "My showcase", entry_count: 3, category_ids: [1] },
+        { id: 2, name: "Second", entry_count: 0, category_ids: [] },
       ],
     });
-    getShowcaseTree.mockImplementation(async (id) =>
-      id === 1
-        ? { showcase_id: 1, nodes: [SUMMER_NODE] }
-        : { showcase_id: id, nodes: [] },
-    );
     duplicateNode.mockRejectedValue(
       new Error("This category is already in the showcase."),
     );

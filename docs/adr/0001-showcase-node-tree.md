@@ -29,3 +29,7 @@ Supersedes the clause above that renaming a label updates every Showcase. `PUT /
 ## Extension: replacing a note card's note
 
 A note card's `note_id` is mutable: `PUT /api/nodes/:id` with a new `note_id` swaps the note it presents, keeping the row's id, parent, and position. A Grouping that had manually chosen that card's note as its cover follows the swap. The note node still holds exactly one note; it never becomes a container.
+
+## Extension: duplicating a Category Placement
+
+`POST /api/nodes/:id/duplicate` copies a top-level Category Placement and every descendant row — Groupings, note cards, catalog entries with their metadata and specimens, manual covers, and sibling positions — into another Showcase. The copy is a new set of rows under the shared `categories` label, so it is a separate Placement: notes are referenced rather than cloned, and the source is unchanged. The root appends after the target's last top-level Category, while descendants keep their order. The whole copy is one transaction; a target that already places the label is refused by the one-placement-per-label rule and nothing is written. Duplicating into the source Showcase is therefore refused too.

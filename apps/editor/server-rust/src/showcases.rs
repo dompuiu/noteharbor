@@ -57,6 +57,9 @@ pub struct Showcase {
     pub owned_count: i64,
     pub catalog_entry_count: i64,
     pub required_collection_ids: Vec<i64>,
+    /// The pool labels this Showcase places. A duplicate target that already
+    /// carries the source label is disabled before the request is sent.
+    pub category_ids: Vec<i64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -191,7 +194,11 @@ fn is_unique_violation(error: &rusqlite::Error) -> bool {
     error.to_string().contains("UNIQUE constraint failed")
 }
 
-fn map_showcase(row: &Row<'_>, required: Vec<i64>) -> rusqlite::Result<Showcase> {
+fn map_showcase(
+    row: &Row<'_>,
+    required: Vec<i64>,
+    category_ids: Vec<i64>,
+) -> rusqlite::Result<Showcase> {
     let note_count: i64 = row.get(5)?;
     let catalog_entry_count: i64 = row.get(6)?;
     Ok(Showcase {
@@ -207,6 +214,7 @@ fn map_showcase(row: &Row<'_>, required: Vec<i64>) -> rusqlite::Result<Showcase>
         owned_count: row.get(7)?,
         catalog_entry_count,
         required_collection_ids: required,
+        category_ids,
     })
 }
 
@@ -255,6 +263,29 @@ fn required_map(conn: &Connection) -> Result<HashMap<i64, Vec<i64>>, DbError> {
     Ok(map)
 }
 
+/// The pool labels each Showcase places, for the duplicate dialog's disabled
+/// targets. One query for the whole list, like `required_map`.
+fn placed_categories_map(conn: &Connection) -> Result<HashMap<i64, Vec<i64>>, DbError> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT DISTINCT showcase_id, category_id
+             FROM showcase_nodes
+             WHERE node_type = 'category' AND category_id IS NOT NULL
+             ORDER BY showcase_id ASC, category_id ASC",
+        )
+        .map_err(classify)?;
+    let rows = stmt
+        .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)))
+        .map_err(classify)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(classify)?;
+    let mut map: HashMap<i64, Vec<i64>> = HashMap::new();
+    for (showcase_id, category_id) in rows {
+        map.entry(showcase_id).or_default().push(category_id);
+    }
+    Ok(map)
+}
+
 /// The Showcase row's count columns, shared by the list and the single read.
 /// `tail` supplies the `ORDER BY`/`WHERE` clause.
 fn showcase_rows_sql(tail: &str) -> String {
@@ -279,6 +310,7 @@ fn showcase_rows_sql(tail: &str) -> String {
 
 fn list_showcases(conn: &Connection) -> Result<Vec<Showcase>, DbError> {
     let required = required_map(conn)?;
+    let placed = placed_categories_map(conn)?;
     let mut stmt = conn
         .prepare(&showcase_rows_sql("ORDER BY display_order ASC, id ASC"))
         .map_err(classify)?;
@@ -286,7 +318,8 @@ fn list_showcases(conn: &Connection) -> Result<Vec<Showcase>, DbError> {
         .query_map([], |row| {
             let id: i64 = row.get(0)?;
             let list = required.get(&id).cloned().unwrap_or_default();
-            map_showcase(row, list)
+            let category_ids = placed.get(&id).cloned().unwrap_or_default();
+            map_showcase(row, list, category_ids)
         })
         .map_err(classify)?
         .collect::<Result<Vec<_>, _>>()
@@ -296,12 +329,14 @@ fn list_showcases(conn: &Connection) -> Result<Vec<Showcase>, DbError> {
 
 fn get_showcase(conn: &Connection, id: i64) -> Result<Option<Showcase>, DbError> {
     let required = required_map(conn)?;
+    let placed = placed_categories_map(conn)?;
     let mut stmt = conn
         .prepare(&showcase_rows_sql("WHERE id = ?1"))
         .map_err(classify)?;
     match stmt.query_row(params![id], |row| {
         let list = required.get(&id).cloned().unwrap_or_default();
-        map_showcase(row, list)
+        let category_ids = placed.get(&id).cloned().unwrap_or_default();
+        map_showcase(row, list, category_ids)
     }) {
         Ok(showcase) => Ok(Some(showcase)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
@@ -423,6 +458,10 @@ pub fn reorder_showcases(conn: &mut Connection, ids: &[i64]) -> Result<Vec<Showc
 // ---------------------------------------------------------------------------
 // Categories (shared label pool, get-or-create, delete when unplaced)
 // ---------------------------------------------------------------------------
+
+/// One Showcase places each pool label once, whether it is adding, re-binding,
+/// or copying a subtree.
+const CATEGORY_ALREADY_PLACED: &str = "This category is already in the showcase.";
 
 const CATEGORY_SELECT: &str = "SELECT
         categories.id,
@@ -562,7 +601,7 @@ fn set_category_placement_label(
         Ok(_) => {}
         Err(error) if is_unique_violation(&error) => {
             return Err(DbError::Failed(
-                "This category is already in the showcase.".to_owned(),
+                CATEGORY_ALREADY_PLACED.to_owned(),
             ));
         }
         Err(error) => return Err(classify(error)),
@@ -888,8 +927,19 @@ fn insert_node(
     Ok(conn.last_insert_rowid())
 }
 
+fn showcase_exists(conn: &Connection, id: i64) -> Result<bool, DbError> {
+    let mut stmt = conn
+        .prepare("SELECT id FROM showcases WHERE id = ?1")
+        .map_err(classify)?;
+    match stmt.query_row(params![id], |_| Ok(())) {
+        Ok(()) => Ok(true),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+        Err(error) => Err(classify(error)),
+    }
+}
+
 fn ensure_showcase(conn: &Connection, id: i64) -> Result<(), DbError> {
-    if get_showcase(conn, id)?.is_none() {
+    if !showcase_exists(conn, id)? {
         return Err(DbError::Failed("Showcase not found.".to_owned()));
     }
     Ok(())
@@ -944,37 +994,19 @@ fn add_category_placement(
         Ok(id) => id,
         Err(DbError::Failed(message)) if message.contains("UNIQUE constraint failed") => {
             return Err(DbError::Failed(
-                "This category is already in the showcase.".to_owned(),
+                CATEGORY_ALREADY_PLACED.to_owned(),
             ));
         }
         Err(error) => {
             if error.user_message().contains("UNIQUE constraint failed") {
                 return Err(DbError::Failed(
-                    "This category is already in the showcase.".to_owned(),
+                    CATEGORY_ALREADY_PLACED.to_owned(),
                 ));
             }
             return Err(error);
         }
     };
     get_node(conn, node_id)?.ok_or_else(|| DbError::Failed("Node not found.".to_owned()))
-}
-
-fn showcase_places_category(
-    conn: &Connection,
-    showcase_id: i64,
-    category_id: i64,
-) -> Result<bool, DbError> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT 1 FROM showcase_nodes
-             WHERE showcase_id = ?1 AND category_id = ?2 AND node_type = 'category'",
-        )
-        .map_err(classify)?;
-    match stmt.query_row(params![showcase_id, category_id], |_| Ok(())) {
-        Ok(()) => Ok(true),
-        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
-        Err(error) => Err(classify(error)),
-    }
 }
 
 /// The source subtree in preorder: the root followed by every descendant,
@@ -1048,7 +1080,7 @@ fn insert_copied_node(
     ) {
         Ok(_) => Ok(conn.last_insert_rowid()),
         Err(error) if is_unique_violation(&error) => Err(DbError::Failed(
-            "This category is already in the showcase.".to_owned(),
+            CATEGORY_ALREADY_PLACED.to_owned(),
         )),
         Err(error) => Err(classify(error)),
     }
@@ -1058,7 +1090,7 @@ fn insert_copied_node(
 /// Showcase, inside one transaction. Notes are referenced, never cloned; the
 /// shared pool label is reused. The copy appends after the target's last
 /// top-level Category and keeps every sibling order below it.
-pub fn duplicate_category_placement(
+fn duplicate_category_placement(
     conn: &mut Connection,
     node_id: i64,
     target_showcase_id: i64,
@@ -1074,18 +1106,10 @@ pub fn duplicate_category_placement(
     // conflict a second placement would.
     if target_showcase_id == source.showcase_id {
         return Err(DbError::Failed(
-            "This category is already in the showcase.".to_owned(),
+            CATEGORY_ALREADY_PLACED.to_owned(),
         ));
     }
     ensure_showcase(conn, target_showcase_id)?;
-    let Some(category_id) = source.category_id else {
-        return Err(DbError::Failed("Category not found.".to_owned()));
-    };
-    if showcase_places_category(conn, target_showcase_id, category_id)? {
-        return Err(DbError::Failed(
-            "This category is already in the showcase.".to_owned(),
-        ));
-    }
     let source_showcase_id = source.showcase_id;
     let rows = subtree_rows(conn, source)?;
     let specimens = fetch_specimens(conn, source_showcase_id)?;
@@ -1096,7 +1120,7 @@ pub fn duplicate_category_placement(
         let parent_node_id = match row.parent_node_id {
             None => None,
             Some(old_parent) => Some(*copied.get(&old_parent).ok_or_else(|| {
-                DbError::Failed("Only a top-level category can be duplicated.".to_owned())
+                DbError::Failed("The copied subtree lost a parent.".to_owned())
             })?),
         };
         // The root takes the target's next top-level slot; every descendant
@@ -1107,16 +1131,14 @@ pub fn duplicate_category_placement(
             row.position.unwrap_or(0)
         };
         let new_id = insert_copied_node(&tx, target_showcase_id, row, parent_node_id, position)?;
-        if row.node_type == "catalog_entry" {
-            if let Some(set) = specimens.get(&row.id) {
-                insert_specimens(&tx, new_id, &set.ordered, set.primary)?;
-            }
+        if let Some(set) = specimens.get(&row.id) {
+            insert_specimens(&tx, new_id, &set.ordered, set.primary)?;
         }
         copied.insert(row.id, new_id);
     }
     let root_id = *copied
         .get(&node_id)
-        .ok_or_else(|| DbError::Failed("Node not found.".to_owned()))?;
+        .ok_or_else(|| DbError::Failed("The copied subtree lost its root.".to_owned()))?;
     tx.commit().map_err(classify)?;
     get_node(conn, root_id)?.ok_or_else(|| DbError::Failed("Node not found.".to_owned()))
 }
@@ -2144,9 +2166,9 @@ async fn duplicate_node_handler(
         return not_found("Node not found.");
     }
     let target_exists =
-        match db::with_conn(&state.pool, move |conn| get_showcase(conn, target_showcase_id)).await
+        match db::with_conn(&state.pool, move |conn| showcase_exists(conn, target_showcase_id)).await
         {
-            Ok(showcase) => showcase.is_some(),
+            Ok(exists) => exists,
             Err(error) => return db_failure(error),
         };
     if !target_exists {

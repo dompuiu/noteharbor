@@ -32,7 +32,7 @@ function ShowcaseItemMenu({
   onEditDetails,
   onEditNote,
   onDuplicate,
-  duplicateDisabled = false,
+  canDuplicate = true,
   onMoveUp,
   onMoveDown,
   onMoveOut,
@@ -139,7 +139,7 @@ function ShowcaseItemMenu({
           label: "Duplicate to showcase…",
           icon: "copy",
           run: onDuplicate,
-          disabled: duplicateDisabled,
+          disabled: !canDuplicate,
         }
       : null,
     onMoveUp

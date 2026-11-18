@@ -67,12 +67,12 @@ function ShowcaseCategorySection({
         {meta ? <p className="showcase-category-meta">{meta}</p> : null}
         <span aria-hidden="true" className="showcase-category-rule" />
         <ShowcaseItemMenu
+          canDuplicate={canDuplicate}
           canMoveDown={canMoveDown}
           canMoveUp={canMoveUp}
-          duplicateDisabled={!canDuplicate}
           isCategory
           label={category.name}
-          onDuplicate={() => onDuplicate?.(category)}
+          onDuplicate={() => onDuplicate(category)}
           onMoveDown={() => onMoveDown?.(category)}
           onMoveUp={() => onMoveUp?.(category)}
           onRemove={() => onRemove(category)}

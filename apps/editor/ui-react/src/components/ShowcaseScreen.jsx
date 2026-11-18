@@ -522,13 +522,7 @@ function ShowcaseScreen() {
     setNodes((current) => [...current, node]);
     setActionError("");
 
-    try {
-      const pool = await getCategories();
-      setCategories(pool.categories ?? []);
-    } catch {
-      // The new placement is already on the canvas; suggestions can lag.
-    }
-
+    await refreshCategoryPool();
     refreshShowcases?.().catch(() => {});
   }
 
@@ -754,6 +748,16 @@ function ShowcaseScreen() {
     setAddTarget({ parent, afterId, mode });
   }
 
+  // The write is already committed; a lagging pool must not read as a failure.
+  async function refreshCategoryPool() {
+    try {
+      const pool = await getCategories();
+      setCategories(pool.categories ?? []);
+    } catch {
+      // The canvas keeps its current suggestions.
+    }
+  }
+
   // An unused pool label can be deleted straight from the suggestion list; the
   // dialog keeps itself open and the row disappears once the write lands.
   async function handleDeleteSuggestion(category) {
@@ -900,12 +904,7 @@ function ShowcaseScreen() {
 
     if (target.node_type === "category") {
       // The rename is already committed; a lagging pool must not read as one.
-      try {
-        const pool = await getCategories();
-        setCategories(pool.categories ?? []);
-      } catch {
-        // The canvas shows the new label; suggestions can lag.
-      }
+      await refreshCategoryPool();
       refreshShowcases?.().catch(() => {});
     }
   }
@@ -932,28 +931,21 @@ function ShowcaseScreen() {
         ? null
         : findNodeById(nodesRef.current, duplicateSourceId);
 
-    if (!source || !showcase) {
-      return;
+    if (!source) {
+      throw new Error("This category is no longer on the canvas.");
     }
 
     const target = showcases.find((entry) => entry.id === targetShowcaseId);
 
     // The copy lives in the target: the source canvas stays exactly as it is.
     const { node } = await duplicateNode(source.id, targetShowcaseId);
-    setDuplicateSourceId(null);
     setActionError("");
     toastHost?.current?.show(
       `Duplicated ${node?.name ?? source.name} to ${target?.name ?? "showcase"}`,
       "success",
     );
 
-    try {
-      const pool = await getCategories();
-      setCategories(pool.categories ?? []);
-    } catch {
-      // The copy is committed; a lagging pool must not read as a failure.
-    }
-
+    await refreshCategoryPool();
     refreshShowcases?.().catch(() => {});
   }
 

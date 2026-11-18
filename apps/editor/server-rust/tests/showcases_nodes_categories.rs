@@ -2079,6 +2079,21 @@ async fn duplicate_category_copies_the_whole_subtree_and_appends_it() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
+    let (status, body) = add_grouping(app.clone(), source_id, grouping_id, "Nested").await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let nested_id = body["node"]["id"].as_i64().unwrap();
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/showcases/{source_id}/nodes"),
+        Some(json!({
+            "type": "notes",
+            "parent_id": nested_id,
+            "note_ids": [first["id"]],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
     let (status, body) = add_catalog_entry(
         app.clone(),
         source_id,
@@ -2088,9 +2103,22 @@ async fn duplicate_category_copies_the_whole_subtree_and_appends_it() {
     .await;
     assert_eq!(status, StatusCode::CREATED, "{body:?}");
     let entry_id = body["node"]["id"].as_i64().unwrap();
+    // Put the later-created entry first: the copy must follow position, not id.
+    let (status, body) = call(
+        app.clone(),
+        "PUT",
+        "/api/nodes/order",
+        Some(json!({
+            "showcase_id": source_id,
+            "parent_node_id": grouping_id,
+            "node_ids": [entry_id, nested_id],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
 
     // A target that already has a category: the copy appends after it.
-    place_category(app.clone(), target_id, "Other").await;
+    let other = place_category(app.clone(), target_id, "Other").await;
     let before_notes = note_count(&dir);
 
     let (status, body) = call(
@@ -2146,6 +2174,14 @@ async fn duplicate_category_copies_the_whole_subtree_and_appends_it() {
         vec![second["id"].clone(), first["id"].clone()]
     );
     assert_eq!(entry_copy["primary_note_id"], second["id"]);
+    // The third level copies too, and its order is position, not id: the entry
+    // was created after the nested grouping.
+    let nested_copy = &grouping_copy["children"][1];
+    assert_eq!(nested_copy["node_type"], json!("grouping"));
+    assert_eq!(nested_copy["name"], json!("Nested"));
+    assert_ne!(nested_copy["id"], json!(nested_id));
+    assert_eq!(nested_copy["children"][0]["node_type"], json!("note"));
+    assert_eq!(nested_copy["children"][0]["note_id"], first["id"]);
 
     // The source is untouched and no Note was cloned.
     let (_, source_tree) = call(
@@ -2158,6 +2194,18 @@ async fn duplicate_category_copies_the_whole_subtree_and_appends_it() {
     assert_eq!(source_tree["nodes"].as_array().unwrap().len(), 1);
     assert_eq!(source_tree["nodes"][0]["id"], root["id"]);
     assert_eq!(note_count(&dir), before_notes);
+
+    // The showcase list exposes each Showcase's placed labels for the dialog.
+    let (_, list) = call(app.clone(), "GET", "/api/showcases", None).await;
+    let target_row = list["showcases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["id"] == json!(target_id))
+        .expect("target listed");
+    let category_ids = target_row["category_ids"].as_array().unwrap();
+    assert!(category_ids.contains(&root["category_id"]));
+    assert!(category_ids.contains(&other["category_id"]));
 
     // An empty Category copies as an empty placement at the target's end.
     let empty = place_category(app.clone(), source_id, "Quiet").await;

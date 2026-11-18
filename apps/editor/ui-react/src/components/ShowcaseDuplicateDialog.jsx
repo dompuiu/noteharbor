@@ -1,22 +1,11 @@
-import { useEffect, useId, useState } from "react";
-import { getShowcaseTree } from "../lib/api.js";
+import { useId, useState } from "react";
 import { ShowcaseDialog } from "./ShowcaseDialog.jsx";
 
-// One showcase places a pool label at most once, so a target that already
-// places this category is shown but cannot be chosen. The check reads each
-// target's tree when the dialog opens; a failed read leaves that row available
-// and the server's own re-check decides.
-function placesCategory(nodes, category) {
-  const categoryId = category?.category_id;
-  const name = String(category?.name ?? "").toLowerCase();
-
-  return (nodes ?? []).some(
-    (node) =>
-      node.node_type === "category" &&
-      (categoryId != null && node.category_id != null
-        ? node.category_id === categoryId
-        : String(node.name ?? "").toLowerCase() === name),
-  );
+// The list already carries each Showcase's placed pool labels, so a target that
+// cannot take this category is disabled without reading every other tree. A
+// stale list still meets the server's own one-placement-per-label rule.
+function placesCategory(showcase, categoryId) {
+  return categoryId != null && (showcase.category_ids ?? []).includes(categoryId);
 }
 
 function entryCount(showcase) {
@@ -35,45 +24,13 @@ function ShowcaseDuplicateDialog({
   onDuplicate,
 }) {
   const headingId = useId();
-  const [selectedId, setSelectedId] = useState(null);
-  const [placedIds, setPlacedIds] = useState(() => new Set());
-  const [checking, setChecking] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const targets = showcases;
-
-  useEffect(() => {
-    let active = true;
-    setChecking(true);
-
-    Promise.all(
-      targets.map(async (showcase) => {
-        try {
-          const tree = await getShowcaseTree(showcase.id);
-          return [showcase.id, placesCategory(tree.nodes, category)];
-        } catch {
-          return [showcase.id, false];
-        }
-      }),
-    ).then((entries) => {
-      if (!active) {
-        return;
-      }
-
-      const placed = new Set(
-        entries.filter(([, value]) => value).map(([id]) => id),
-      );
-      setPlacedIds(placed);
-      setChecking(false);
-      setSelectedId(
-        targets.find((showcase) => !placed.has(showcase.id))?.id ?? null,
-      );
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [category, targets]);
+  const [selectedId, setSelectedId] = useState(
+    () =>
+      showcases.find((showcase) => !placesCategory(showcase, category?.category_id))
+        ?.id ?? null,
+  );
 
   async function submit(event) {
     event.preventDefault();
@@ -87,6 +44,7 @@ function ShowcaseDuplicateDialog({
 
     try {
       await onDuplicate(selectedId);
+      onClose?.();
     } catch (submitError) {
       setError(submitError.message || "Could not duplicate the category.");
       setBusy(false);
@@ -104,45 +62,47 @@ function ShowcaseDuplicateDialog({
           {`Copy “${category?.name ?? "this category"}” into another showcase.`}
         </p>
 
-        {targets.length ? (
-          <div
-            aria-labelledby={headingId}
-            className="showcase-manager-list"
-            role="radiogroup"
-          >
-            {targets.map((showcase) => {
-              const placed = placedIds.has(showcase.id);
+        <div
+          aria-labelledby={headingId}
+          className="showcase-manager-list"
+          role="radiogroup"
+        >
+          {showcases.map((showcase) => {
+            const placed = placesCategory(showcase, category?.category_id);
+            const reasonId = `${headingId}-placed-${showcase.id}`;
 
-              return (
-                <div className="showcase-manager-row" key={showcase.id}>
-                  <label className="showcase-manager-choice">
-                    <input
-                      checked={selectedId === showcase.id}
-                      disabled={checking || placed || busy}
-                      name="duplicate-showcase"
-                      onChange={() => setSelectedId(showcase.id)}
-                      type="radio"
-                      value={showcase.id}
-                    />
-                    <span className="showcase-manager-note">
-                      {showcase.name}
-                    </span>
-                    <span className="showcase-manager-chip">
-                      {entryCount(showcase)}
-                    </span>
-                  </label>
-                  {placed ? (
-                    <span className="muted">Already in this showcase</span>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="muted">
-            There is no other showcase to duplicate into.
-          </p>
-        )}
+            return (
+              <div className="showcase-manager-row" key={showcase.id}>
+                <label className="showcase-manager-choice">
+                  <input
+                    aria-describedby={placed ? reasonId : undefined}
+                    autoFocus={selectedId === showcase.id}
+                    checked={selectedId === showcase.id}
+                    disabled={placed || busy}
+                    name="duplicate-showcase"
+                    onChange={() => {
+                      setError("");
+                      setSelectedId(showcase.id);
+                    }}
+                    type="radio"
+                    value={showcase.id}
+                  />
+                  <span className="showcase-manager-note">
+                    {showcase.name}
+                  </span>
+                  <span className="showcase-manager-chip">
+                    {entryCount(showcase)}
+                  </span>
+                </label>
+                {placed ? (
+                  <span className="muted" id={reasonId}>
+                    Already in this showcase
+                  </span>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
 
         {error ? (
           <p className="showcase-error" role="alert">
@@ -161,9 +121,7 @@ function ShowcaseDuplicateDialog({
           </button>
           <button
             className="button button-primary"
-            disabled={
-              busy || checking || selectedId == null || targets.length === 0
-            }
+            disabled={busy || selectedId == null}
             type="submit"
           >
             {busy ? "Duplicating…" : "Duplicate"}
