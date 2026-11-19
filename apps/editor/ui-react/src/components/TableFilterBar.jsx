@@ -651,6 +651,21 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
             document.body,
           )
         : null}
+      {chipUnits.length ? null : (
+        // The idle rail teaches the commit model in the slot the chips will
+        // take: Replace swaps that field's values, Add ORs them. The full
+        // rule lives in the `?` dialog; this line is the one-glance version.
+        <p className="table-filter-hint">
+          {commitMode === "add" ? (
+            <span>
+              Pick a field, type, press <kbd>⏎</kbd>. Same field ORs, different
+              fields AND.
+            </span>
+          ) : (
+            <span>New values replace that field; other fields stay</span>
+          )}
+        </p>
+      )}
       {chipUnits.length ? (
         <div className="table-filter-chips">
           {visibleChipUnits.map(renderChipUnit)}

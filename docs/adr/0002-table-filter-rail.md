@@ -37,6 +37,6 @@ verdict switches the template to `field actions` over `chips chips` and the view
 keep the field's line; a flex wrap would have pushed the controls down first. The one-line
 rule stands in either placement, with `+N` carrying the rest, so the rail is 49px with the
 chips inline and 81px when they take their own row. The
-1120px shape rule and its `order`-based pairing with the idle hint are gone with the hint
-itself. The page head is the collection's title and menu again, outside the card; the rail
+1120px shape rule and its `order`-based pairing with the idle hint are gone; the hint itself
+is back in the chips' cell, one line, truncating instead of growing the rail. The page head is the collection's title and menu again, outside the card; the rail
 carries the view's controls.

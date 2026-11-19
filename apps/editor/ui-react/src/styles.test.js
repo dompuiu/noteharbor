@@ -461,11 +461,18 @@ describe("table styles", () => {
     expect(styles).not.toMatch(/\.table-filter-chips-empty/);
   });
 
-  // The idle rule left the rail with the second row: the field's mode control
-  // names the latch and the `?` dialog documents the model. The connectors
-  // stay one role.
-  test("there is no idle hint and the connectors keep one voice", () => {
-    expect(styles).not.toMatch(/^\.table-filter-hint\s*\{/m);
+  // The idle rule teaches the commit model in the chips' own slot and keeps
+  // the rail to one line by truncating. The connectors stay one role.
+  test("the idle hint takes the chips' cell and the connectors keep one voice", () => {
+    const hint = styles.match(/^\.table-filter-hint\s*\{([^}]*)\}/m);
+    expect(hint).not.toBeNull();
+    expect(hint[1]).toMatch(/grid-area:\s*chips/);
+    expect(hint[1]).toMatch(/min-width:\s*0/);
+    expect(hint[1]).toMatch(/white-space:\s*nowrap/);
+    expect(hint[1]).toMatch(/overflow:\s*hidden/);
+    expect(styles).toMatch(
+      /^\.table-filter-hint > span\s*\{[^}]*text-overflow:\s*ellipsis/m,
+    );
     expect(styles).not.toMatch(/\.table-filter-help/);
     expect(styles).not.toMatch(/\.table-filter-menu--note/);
 

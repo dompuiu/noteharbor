@@ -7197,6 +7197,46 @@ th[aria-sort="descending"] .sort-chevron {
    in tableFilterChips.js keeps whole units that fit and gives the rest to the
    `+N` chip. The line is 24px, so a view with conditions is 32px taller than
    an idle one and that is the rail's only height change. */
+/* The idle rail states the commit model in the slot the chips will take. It
+   keeps the rail at one line: a sentence that cannot fit truncates, because
+   the field's mode control and the `?` dialog carry the same rule in full. */
+.table-filter-hint {
+  display: flex;
+  align-items: center;
+  grid-area: chips;
+  flex: 1 1 240px;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.table-filter-hint > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A key named inside the sentence wears the same keycap as the field's own
+   hint, so "press ⏎" reads as a key and not as a glyph that happens to be in
+   the sentence. */
+.table-filter-hint kbd {
+  min-width: 0;
+  height: auto;
+  /* Tight on the right so the sentence's full stop stays attached to the key
+     it follows, as it would to a word. */
+  margin: 0 1px 0 3px;
+  padding: 2px 5px;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  font-weight: 650;
+}
+
 /* The chips take the field's own line while they fit beside it, and drop to a
    row of their own only when they do not. The plan keeps them to one line
    either way; in the rail's grid their cell is the space the controls leave,
