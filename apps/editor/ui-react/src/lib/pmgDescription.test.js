@@ -48,6 +48,29 @@ describe("extractPmgDescriptionFields", () => {
     ).toEqual({ denomination: "1000 Lei", issueDate: "1998" });
   });
 
+  test("parses a denomination with an unlisted Pick number and a trailing qualifier", () => {
+    expect(
+      extractPmgDescriptionFields(
+        "Romania / Foreign Exchange Certificate, 0.10 Lei Pick Unlisted ND (ca. 1970s) - Navrom",
+      ),
+    ).toEqual({ denomination: "0.10 Lei", issueDate: "ca. 1970s" });
+  });
+
+  test("parses a centi denomination with an unlisted Pick number and a trailing qualifier", () => {
+    expect(
+      extractPmgDescriptionFields(
+        "Romania / Foreign Exchange Certificate, 10 Centi Pick Unlisted    ND (ca. 1970s) - Navrom",
+      ),
+    ).toEqual({ denomination: "10 Centi", issueDate: "ca. 1970s" });
+  });
+  test("keeps a spaced date range instead of treating it as a qualifier", () => {
+    expect(
+      extractPmgDescriptionFields(
+        "Romania, Banca Nationala, 500 Lei 1944 - 1945",
+      ),
+    ).toEqual({ denomination: "500 Lei", issueDate: "1944-1945" });
+  });
+
   test("parses denominations with a trailing printer qualifier", () => {
     expect(
       extractPmgDescriptionFields(

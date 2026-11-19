@@ -14,6 +14,10 @@ function extractPmgDescriptionFields(value) {
     // strip the qualifier so the trailing date/denomination anchors match.
     .replace(/\s+-\s*(Uncut\s+)?Sheets?\s+of\s+\d+.*$/i, "")
     .replace(/\s+(Uncut\s+)?Sheets?\s+of\s+\d+\s*$/i, "")
+    // Other descriptions end with a free-form qualifier ("- Navrom",
+    // "- Harare"): drop trailing dash segments when the date sits before
+    // them. A dash followed by digits stays, as it continues a date range.
+    .replace(/(\b(?:\d{3,4}|ND\s*\([^)]*\)))\s+-\s+(?!\d).+$/i, "$1")
     .trim();
 
   let issueDate = null;
@@ -36,6 +40,8 @@ function extractPmgDescriptionFields(value) {
   // currency names ("Lei", "Mark") are untouched.
   denominationSource = denominationSource
     .replace(/\s+[A-Za-z]+-?\d+[A-Za-z0-9-]*$/, "")
+    // "Pick Unlisted" is PMG's placeholder when no Pick number exists.
+    .replace(/\s+Pick(?:\s+Unlisted)?$/i, "")
     .trim();
 
   // Match the trailing amount on the full source. Splitting on commas
