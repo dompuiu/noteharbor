@@ -182,12 +182,29 @@ fn window_position_is_visible(
 
 fn write_window_state(app: &tauri::AppHandle, state: &window_state::WindowState) {
     let state_path = app_data_file(app, window_state::WINDOW_STATE_FILENAME);
-    if let Some(parent) = state_path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Ok(body) = serde_json::to_string(state) {
-        let _ = std::fs::write(&state_path, body);
-    }
+    let _ = window_state::write_state_file(&state_path, state);
+}
+
+/// Whether the window is maximized, read from the OS window style instead of
+/// tao's cached flag. Windows sets that flag while handling `WM_SIZE`, which
+/// DefWindowProc sends after the `WM_WINDOWPOSCHANGED` that raises `Moved`;
+/// a save between the two would see the maximized rect with the flag still
+/// false and record it as the normal bounds. `IsZoomed` reads `WS_MAXIMIZE`,
+/// which is already set when the window is resized. A window minimized from
+/// maximized also reports true here; the merge ignores minimized readings.
+#[cfg(windows)]
+fn window_is_maximized(window: &tauri::WebviewWindow) -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::IsZoomed;
+
+    window
+        .hwnd()
+        .map(|hwnd| unsafe { IsZoomed(hwnd) }.as_bool())
+        .unwrap_or_else(|_| window.is_maximized().unwrap_or(false))
+}
+
+#[cfg(not(windows))]
+fn window_is_maximized(window: &tauri::WebviewWindow) -> bool {
+    window.is_maximized().unwrap_or(false)
 }
 
 /// Reads the window's current geometry and flags. `outer_position` and
@@ -203,7 +220,7 @@ fn observe_window(window: &tauri::WebviewWindow) -> Option<window_state::WindowO
         y: f64::from(position.y) / scale,
         width: f64::from(size.width) / scale,
         height: f64::from(size.height) / scale,
-        is_maximized: window.is_maximized().unwrap_or(false),
+        is_maximized: window_is_maximized(window),
         is_full_screen: window.is_fullscreen().unwrap_or(false),
         is_minimized: window.is_minimized().unwrap_or(false),
     })
@@ -602,8 +619,9 @@ pub fn run() {
             // JSON write and correctness (state survives a crash) beats
             // write coalescing here. Attached after the restore steps so any
             // move/resize they queue is handled by the state normalized above;
-            // the merge also ignores maximized/fullscreen geometry, so a late
-            // event cannot clobber the normal bounds either.
+            // the merge also ignores maximized/fullscreen geometry, and the
+            // maximized flag comes from the OS (see `window_is_maximized`), so
+            // a Windows maximize transition cannot clobber the normal bounds.
             let persist_window = window.clone();
             let persisted = Mutex::new(persisted_state);
             window.on_window_event(move |event| {

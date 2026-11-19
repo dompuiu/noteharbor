@@ -24,6 +24,11 @@ tauri-plugin-opener = "2"
 tokio = { version = "1", features = ["full"] }
 url = "2"
 
+[target.'cfg(windows)'.dependencies]
+# `IsZoomed` reads the window style, which Windows sets before the resize that
+# raises tao's cached maximized flag; see `window_is_maximized` in main.rs.
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

@@ -2,7 +2,11 @@
 //!
 //! Same file (`window-state.json`), same defaults (1480×960, min 1200×720),
 //! same clamping, same on-any-display guard. The display list is injected so
-//! tests don't need a windowing system.
+//! tests don't need a windowing system; the state file itself is written
+//! through a scratch file and a rename so a process killed mid-write (an
+//! installer force-closing the app) cannot truncate it.
+
+use std::{fs, io, path::Path};
 
 use serde::{Deserialize, Serialize};
 
@@ -157,6 +161,24 @@ pub fn default_window_state() -> WindowState {
         is_maximized: false,
         is_full_screen: false,
     }
+}
+
+/// Writes `state` to `path` by way of a scratch file and a rename, so a process
+/// killed mid-write cannot leave a truncated file that parses as "no saved
+/// state".
+pub fn write_state_file(path: &Path, state: &WindowState) -> io::Result<()> {
+    let body = serde_json::to_vec(state)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "state path has no parent"))?;
+    fs::create_dir_all(parent)?;
+    let scratch = parent.join(format!(".{WINDOW_STATE_FILENAME}.{}.tmp", std::process::id()));
+    if let Err(error) = fs::write(&scratch, &body).and_then(|()| fs::rename(&scratch, path)) {
+        let _ = fs::remove_file(&scratch);
+        return Err(error);
+    }
+    Ok(())
 }
 
 /// Folds a live observation into the persisted state.
@@ -348,6 +370,9 @@ mod tests {
 
     #[test]
     fn maximized_observation_keeps_normal_geometry() {
+        // The Windows maximize transition hands over the maximized rect with
+        // `is_maximized` true (`IsZoomed` is already set when `Moved` fires);
+        // it must not become the normal bounds.
         let next = state_after_observation(
             &normal_state(),
             &WindowObservation {
@@ -396,5 +421,28 @@ mod tests {
         let next = state_after_observation(&normal_state(), &observation(10.0, 10.0, 100.0, 50.0));
         assert_eq!(next.width, MIN_WINDOW_WIDTH);
         assert_eq!(next.height, MIN_WINDOW_HEIGHT);
+    }
+
+    #[test]
+    fn write_state_file_replaces_the_previous_state_without_leftovers() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(WINDOW_STATE_FILENAME);
+
+        write_state_file(&path, &normal_state()).unwrap();
+        let maximized = WindowState {
+            is_maximized: true,
+            ..normal_state()
+        };
+        write_state_file(&path, &maximized).unwrap();
+
+        let raw = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(parse_window_state(&raw), Some(maximized));
+
+        let leftovers: Vec<String> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .filter(|name| name != WINDOW_STATE_FILENAME)
+            .collect();
+        assert!(leftovers.is_empty(), "leftover files: {leftovers:?}");
     }
 }
