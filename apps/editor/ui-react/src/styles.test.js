@@ -511,15 +511,23 @@ describe("table styles", () => {
   });
 
   // The filters describe only the table, so they are the card's own head: the
-  // collection identity leads, the field follows, the trailing cluster keeps
-  // the right edge, and the chips get their own line beneath when a view has
-  // conditions. Rail padding stays above the field's focus glow, which
-  // `.table-shell { overflow: hidden }` would otherwise crop.
+  // field leads, the chips take the space the controls leave, and the trailing
+  // cluster keeps the right edge of the field's line — the controls never drop
+  // below it, because the chips are the part allowed to move. Rail padding
+  // stays above the field's focus glow, which `.table-shell { overflow:
+  // hidden }` would otherwise crop.
   test("the filter bar rides in the table card's rail", () => {
     const rail = styles.match(/^\.table-rail\s*\{([^}]*)\}/m);
     expect(rail).not.toBeNull();
-    expect(rail[1]).toMatch(/display:\s*flex/);
-    expect(rail[1]).toMatch(/flex-wrap:\s*wrap/);
+    // A three-cell grid, so a line break can never move the controls: the
+    // chips' own row is a template switch, not a wrap.
+    expect(rail[1]).toMatch(/display:\s*grid/);
+    expect(rail[1]).toMatch(
+      /grid-template-areas:\s*"field chips actions"/,
+    );
+    expect(rail[1]).toMatch(
+      /grid-template-columns:\s*minmax\(280px,\s*400px\)\s+minmax\(0,\s*1fr\)\s+auto/,
+    );
     expect(rail[1]).toMatch(/align-items:\s*center/);
     expect(rail[1]).toMatch(/gap:\s*8px 12px/);
     expect(rail[1]).toMatch(/padding:\s*6px 10px/);
@@ -538,10 +546,9 @@ describe("table styles", () => {
     expect(actions).not.toBeNull();
     expect(actions[1]).toMatch(/display:\s*flex/);
     expect(actions[1]).toMatch(/gap:\s*8px/);
-    expect(actions[1]).toMatch(/flex:\s*0 0 auto/);
-    expect(actions[1]).toMatch(/margin-left:\s*auto/);
-    // Visual order is field, chips, controls; the DOM keeps the chips before
-    // the controls so Tab still walks field → chips → controls.
+    expect(actions[1]).toMatch(/grid-area:\s*actions/);
+    expect(actions[1]).toMatch(/justify-self:\s*end/);
+    // DOM order is field, chips, controls, so Tab still walks that way.
     expect(actions[1]).toMatch(/order:\s*3/);
 
     // The primary action leads the cluster, so it is reached before the view
@@ -563,24 +570,26 @@ describe("table styles", () => {
     expect(addNoteBadge[1]).toMatch(/top:\s*calc\(100% \+ 8px\)/);
     expect(addNoteBadge[1]).toMatch(/bottom:\s*auto/);
 
-    // The chips share the field's line while they fit and wrap to their own
-    // only when they do not: the block never shrinks under its planned width,
-    // and the plan keeps it to one line with the `+N` chip carrying the rest.
+    // The chips sit in the middle cell while they fit there, and the plan
+    // keeps them to one line with the `+N` chip carrying the rest.
     const chips = styles.match(/^\.table-filter-chips\s*\{([^}]*)\}/m);
     expect(chips).not.toBeNull();
     expect(chips[1]).toMatch(/flex-wrap:\s*nowrap/);
-    expect(chips[1]).toMatch(/flex:\s*0 0 auto/);
+    expect(chips[1]).toMatch(/grid-area:\s*chips/);
     expect(chips[1]).toMatch(/gap:\s*4px/);
     expect(chips[1]).toMatch(/margin:\s*0/);
-    expect(chips[1]).toMatch(/order:\s*2/);
     expect(chips[1]).not.toMatch(/min-height/);
 
-    // The planner's own-line verdict takes the whole width deliberately.
+    // The planner's own-line verdict rewrites the template: the controls keep
+    // the field's row and the chips get both columns beneath.
     const ownLine = styles.match(
-      /^\.table-filter-chips--own-line\s*\{([^}]*)\}/m,
+      /^\.table-rail--chips-own-line\s*\{([^}]*)\}/m,
     );
     expect(ownLine).not.toBeNull();
-    expect(ownLine[1]).toMatch(/flex-basis:\s*100%/);
+    expect(ownLine[1]).toMatch(/grid-template-areas:\s*"field actions"\s+"chips chips"/);
+    expect(ownLine[1]).toMatch(
+      /grid-template-columns:\s*minmax\(280px,\s*400px\)\s+minmax\(0,\s*1fr\)/,
+    );
 
     // The old toolbar band left with the filter bar that used it.
     expect(styles).not.toMatch(/\.toolbar-row--table-controls/);

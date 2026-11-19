@@ -1469,7 +1469,7 @@ describe("NotesTable filter rail", () => {
 
     const chips = document.querySelector(".table-filter-chips");
     expect(chips).not.toBeNull();
-    expect(chips).not.toHaveClass("table-filter-chips--own-line");
+    expect(rail()).not.toHaveClass("table-rail--chips-own-line");
     // Same line as the field, before the trailing cluster in the DOM.
     const field = rail().querySelector(".table-search--scoped");
     expect(field).not.toBeNull();
@@ -1492,7 +1492,7 @@ describe("NotesTable filter rail", () => {
 
     const chips = document.querySelector(".table-filter-chips");
     expect(chips).not.toBeNull();
-    expect(chips).not.toHaveClass("table-filter-chips--own-line");
+    expect(rail()).not.toHaveClass("table-rail--chips-own-line");
   });
 
   test("the chips take their own line only when none of the line is left", async () => {
@@ -1507,8 +1507,10 @@ describe("NotesTable filter rail", () => {
 
     const chips = document.querySelector(".table-filter-chips");
     expect(chips).not.toBeNull();
-    expect(chips).toHaveClass("table-filter-chips--own-line");
-    expect(within(chips).getByRole("button", { name: "Clear all" })).toBeInTheDocument();
+    expect(rail()).toHaveClass("table-rail--chips-own-line");
+    expect(
+      within(chips).getByRole("button", { name: "Clear all" }),
+    ).toBeInTheDocument();
   });
 });
 

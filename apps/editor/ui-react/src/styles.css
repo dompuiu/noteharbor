@@ -6819,9 +6819,16 @@ th[aria-sort="descending"] .sort-chevron {
    conditions. It wraps internally instead of competing for the head's width.
    The 6px padding also keeps the field's focus glow clear of the shell's
    `overflow: hidden`. */
+/* The rail is a three-cell line: the field, the chip line's space, and the
+   trailing controls. Grid, not flow, because the controls must keep the
+   field's line whatever the chips do — a flex line break would push the
+   controls down instead, and the chips are the part allowed to move.
+   `.table-rail--chips-own-line` is the planner's verdict that the chips
+   cannot share the field's line; they then take a whole row under it. */
 .table-rail {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-areas: "field chips actions";
+  grid-template-columns: minmax(280px, 400px) minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px 12px;
   padding: 6px 10px;
@@ -6830,15 +6837,23 @@ th[aria-sort="descending"] .sort-chevron {
   background: var(--surface-2);
 }
 
+.table-rail--chips-own-line {
+  grid-template-areas:
+    "field actions"
+    "chips chips";
+  grid-template-columns: minmax(280px, 400px) minmax(0, 1fr);
+}
+
 /* The rail's trailing cluster keeps Add note, Find, Reset view and Columns on
-   the right edge. It comes after the chip line in the visual order and after
-   the field in the DOM, so Tab still walks field → chips → controls. */
+   the right edge of the field's line. It comes after the chips in the DOM, so
+   Tab still walks field → chips → controls. */
 .table-rail-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  grid-area: actions;
+  justify-self: end;
   flex: 0 0 auto;
-  margin-left: auto;
   order: 3;
 }
 
@@ -6911,6 +6926,7 @@ th[aria-sort="descending"] .sort-chevron {
   display: flex;
   align-items: center;
   gap: 8px;
+  grid-area: field;
   height: 36px;
   padding: 0 8px 0 11px;
   border: 1px solid var(--border-control);
@@ -7181,26 +7197,19 @@ th[aria-sort="descending"] .sort-chevron {
    `+N` chip. The line is 24px, so a view with conditions is 32px taller than
    an idle one and that is the rail's only height change. */
 /* The chips take the field's own line while they fit beside it, and drop to a
-   line of their own only when they do not. `flex: 0 0 auto` is what makes the
-   choice CSS's: the block never shrinks under its planned width, so an
-   over-wide line wraps instead of running under the trailing controls. The
-   plan keeps it to one line either way. */
+   row of their own only when they do not. The plan keeps them to one line
+   either way; in the rail's grid their cell is the space the controls leave,
+   and the own-line state gives them both columns. */
 .table-filter-chips {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
   gap: 4px;
+  grid-area: chips;
   flex: 0 0 auto;
   max-width: 100%;
   margin: 0;
   order: 2;
-}
-
-/* The planner already decided the chips cannot share the field's line; the
-   full basis makes the wrap deliberate instead of leaving it to the content's
-   width, and hands the line the rail's whole width to fill. */
-.table-filter-chips--own-line {
-  flex-basis: 100%;
 }
 
 /* The overflow count is a chip-sized control with the tag family's dashed
@@ -7567,10 +7576,10 @@ th[aria-sort="descending"] .sort-chevron {
   color: var(--accent-strong);
 }
 
-/* The rail holds its one line at every working width. The trailing controls
-   shed words first, then fold into the one overflow menu; the status sheds its
-   count before its sort. The chip line is outside these queries: it is always
-   its own row when a view has conditions. */
+/* The rail's controls keep the field's row at every working width. The
+   trailing cluster sheds words first, then folds into the one overflow menu;
+   the chips are outside these queries, because the planner — not a width
+   breakpoint — decides whether they share the field's row. */
 @container table-shell (max-width: 1279px) {
   .table-find-toggle-label {
     display: none;

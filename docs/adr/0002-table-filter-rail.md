@@ -27,10 +27,13 @@ The collection table's filter field, chips, column picker, `Reset view` and `Add
 
 The horizontal-query bullet above no longer holds. The rail does not switch the chips to a
 row of their own at a container breakpoint: the chips start on the filter field's line and
-take a full-width line of their own only when that line cannot hold them, decided by the
+take a full-width row of their own only when that line cannot hold them, decided by the
 measured budget in `lib/tableFilterChips.js` (the field's 400px basis plus the measured
-trailing cluster and the two gaps). The one-line rule stands in either placement, with `+N`
-carrying the rest, so the rail is 49px with the chips inline and 81px when they wrap. The
+trailing cluster and the two gaps). The rail is a grid — `field chips actions` — so that
+verdict switches the template to `field actions` over `chips chips` and the view controls
+keep the field's line; a flex wrap would have pushed the controls down first. The one-line
+rule stands in either placement, with `+N` carrying the rest, so the rail is 49px with the
+chips inline and 81px when they take their own row. The
 1120px shape rule and its `order`-based pairing with the idle hint are gone with the hint
 itself. The page head is the collection's title and menu again, outside the card; the rail
 carries the view's controls.

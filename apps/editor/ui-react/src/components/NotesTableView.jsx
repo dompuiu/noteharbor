@@ -102,6 +102,7 @@ export function NotesTableView({
     <>
       <TableCard
         cardClassName={cardClassName}
+        chipsOwnLine={chipLayout.ownLine}
         focusAnchorRef={focusAnchorRef}
         onDragOver={onDragOver}
         railActions={
@@ -183,7 +184,6 @@ export function NotesTableView({
           railChrome ? (
             <TableFilterBar
               availableWidth={chipLayout.availableWidth}
-              chipsOwnLine={chipLayout.ownLine}
               conditions={filterBar.conditions}
               defaultField={filterBar.defaultField}
               hasRows={filterBar.hasRows ?? rows.length > 0}

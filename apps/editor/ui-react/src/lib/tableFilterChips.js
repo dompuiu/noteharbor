@@ -12,17 +12,21 @@ const valueProbeClass = "table-filter-chip-value";
 const labelProbeClass = "table-filter-facet-label";
 const moreProbeClass = "table-filter-more";
 
-// Horizontal cost beyond the text itself: the value button's 6px + 3px
-// padding, the 17px remove cross, the chip's 2px border and the 1px gap
-// between value and cross.
-const chipChromeWidth = 29;
-const labelGap = 5;
-const orGap = 6;
-const andGap = 16;
+// Horizontal cost beyond the text itself: the chip's 2px border, its 1px
+// right padding, the 1px gap before the cross, the value button's 9px of
+// padding and the 17px cross. The connectors' costs are their own paddings
+// plus the unit's 5px gap; a label keeps its 1px margin too.
+const chipChromeWidth = 30;
+const labelGap = 6;
+const orGap = 11;
+const andGap = 21;
 const unitGap = 4;
 // Clear all is a fixed word at the line's end; reserving it keeps the plan
 // from letting the last chip sit under the control.
 const clearAllReserve = 70;
+// Text is measured on a canvas, so the line it is planned into has to be a
+// few pixels generously wrong before it is exactly wrong.
+const lineSafety = 6;
 
 function measureWithProbe(className, text, fallbackCharWidth) {
   const cacheKey = `${className}:${text}`;
@@ -81,7 +85,8 @@ function measureLabel(text) {
 }
 
 function measureMore(text) {
-  return measureWithProbe(moreProbeClass, text, 7) + 12;
+  // The count badge's own 6px paddings and 2px border on each side.
+  return measureWithProbe(moreProbeClass, text, 7) + 14;
 }
 
 function chipWidth(unit) {
@@ -153,7 +158,7 @@ export function computeFilterChipPlan(units, availableWidth) {
   }
 
   const widths = units.map(unitWidth);
-  const budget = availableWidth - clearAllReserve;
+  const budget = availableWidth - clearAllReserve - lineSafety;
   const fullWidth = widths.reduce(
     (sum, width, index) => sum + width + (index > 0 ? unitGap : 0),
     0,

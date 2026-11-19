@@ -8,6 +8,7 @@ export function TableCard({
   children,
   focusAnchorRef,
   onDragOver,
+  chipsOwnLine = false,
   railActions = null,
   railActionsRef,
   railControls = null,
@@ -31,7 +32,9 @@ export function TableCard({
           tabIndex={-1}
         />
         {hasRail ? (
-          <div className="table-rail">
+          <div
+            className={`table-rail${chipsOwnLine ? " table-rail--chips-own-line" : ""}`}
+          >
             {railControls}
             {railActions ? (
               <div className="table-rail-actions" ref={railActionsRef}>

@@ -38,7 +38,6 @@ import {
 export const TableFilterBar = forwardRef(function TableFilterBar(
   {
     availableWidth = null,
-    chipsOwnLine = false,
     conditions,
     defaultField = defaultFilterField,
     hasRows,
@@ -663,9 +662,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
           )
         : null}
       {conditionGroups.length ? (
-        <div
-          className={`table-filter-chips${chipsOwnLine ? " table-filter-chips--own-line" : ""}`}
-        >
+        <div className="table-filter-chips">
           {visibleChipUnits.map(renderChipUnit)}
           {hiddenChipUnits.length ? (
             <AnchoredPopover
