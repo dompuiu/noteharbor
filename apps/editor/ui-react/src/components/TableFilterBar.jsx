@@ -2,6 +2,7 @@ import {
   Fragment,
   forwardRef,
   useEffect,
+  useId,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -65,6 +66,10 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
   const searchInputRef = useRef(null);
   const fieldRef = useRef(null);
   const tagSuggestionListRef = useRef(null);
+  // Browsers (and their autofill heuristics) want a field to carry an id or a
+  // name; two filter bars can be mounted at once — the table's and the
+  // showcase picker's — so the id has to be per instance.
+  const filterInputId = useId();
 
   const tagMatches = useMemo(
     () => rankTagSuggestions(tagNames, new Set(), filterDraft),
@@ -434,6 +439,8 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
               aria-label={`Edit ${filterFieldLabel(field)} filter`}
               autoFocus
               className="table-filter-chip-input"
+              id={`${filterInputId}-value`}
+              name="filter value"
               onBlur={commitConditionEdit}
               onChange={(event) => setConditionDraft(event.target.value)}
               onFocus={(event) => event.currentTarget.select()}
@@ -519,6 +526,8 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
           aria-label={`Filter ${filterFieldLabel(filterField)}`}
           autoComplete="off"
           className="table-search-input"
+          id={filterInputId}
+          name="filter"
           onBlur={
             filterField === tagsColumnKey
               ? () => closeTagSuggestions()

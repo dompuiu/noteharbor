@@ -159,6 +159,16 @@ describe("NotesTable filter chips", () => {
     );
   });
 
+  test("the filter field carries an id and a name the browser can see", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+
+    const input = screen.getByRole("searchbox", { name: "Filter Catalog" });
+    expect(input.id).not.toBe("");
+    expect(input).toHaveAttribute("name", "filter");
+  });
+
   test("the field menu marks the current field and focuses the input after a pick", async () => {
     renderTable();
     const user = userEvent.setup();
