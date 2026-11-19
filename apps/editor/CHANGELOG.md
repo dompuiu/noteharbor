@@ -4,6 +4,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.21.2] - 2026-11-19
+
 ### Fixed
 
 - Desktop: un-maximizing keeps the window's normal size and position. Windows reports a maximize before it flips the maximized flag, so the shell recorded the maximized rect as the normal bounds; the maximized state now comes from the OS window style. The state file is also replaced atomically, so an installer closing the app mid-write cannot leave a truncated `window-state.json`.
