@@ -29,7 +29,6 @@ import {
   defaultFilterField,
   filterFieldLabel,
   filterPlaceholderFor,
-  groupConditions,
   maxRangeValues,
   parseFilterInput,
 } from "../lib/tableFilters.js";
@@ -41,6 +40,7 @@ import {
 export const TableFilterBar = forwardRef(function TableFilterBar(
   {
     availableWidth = null,
+    chipUnits: chipUnitsProp = null,
     conditions,
     defaultField = defaultFilterField,
     hasRows,
@@ -77,14 +77,14 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
     filterField === tagsColumnKey &&
     tagSuggestionOpen &&
     Boolean(tagSuggestionPosition);
-  const conditionGroups = useMemo(
-    () => groupConditions(conditions),
-    [conditions],
-  );
   // The chips are one line. Each unit is one connector (or field label) plus
-  // its chip, in table order, built by the same helper the rail's budget uses;
-  // the plan decides how many whole units fit before the `+N` count takes over.
-  const chipUnits = useMemo(() => filterChipUnits(conditions), [conditions]);
+  // its chip, in table order. The Table screen hands the list down so the row
+  // it plans and the row it paints are the same list; a caller without a rail
+  // (the showcase picker) builds its own.
+  const chipUnits = useMemo(
+    () => chipUnitsProp ?? filterChipUnits(conditions),
+    [chipUnitsProp, conditions],
+  );
   const chipPlan = useMemo(
     () => computeFilterChipPlan(chipUnits, availableWidth),
     [availableWidth, chipUnits],
@@ -651,7 +651,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
             document.body,
           )
         : null}
-      {conditionGroups.length ? (
+      {chipUnits.length ? (
         <div className="table-filter-chips">
           {visibleChipUnits.map(renderChipUnit)}
           {hiddenChipUnits.length ? (

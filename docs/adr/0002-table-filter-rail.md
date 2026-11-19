@@ -30,7 +30,7 @@ row of their own at a container breakpoint: the chips start on the filter field'
 stay there for as long as every condition fits whole. The first condition that would need a
 `+N` beside the field sends them to a full-width row of their own, where the count is only
 used if that row cannot hold them either — the count belongs where there is room to name
-what it hides. The verdict comes from the measured budget in `lib/tableFilterChips.js` (the
+what it hides. A lone condition never needs a count, so it stays inline and truncates. The verdict comes from the measured budget in `lib/tableFilterChips.js` (the
 field's 400px basis plus the measured trailing cluster and the two gaps) and the same
 `filterChipUnits` list the rail renders. The rail is a grid — `field chips actions` — so that
 verdict switches the template to `field actions` over `chips chips` and the view controls

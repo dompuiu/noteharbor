@@ -112,11 +112,12 @@ function unitWidth(unit) {
 // The chips share the filter field's line only while every condition fits
 // beside it. As soon as the plan would need a `+N` count there, the chips take
 // a row of their own, where the count is only used if even the full row cannot
-// hold them. These are the rail's fixed costs: its 10px paddings, the 12px gap
+// hold them. A lone condition never needs a count, so it stays on the line and
+// truncates. These are the rail's fixed costs: its 10px paddings, the 12px gap
 // between the field, the chips and the trailing controls, and the field's
-// width. The field never grows past its 400px basis, so reserving the basis is
-// the safe side: a narrower field only leaves the planned line more room than
-// it asked for.
+// width. The rail's grid gives the field its full 400px whenever the line has
+// that much, whatever the chips would like, so reserving the basis is exact
+// rather than cautious.
 const railChipPadding = 20;
 const railChipGap = 12;
 const filterFieldWidth = 400;
@@ -148,7 +149,7 @@ export function filterChipUnits(conditions) {
 export function computeFilterChipBudget({
   actionsWidth = null,
   railWidth = null,
-  units = [],
+  units,
 }) {
   if (!Number.isFinite(railWidth) || railWidth <= 0) {
     return { availableWidth: null, ownLine: false };

@@ -195,6 +195,7 @@ export function NotesTableView({
           railChrome ? (
             <TableFilterBar
               availableWidth={chipLayout.availableWidth}
+              chipUnits={chipUnits}
               conditions={filterBar.conditions}
               defaultField={filterBar.defaultField}
               hasRows={filterBar.hasRows ?? rows.length > 0}

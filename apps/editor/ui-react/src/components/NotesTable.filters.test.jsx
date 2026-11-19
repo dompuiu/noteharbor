@@ -1479,10 +1479,10 @@ describe("NotesTable filter rail", () => {
     expect(chips.nextElementSibling).toHaveClass("table-rail-actions");
   });
 
-  test("the chips still share the field's line in a sliver of room", async () => {
-    // 900 − 20 − 400 of field − 380 of controls − the gaps leaves 76px. The
-    // plan keeps one truncated chip there rather than hiding it behind `+1`,
-    // so the chips stay where they are.
+  test("a lone chip stays on the line even when it truncates", async () => {
+    // 900 − 20 − 400 of field − 380 of controls − the gaps leaves 76px. A
+    // single condition never needs a count, so it has nothing to gain from
+    // moving down: it stays and truncates.
     mockRailWidths(900, 380);
     renderTable();
     const user = userEvent.setup();
@@ -1495,11 +1495,11 @@ describe("NotesTable filter rail", () => {
     expect(rail()).not.toHaveClass("table-rail--chips-own-line");
   });
 
-  test("one chip that would need a +N sends the whole row down", async () => {
-    // The same 76px gap holds the first chip truncated, so it stays. The
-    // second chip would need a `+1` beside the field — and the count belongs
-    // to a row with room to name what it hides, so the chips move down and the
-    // count travels with them.
+  test("a second chip that would need a +N sends the whole row down", async () => {
+    // The 76px gap is enough for one chip, not two: the inline line would need
+    // a `+1`, and a count belongs to a row with room to name what it hides.
+    // The chips move down; the long row holds both, so no count is needed
+    // there either.
     mockRailWidths(900, 380);
     renderTable();
     const user = userEvent.setup();
@@ -1523,9 +1523,9 @@ describe("NotesTable filter rail", () => {
     ).toBeNull();
   });
 
-  test("the chips take their own line only when none of the line is left", async () => {
-    // 640 − 20 − 400 of field − 260 of controls − the gaps leaves nothing: the
-    // block wraps and the plan gets the full 620px.
+  test("the row drops when the field's line has no room at all", async () => {
+    // 640 − 20 − 400 of field − 260 of controls − the gaps leaves nothing, so
+    // the chips take the full 620px row whatever they hold.
     mockRailWidths(640, 260);
     renderTable();
     const user = userEvent.setup();
@@ -1539,6 +1539,32 @@ describe("NotesTable filter rail", () => {
     expect(
       within(chips).getByRole("button", { name: "Clear all" }),
     ).toBeInTheDocument();
+  });
+
+  test("the count appears on the own row only when that row is full too", async () => {
+    // Same zero-room rail, 620px of row. Five short filters need more than it
+    // has, so the row keeps what fits and names the rest in `+N`.
+    mockRailWidths(640, 260);
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Catalog", "Fr. 2300");
+    await commitChip(user, "Serial", "SER-1");
+    await commitChip(user, "Company", "PMG");
+    await commitChip(user, "Denomination", "100");
+    await commitChip(user, "Grade", "66");
+
+    const chips = document.querySelector(".table-filter-chips");
+    expect(chips).not.toBeNull();
+    expect(rail()).toHaveClass("table-rail--chips-own-line");
+    expect(
+      within(chips).getByRole("button", { name: /more filters?$/ }),
+    ).toBeInTheDocument();
+    // The line keeps whole units only; the hidden ones live in the count.
+    expect(
+      within(chips).queryByRole("button", { name: "Edit Grade filter 66" }),
+    ).toBeNull();
   });
 });
 
