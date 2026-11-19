@@ -1,8 +1,12 @@
 /* Hallmark · checked: 2026-11-18 · scope: app · genre: modern-minimal (inferred)
  * built: the project (DESIGN.md locked) · redesign: restructure · v2.0.0
- * floor: table region clean except 67 · the 44 remaining 67 findings are the
-   locked system's uppercase tracked labels (DESIGN.md § Table, § Typography,
-   § Sidebar), and floor 67 cannot be waived without breaking that system
+ * floor: table region clean except 67 · eight instances stay in this file's
+   table span, recorded here: .eyebrow, .collection-eyebrow,
+   td.table-col-serial, thead th, .table-shell thead th,
+   .table-filter-menu-heading and .table-columns-menu-heading take
+   DESIGN.md's Label or Code voice; .table-filter-or/and keep the filter
+   connectors' own tracking. Floor 67 cannot be waived without breaking that
+   system
  * open: 53 non-67 findings outside the table (sidebar width transitions,
    showcase/import literals, slideshow plates) — take A's material sweep
  */
@@ -262,9 +266,12 @@ input[type="radio"] {
 /* The cell centres its line box, but the input sits on the font baseline,
    which lifts the box ~2.5px above the halo's centre. Collapsing the strut
    makes the line box exactly the checkbox, so box and halo share a centre.
-   Scoped with `:has` because the thumbnail column is also pinned and centred. */
+   Scoped with `:has` because the thumbnail column is also pinned and centred.
+   The cell is also the hit target: 44px wide (its own column) by the row's
+   45px, while the box and its 21px halo keep their drawn size. */
 .table-sticky-cell.align-center:has(> input[type="checkbox"]) {
   line-height: 0;
+  cursor: pointer;
 }
 
 .table-sticky-cell.align-center > input[type="checkbox"]:focus-visible {
@@ -4235,6 +4242,14 @@ input[type="radio"] {
   .named-record-row {
     transition: none;
   }
+
+  /* The table's own motion is the sort chevron, the tag chevron and the row
+     menu's hover chrome; each lands instantly under the preference. */
+  .sort-chevron,
+  .tag-suggestions-toggle svg,
+  .row-menu-btn {
+    transition: none;
+  }
 }
 
 .site-header {
@@ -4950,8 +4965,10 @@ input[type="radio"] {
   font-size: 0.84rem;
 }
 
-.table-find-bar:focus-within {
+.table-find-bar:has(.table-find-input:focus-visible) {
   border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .table-find-input::-webkit-search-cancel-button {
@@ -5224,10 +5241,8 @@ input[type="radio"] {
   display: block;
   margin-bottom: 6px;
   color: var(--text-faint);
-  font-size: 0.7rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 /* The Ownership panel stages one of two states for the whole selection. The
@@ -5256,6 +5271,15 @@ input[type="radio"] {
 .bulk-ownership-option:has(input:checked) {
   border-color: var(--accent);
   background: var(--accent-soft);
+}
+
+.bulk-ownership-option:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.bulk-ownership-option input:focus-visible {
+  outline: none;
 }
 
 .bulk-ownership-option input {
@@ -6937,10 +6961,11 @@ th[aria-sort="descending"] .sort-chevron {
   order: 1;
 }
 
-.table-search--scoped:focus-within {
+.table-search--scoped:has(.table-search-input:focus-visible) {
   border-color: var(--accent);
-  outline: none;
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 .table-search--scoped .table-search-icon {
@@ -6972,7 +6997,7 @@ th[aria-sort="descending"] .sort-chevron {
 
 .table-filter-field:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
 .table-filter-field-label {
@@ -7075,11 +7100,10 @@ th[aria-sort="descending"] .sort-chevron {
   color: var(--text-muted);
   /* A keycap is a key, not code: the editor has no mono family, so the hint
      keeps the system sans and borrows its cap look from the frame and the
-     tracking instead of from a second typeface. */
+     border, not from tracked capitals. */
   font-family: inherit;
   font-size: 0.6875rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
   line-height: 1;
 }
 
@@ -7547,6 +7571,15 @@ th[aria-sort="descending"] .sort-chevron {
   color: var(--accent-strong);
 }
 
+.table-columns-option:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.table-columns-option input:focus-visible {
+  outline: none;
+}
+
 .table-columns-option input {
   accent-color: var(--accent-strong);
   cursor: inherit;
@@ -7783,12 +7816,11 @@ td.drag-cell {
    state: a control that changes size or corner as the pointer crosses a row
    makes the rows look like they shift under the cursor.
 
-   The grip itself carries the interaction. It rests faint — a table can show a
-   hundred of these down its left edge, so the glyph is a mark, not a badge —
-   strengthens one tone with its row, and takes the accent only under the
-   pointer.
-   The rail behind it never changes in a row state, so hovering a row cannot
-   read as a handle already grabbed. */
+   The grip itself carries the interaction. It rests in the readable muted
+   tone — a hundred of these run down the left edge, and the faint tone measured
+   4.33:1 on the rail's own ground — strengthens to ink with its row, and takes
+   the accent only under the pointer. The rail behind it never changes in a row
+   state, so hovering a row cannot read as a handle already grabbed. */
 .drag-handle {
   display: inline-flex;
   align-items: center;
@@ -7798,7 +7830,7 @@ td.drag-cell {
   border: 0;
   border-radius: 0;
   background-color: var(--surface-3);
-  color: var(--text-faint);
+  color: var(--text-muted);
   cursor: grab;
   padding: 0;
   /* A drag started with a slow click can otherwise flash a text selection
@@ -7819,15 +7851,11 @@ td.drag-cell {
     .named-record-row--focused
   )
   .drag-handle-dots {
-  color: var(--text-muted);
+  color: var(--text);
 }
 
 .drag-handle:hover {
   background-color: var(--surface-4);
-}
-
-.drag-handle:hover .drag-handle-dots {
-  color: var(--text);
 }
 
 /* The one state that marks the grab itself: the pointer has hold of the
@@ -7954,7 +7982,13 @@ td.drag-cell {
 .row-actions-menu-item:focus-visible {
   background: var(--accent-soft);
   color: var(--accent-strong);
-  outline: none;
+}
+
+/* Keyboard focus keeps the app's 2px ring at its 2px offset; the menu's 6px
+   padding leaves it room inside the panel. */
+.row-actions-menu-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .row-actions-menu-item--danger {

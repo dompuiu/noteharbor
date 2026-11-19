@@ -147,11 +147,18 @@ export const NoteRow = memo(function NoteRow({
   }
 
   function renderSelectionCell(column) {
+    // The 44px cell toggles its row's selection; a pointer on the box itself
+    // lands on the input's own change. See the stylesheet for the geometry.
+    function handleClick(event) {
+      event.stopPropagation();
+
+      if (event.target === event.currentTarget) {
+        handlers.onToggleSelection(note.id);
+      }
+    }
+
     return (
-      <td
-        onClick={(event) => event.stopPropagation()}
-        {...cellAttributes(column)}
-      >
+      <td onClick={handleClick} {...cellAttributes(column)}>
         <input
           aria-label={`Select ${noteLabel}`}
           checked={isSelected}

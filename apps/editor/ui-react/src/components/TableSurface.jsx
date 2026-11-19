@@ -52,6 +52,16 @@ export function TableSurface({
   totalColumnCount,
   virtualRows,
 }) {
+  // The selection header cell is the select-all hit target; a click on the box
+  // itself lands on the input's own change.
+  function handleSelectAllClick(event) {
+    event.stopPropagation();
+
+    if (event.target === event.currentTarget) {
+      toggleAllVisible();
+    }
+  }
+
   return (
     <div className="table-viewport">
       {findBar}
@@ -97,6 +107,7 @@ export function TableSurface({
                     return (
                       <th
                         key={column.key}
+                        onClick={handleSelectAllClick}
                         scope="col"
                         {...tableCellAttributes(column)}
                       >

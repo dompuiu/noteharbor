@@ -717,12 +717,12 @@ export function AllNotesScreen() {
             <div className="table-load-error-body">
               <div className="table-load-error-copy" role="alert">
                 <h2 className="table-load-error-title">
-                  Couldn't load notes.
+                  Couldn’t load notes.
                 </h2>
                 <p className="table-load-error-detail">{displayError}</p>
               </div>
               <p className="table-load-error-note">
-                Your notes stay on this device and aren't affected.
+                Your notes stay on this device and aren’t affected.
               </p>
               <button
                 className="button button-primary"

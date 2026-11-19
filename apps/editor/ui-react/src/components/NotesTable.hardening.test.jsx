@@ -121,14 +121,14 @@ describe("NotesTable hardening: a failed load", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: "Couldn't load this collection's notes.",
+        name: "Couldn’t load this collection’s notes.",
       }),
     ).toBeInTheDocument();
     // The raw message stays visible: it is the only diagnostic a local user
     // has when the server is the thing that is down.
     expect(screen.getByText("Failed to fetch")).toBeInTheDocument();
     expect(
-      screen.getByText("Your notes stay on this device and aren't affected."),
+      screen.getByText("Your notes stay on this device and aren’t affected."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
   });
@@ -139,7 +139,7 @@ describe("NotesTable hardening: a failed load", () => {
     const { container } = renderTable();
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Couldn't load this collection's notes.");
+    expect(alert).toHaveTextContent("Couldn’t load this collection’s notes.");
     expect(alert).not.toContainElement(
       screen.getByRole("button", { name: "Try again" }),
     );
@@ -166,7 +166,7 @@ describe("NotesTable hardening: a failed load", () => {
     expect(getNotes).toHaveBeenCalledTimes(2);
     expect(
       screen.queryByRole("heading", {
-        name: "Couldn't load this collection's notes.",
+        name: "Couldn’t load this collection’s notes.",
       }),
     ).not.toBeInTheDocument();
   });
@@ -209,7 +209,7 @@ describe("NotesTable hardening: a failed load", () => {
       expect(reported).toEqual([reason]);
       expect(
         screen.queryByRole("heading", {
-          name: "Couldn't load this collection's notes.",
+          name: "Couldn’t load this collection’s notes.",
         }),
       ).not.toBeInTheDocument();
     },
@@ -224,7 +224,7 @@ describe("NotesTable hardening: a failed load", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: "Couldn't load this collection's notes.",
+        name: "Couldn’t load this collection’s notes.",
       }),
     ).toBeInTheDocument();
     expect(screen.getByText("The query failed.")).toBeInTheDocument();
@@ -240,7 +240,7 @@ describe("NotesTable hardening: a failed load", () => {
     expect(await screen.findByText("shell:server")).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", {
-        name: "Couldn't load this collection's notes.",
+        name: "Couldn’t load this collection’s notes.",
       }),
     ).not.toBeInTheDocument();
   });

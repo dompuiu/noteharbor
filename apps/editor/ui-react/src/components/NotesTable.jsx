@@ -4362,7 +4362,7 @@ function NotesTable({
           </div>
         ) : null}
         <p className="table-empty-hint">
-          A new note lands at the end of the collection's order.
+          A new note lands at the end of the collection’s order.
         </p>
       </div>
     )
@@ -4572,12 +4572,12 @@ function NotesTable({
     <div className="table-load-error-body">
       <div className="table-load-error-copy" role="alert">
         <h2 className="table-load-error-title">
-          Couldn't load this collection's notes.
+          Couldn’t load this collection’s notes.
         </h2>
         <p className="table-load-error-detail">{loadError}</p>
       </div>
       <p className="table-load-error-note">
-        Your notes stay on this device and aren't affected.
+        Your notes stay on this device and aren’t affected.
       </p>
       <button
         className="button button-primary"

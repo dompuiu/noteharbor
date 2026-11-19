@@ -270,4 +270,37 @@ describe("NotesTable semantics", () => {
     });
     expect(rowFor("CCCC")).toHaveClass("table-row-link--active");
   });
+
+  test("a click on the selection cell toggles the checkbox", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await screen.findByText("AAAA");
+
+    const checkbox = within(rowFor("AAAA")).getByRole("checkbox");
+    const cell = checkbox.closest("td");
+
+    await user.click(cell);
+
+    expect(checkbox).toBeChecked();
+    // The cell's own click still stops at the selection: it must not open
+    // the note the way the rest of the row does.
+    expect(currentHash()).not.toContain("slideshow");
+  });
+
+  test("a click on the selection header cell selects every visible row", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await screen.findByText("AAAA");
+
+    const selectAll = screen.getByRole("checkbox", {
+      name: "Select all visible rows",
+    });
+    const cell = selectAll.closest("th");
+
+    await user.click(cell);
+
+    for (const denomination of ["AAAA", "BBBB", "CCCC"]) {
+      expect(within(rowFor(denomination)).getByRole("checkbox")).toBeChecked();
+    }
+  });
 });

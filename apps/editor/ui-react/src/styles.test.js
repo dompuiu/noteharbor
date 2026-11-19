@@ -191,6 +191,8 @@ describe("table styles", () => {
     );
     expect(cell).not.toBeNull();
     expect(cell[1]).toMatch(/line-height:\s*0/);
+    // The whole 44px cell is the pointer target, so it shows the hand.
+    expect(cell[1]).toMatch(/cursor:\s*pointer/);
 
     const reset = styles.match(
       /\.table-sticky-cell\.align-center > input\[type="checkbox"\]:focus-visible\s*\{([^}]*)\}/,
@@ -1639,6 +1641,120 @@ describe("table styles", () => {
     expect(styles).toMatch(
       /th\[aria-sort="descending"\]\s+\.sort-chevron\s*\{[^}]*transform:\s*rotate\(180deg\)/,
     );
+  });
+});
+
+// The polish pass rings every table control on the same 2px accent at a 2px
+// offset, so keyboard focus reads the same wherever it lands. jsdom cannot
+// resolve `:has()` or `:focus-visible`, so the contract is pinned over the
+// source.
+describe("table control focus and motion", () => {
+  function expectRing(block, label) {
+    expect(block, label).toMatch(/outline:\s*2px solid var\(--accent\)/);
+    expect(block, label).toMatch(/outline-offset:\s*2px/);
+  }
+
+  test("the find bar rings itself while its field has focus", () => {
+    const ring = styles.match(
+      /^\.table-find-bar:has\(\.table-find-input:focus-visible\)\s*\{([^}]*)\}/m,
+    );
+    expect(ring).not.toBeNull();
+    expect(ring[1]).toMatch(/border-color:\s*var\(--accent\)/);
+    expectRing(ring[1]);
+    // The old rule lit the bar for any child control, ring or not.
+    expect(styles).not.toMatch(/\.table-find-bar:focus-within/);
+  });
+
+  test("the scoped field takes the true ring instead of a soft glow", () => {
+    const ring = styles.match(
+      /^\.table-search--scoped:has\(\.table-search-input:focus-visible\)\s*\{([^}]*)\}/m,
+    );
+    expect(ring).not.toBeNull();
+    expect(ring[1]).toMatch(/border-color:\s*var\(--accent\)/);
+    expectRing(ring[1]);
+    expect(ring[1]).toMatch(/box-shadow:\s*none/);
+    expect(styles).not.toMatch(/\.table-search--scoped:focus-within/);
+  });
+
+  test("the filter field and the menu rows share the 2px offset", () => {
+    const field = styles.match(
+      /^\.table-filter-field:focus-visible\s*\{([^}]*)\}/m,
+    );
+    expect(field).not.toBeNull();
+    expect(field[1]).toMatch(/outline-offset:\s*2px/);
+
+    const item = styles.match(
+      /^\.row-actions-menu-item:focus-visible\s*\{([^}]*outline[^}]*)\}/m,
+    );
+    expect(item).not.toBeNull();
+    expectRing(item[1]);
+    expect(item[1]).not.toMatch(/outline:\s*none/);
+  });
+
+  test("the checkbox rows ring the whole row, not the 15px control", () => {
+    for (const name of ["table-columns-option", "bulk-ownership-option"]) {
+      const row = styles.match(
+        new RegExp(
+          `^\\.${name}:has\\(input:focus-visible\\)\\s*\\{([^}]*)\\}`,
+          "m",
+        ),
+      );
+      expect(row, name).not.toBeNull();
+      expectRing(row[1], name);
+
+      const input = styles.match(
+        new RegExp(`^\\.${name} input:focus-visible\\s*\\{([^}]*)\\}`, "m"),
+      );
+      expect(input, name).not.toBeNull();
+      expect(input[1], name).toMatch(/outline:\s*none/);
+    }
+  });
+
+  // The grip rests in a tone that clears 4.5:1 on the rail's own ground; its
+  // row state still strengthens to ink, and hovering the row is that state.
+  test("the drag handle rests readable and strengthens with its row", () => {
+    const base = styles.match(/^\.drag-handle\s*\{([^}]*)\}/m);
+    expect(base).not.toBeNull();
+    expect(base[1]).toMatch(/color:\s*var\(--text-muted\)/);
+
+    const rowState = styles.match(
+      /:is\([\s\S]*?\.named-record-row--focused\s*\)\s*\.drag-handle-dots\s*\{([^}]*)\}/,
+    );
+    expect(rowState).not.toBeNull();
+    expect(rowState[1]).toMatch(/color:\s*var\(--text\)/);
+    expect(styles).not.toMatch(/\.drag-handle:hover \.drag-handle-dots/);
+  });
+
+  test("the sort, tag and row-menu motion stops under reduced motion", () => {
+    // The media block that owns the table's grip is the one checked: the exact
+    // selector list and its `transition: none` cannot be satisfied by a
+    // mention in a comment or by another screen's block.
+    expect(styles).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.sort-chevron,\s*\n\s*\.tag-suggestions-toggle svg,\s*\n\s*\.row-menu-btn \{\s*\n\s*transition: none;\s*\n\s*\}/,
+    );
+  });
+});
+
+// Gate 67 flags uppercase and tracked micro-type. The table span keeps only
+// the eight recorded labels; these two were the last unsanctioned pair, so no
+// rule here may reintroduce them.
+describe("table micro-type", () => {
+  test("the / keycap borrows its look from the frame, not from tracking", () => {
+    const hint = styles.match(
+      /^\.table-search--scoped \.table-search-hint\s*\{([^}]*)\}/m,
+    );
+    expect(hint).not.toBeNull();
+    expect(hint[1]).not.toMatch(/letter-spacing/);
+    expect(hint[1]).not.toMatch(/text-transform/);
+  });
+
+  test("the bulk panel label speaks in sentence case", () => {
+    const label = styles.match(/^\.bulk-panel-label\s*\{([^}]*)\}/m);
+    expect(label).not.toBeNull();
+    expect(label[1]).toMatch(/font-size:\s*0\.78rem/);
+    expect(label[1]).toMatch(/font-weight:\s*700/);
+    expect(label[1]).not.toMatch(/letter-spacing/);
+    expect(label[1]).not.toMatch(/text-transform/);
   });
 });
 

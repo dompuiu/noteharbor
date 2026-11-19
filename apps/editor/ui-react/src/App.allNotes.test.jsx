@@ -392,11 +392,11 @@ describe("All notes screen", () => {
     const user = userEvent.setup();
     renderAllNotes();
 
-    expect(await screen.findByText("Couldn't load notes.")).toBeInTheDocument();
+    expect(await screen.findByText("Couldn’t load notes.")).toBeInTheDocument();
     expect(screen.getByText("network down")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Your notes stay on this device and aren't affected.",
+        "Your notes stay on this device and aren’t affected.",
       ),
     ).toBeInTheDocument();
 
