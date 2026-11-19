@@ -6823,8 +6823,9 @@ th[aria-sort="descending"] .sort-chevron {
    trailing controls. Grid, not flow, because the controls must keep the
    field's line whatever the chips do — a flex line break would push the
    controls down instead, and the chips are the part allowed to move.
-   `.table-rail--chips-own-line` is the planner's verdict that the chips
-   cannot share the field's line; they then take a whole row under it. */
+   `.table-rail--chips-own-line` is the planner's verdict that the chips would
+   need a `+N` on the field's line; they then take a whole row under it, where
+   the count is only used if the row itself is full. */
 .table-rail {
   display: grid;
   grid-template-areas: "field chips actions";

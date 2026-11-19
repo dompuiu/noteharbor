@@ -4,6 +4,8 @@
 // full list. The plan measures text the same way the tag chip plan does: a
 // hidden probe in the built app, a fixed fallback where canvas is absent
 // (jsdom), so the tests and the browser agree on the shape.
+import { filterFieldLabel, groupConditions } from "./tableFilters.js";
+
 const chipTextMeasureContexts = new Map();
 const chipWidthCache = new Map();
 const measurementCacheLimit = 500;
@@ -107,24 +109,47 @@ function unitWidth(unit) {
   return measureLabel(unit.label) + labelGap + chipWidth(unit);
 }
 
-// The chips share the filter field's line while they fit beside it and take a
-// line of their own only when they do not. These are the rail's fixed costs:
-// its 10px paddings, the 12px gap between the field, the chips and the
-// trailing controls, and the field's width. The field never grows past its
-// 400px basis, so reserving the basis is the safe side: a narrower field only
-// leaves the planned line more room than it asked for.
+// The chips share the filter field's line only while every condition fits
+// beside it. As soon as the plan would need a `+N` count there, the chips take
+// a row of their own, where the count is only used if even the full row cannot
+// hold them. These are the rail's fixed costs: its 10px paddings, the 12px gap
+// between the field, the chips and the trailing controls, and the field's
+// width. The field never grows past its 400px basis, so reserving the basis is
+// the safe side: a narrower field only leaves the planned line more room than
+// it asked for.
 const railChipPadding = 20;
 const railChipGap = 12;
 const filterFieldWidth = 400;
 
+// The conditions as the chip line reads them: one unit per chip, in table
+// order, carrying the connector it follows ("and" for a new field, "or" for
+// the next value of the same one). The rail and the budget plan the same list,
+// so the count a `+N` promises can never drift from the chips on the line.
+export function filterChipUnits(conditions) {
+  return groupConditions(conditions).flatMap(({ field, items }, groupIndex) =>
+    items.map((condition, index) => ({
+      condition,
+      field,
+      groupIndex,
+      index,
+      label: filterFieldLabel(field),
+    })),
+  );
+}
+
 // Decides how much width the chips may use and whether they can stay beside
-// the field at all. They leave the field's line only when that line has no
-// room left for them; the plan's one-chip floor still shows a single condition
-// in a narrow gap rather than hiding it behind `+N`. The own-line case reports
-// the rail's whole content box, because that is what the wrapped line gets.
-// Until the trailing cluster is measured the answer is "unknown", which the
-// plan reads as "show everything" and the stylesheet as "wrap if you must".
-export function computeFilterChipBudget({ actionsWidth = null, railWidth = null }) {
+// the field at all. They leave the field's line the moment the inline plan
+// would hide a condition behind `+N`, even when a truncated chip would fit:
+// the count belongs to a row with room to name what it hides. A lone condition
+// never needs the count, so it stays inline and truncates. The own-line case
+// reports the rail's whole content box, because that is the row it gets. Until
+// the trailing cluster is measured the answer is "unknown", which the plan
+// reads as "show everything" and the stylesheet as "wrap if you must".
+export function computeFilterChipBudget({
+  actionsWidth = null,
+  railWidth = null,
+  units = [],
+}) {
   if (!Number.isFinite(railWidth) || railWidth <= 0) {
     return { availableWidth: null, ownLine: false };
   }
@@ -138,11 +163,15 @@ export function computeFilterChipBudget({ actionsWidth = null, railWidth = null 
   const inlineWidth =
     innerWidth - filterFieldWidth - actionsWidth - railChipGap * 2;
 
-  if (inlineWidth > 0) {
-    return { availableWidth: inlineWidth, ownLine: false };
+  if (inlineWidth <= 0) {
+    return { availableWidth: innerWidth, ownLine: true };
   }
 
-  return { availableWidth: innerWidth, ownLine: true };
+  if (computeFilterChipPlan(units, inlineWidth).hiddenCount > 0) {
+    return { availableWidth: innerWidth, ownLine: true };
+  }
+
+  return { availableWidth: inlineWidth, ownLine: false };
 }
 
 // Returns how many units stay on the line. One unit is always visible, even

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   computeFilterChipBudget,
   computeFilterChipPlan,
+  filterChipUnits,
 } from "./tableFilterChips.js";
 
 function unit(value, overrides = {}) {
@@ -58,43 +59,114 @@ describe("computeFilterChipPlan", () => {
 });
 
 describe("computeFilterChipBudget", () => {
-  test("keeps the chips on the field's line when they fit beside it", () => {
+  test("keeps the chips on the field's line while every condition fits there", () => {
     // 1160 card: 1140 inside, minus a 400px field, 260px of controls and the
-    // two 12px gaps, leaves 456px for the chips.
+    // two 12px gaps, leaves 456px for the chips; one short unit fits whole.
     expect(
-      computeFilterChipBudget({ actionsWidth: 260, railWidth: 1160 }),
+      computeFilterChipBudget({
+        actionsWidth: 260,
+        railWidth: 1160,
+        units: [unit("PMG")],
+      }),
     ).toEqual({ availableWidth: 456, ownLine: false });
   });
 
-  test("keeps a narrow gap on the field's line, where the plan truncates", () => {
-    // 900 card: 880 inside, minus the 400px field, 380px of controls and the
-    // gaps, leaves 76px. The plan always keeps one chip, so a sliver is still
-    // room for that one truncated chip: it does not move down.
+  test("moves the chips down as soon as the line would need a +N", () => {
+    // 900 card: 880 inside leaves 76px beside the field, which cannot hold
+    // both units whole. A count chip is not wanted up there, so the chips take
+    // the full 880px row instead.
     expect(
-      computeFilterChipBudget({ actionsWidth: 380, railWidth: 900 }),
-    ).toEqual({ availableWidth: 76, ownLine: false });
+      computeFilterChipBudget({
+        actionsWidth: 380,
+        railWidth: 900,
+        units: [unit("PMG"), unit("PCGS", { index: 1 })],
+      }),
+    ).toEqual({ availableWidth: 880, ownLine: true });
   });
 
-  test("gives the chips their own line only when nothing is left over", () => {
+  test("moves the chips down when the field's line has nothing left at all", () => {
     // 640 card: 620 inside cannot also hold the 400px field, 260px of controls
-    // and the gaps, so the chip line wraps and the plan gets the full 620px.
+    // and the gaps, so the chip row takes the full 620px.
     expect(
-      computeFilterChipBudget({ actionsWidth: 260, railWidth: 640 }),
+      computeFilterChipBudget({
+        actionsWidth: 260,
+        railWidth: 640,
+        units: [],
+      }),
     ).toEqual({ availableWidth: 620, ownLine: true });
+  });
+
+  test("keeps a lone condition on the line even when it truncates", () => {
+    // 900 card: 880 inside, minus the 400px field, 380px of controls and the
+    // gaps, leaves 76px. There is no `+N` to show — the one chip truncates
+    // instead of hiding behind a count, so it stays where it is.
+    expect(
+      computeFilterChipBudget({
+        actionsWidth: 380,
+        railWidth: 900,
+        units: [unit("PMG")],
+      }),
+    ).toEqual({ availableWidth: 76, ownLine: false });
   });
 
   test("leaves the answer open until the controls are measured", () => {
     // Without a measured cluster the line break belongs to the stylesheet,
     // which wraps the block when its content cannot fit; the plan shows every
     // chip meanwhile.
-    expect(computeFilterChipBudget({ actionsWidth: null, railWidth: 1160 })).toEqual(
-      { availableWidth: null, ownLine: false },
-    );
+    expect(
+      computeFilterChipBudget({
+        actionsWidth: null,
+        railWidth: 1160,
+        units: [unit("PMG"), unit("PCGS", { index: 1 })],
+      }),
+    ).toEqual({ availableWidth: null, ownLine: false });
   });
 
   test("plans nothing against an unknown rail", () => {
-    expect(computeFilterChipBudget({ actionsWidth: 200, railWidth: null })).toEqual(
-      { availableWidth: null, ownLine: false },
-    );
+    expect(
+      computeFilterChipBudget({
+        actionsWidth: 200,
+        railWidth: null,
+        units: [unit("PMG")],
+      }),
+    ).toEqual({ availableWidth: null, ownLine: false });
+  });
+});
+
+describe("filterChipUnits", () => {
+  const conditions = [
+    { id: "a", field: "grading_company", value: "PMG", negated: false },
+    { id: "b", field: "grading_company", value: "PCGS", negated: true },
+    { id: "c", field: "catalog_number", value: "22", negated: false },
+  ];
+
+  test("walks the conditions in table order, one unit per chip", () => {
+    expect(filterChipUnits(conditions)).toEqual([
+      {
+        condition: conditions[0],
+        field: "grading_company",
+        groupIndex: 0,
+        index: 0,
+        label: "Company",
+      },
+      {
+        condition: conditions[1],
+        field: "grading_company",
+        groupIndex: 0,
+        index: 1,
+        label: "Company",
+      },
+      {
+        condition: conditions[2],
+        field: "catalog_number",
+        groupIndex: 1,
+        index: 0,
+        label: "Catalog",
+      },
+    ]);
+  });
+
+  test("is empty without conditions", () => {
+    expect(filterChipUnits([])).toEqual([]);
   });
 });

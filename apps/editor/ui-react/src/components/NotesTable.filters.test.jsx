@@ -1495,6 +1495,34 @@ describe("NotesTable filter rail", () => {
     expect(rail()).not.toHaveClass("table-rail--chips-own-line");
   });
 
+  test("one chip that would need a +N sends the whole row down", async () => {
+    // The same 76px gap holds the first chip truncated, so it stays. The
+    // second chip would need a `+1` beside the field — and the count belongs
+    // to a row with room to name what it hides, so the chips move down and the
+    // count travels with them.
+    mockRailWidths(900, 380);
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Catalog", "Fr. 2300");
+    await commitChip(user, "Serial", "SER-1");
+
+    expect(rail()).toHaveClass("table-rail--chips-own-line");
+    const chips = document.querySelector(".table-filter-chips");
+    // The full row holds both, so there is no count to show: `+N` is only a
+    // row problem, never the reason for moving down.
+    expect(
+      within(chips).getByRole("button", { name: "Edit Catalog filter Fr. 2300" }),
+    ).toBeInTheDocument();
+    expect(
+      within(chips).getByRole("button", { name: "Edit Serial filter SER-1" }),
+    ).toBeInTheDocument();
+    expect(
+      within(chips).queryByRole("button", { name: /more filter/ }),
+    ).toBeNull();
+  });
+
   test("the chips take their own line only when none of the line is left", async () => {
     // 640 − 20 − 400 of field − 260 of controls − the gaps leaves nothing: the
     // block wraps and the plan gets the full 620px.

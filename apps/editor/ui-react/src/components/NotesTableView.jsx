@@ -1,5 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { computeFilterChipBudget } from "../lib/tableFilterChips.js";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  computeFilterChipBudget,
+  filterChipUnits,
+} from "../lib/tableFilterChips.js";
 import { ColumnPicker } from "./ColumnPicker.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { TableCard } from "./TableCard.jsx";
@@ -93,9 +96,17 @@ export function NotesTableView({
     return () => observer.disconnect();
   }, [railChrome]);
 
+  // One unit per committed condition: the chips stay beside the field only
+  // while every one of them fits there. The first `+N` the inline line would
+  // need sends them to their own row.
+  const chipUnits = useMemo(
+    () => filterChipUnits(filterBar.conditions ?? []),
+    [filterBar.conditions],
+  );
   const chipLayout = computeFilterChipBudget({
     actionsWidth: railActionsWidth,
     railWidth,
+    units: chipUnits,
   });
 
   return (

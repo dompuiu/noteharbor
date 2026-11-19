@@ -14,7 +14,10 @@ import { FilterFieldMenu } from "./FilterFieldMenu.jsx";
 import { HighlightMatch, rankTagSuggestions } from "./TagsField.jsx";
 import { TagSuggestionsToggle } from "./TagSuggestionsToggle.jsx";
 import { tagsColumnKey } from "../lib/tableColumns.js";
-import { computeFilterChipPlan } from "../lib/tableFilterChips.js";
+import {
+  computeFilterChipPlan,
+  filterChipUnits,
+} from "../lib/tableFilterChips.js";
 import {
   commitModeLabel,
   loadFilterCommitMode,
@@ -78,23 +81,10 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
     () => groupConditions(conditions),
     [conditions],
   );
-  // The chips are one line, on the field's own line while they fit there.
-  // Each unit is one connector (or field label) plus its chip, in table order;
-  // the plan decides how many whole units fit before the `+N` count takes
-  // over.
-  const chipUnits = useMemo(
-    () =>
-      conditionGroups.flatMap(({ field, items }, groupIndex) =>
-        items.map((condition, index) => ({
-          condition,
-          field,
-          groupIndex,
-          index,
-          label: filterFieldLabel(field),
-        })),
-      ),
-    [conditionGroups],
-  );
+  // The chips are one line. Each unit is one connector (or field label) plus
+  // its chip, in table order, built by the same helper the rail's budget uses;
+  // the plan decides how many whole units fit before the `+N` count takes over.
+  const chipUnits = useMemo(() => filterChipUnits(conditions), [conditions]);
   const chipPlan = useMemo(
     () => computeFilterChipPlan(chipUnits, availableWidth),
     [availableWidth, chipUnits],
