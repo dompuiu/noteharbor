@@ -4,6 +4,20 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.21.0] - 2026-11-18
+
+### Changed
+
+- Table screen: the collection's name and menu now sit above the table as the screen's title, and the view's controls — filter, Add note, Find, Reset view and Columns — live in the card's own top rail. The eyebrow above the collection name is gone, so the rows start higher. The count, sort and reorder undo moved to the band under the card, beside the key hints, and the bulk-action pill's height is reserved in the scroll range so the last row can always be scrolled clear of it.
+
+- Table filter rail: the condition chips now share the filter field's line for as long as every condition fits there whole. The first condition that would need a `+N` sends the row underneath, where the count appears only if that row is full too; a lone condition stays on the line and truncates. While a view has no conditions, the idle hint states the commit model in one line — Replace swaps the field's values, Add ORs them — and the view controls keep the field's line in either state.
+
+- Table: the row actions column is pinned at the right behind the same hairline and a mirrored pan shadow, so Open, Edit, Copy, Insert and Delete never leave the card. The checkbox column and its header are one click target, and the drag handle's rest tone is legible on the rail.
+
+### Fixed
+
+- Table: the filter field and the inline chip editor carry a name and a per-instance id, so the browser's form-field heuristics stop warning when the table and the showcase picker are mounted at once. The find bar, scoped field, filter field, row menu and column and ownership rows all take the standard 2px accent ring, and the sort, tag and row-menu chrome stops moving under reduced motion.
+
 ## [2.20.0] - 2026-11-18
 
 ### Added
