@@ -4,6 +4,12 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.21.1] - 2026-11-18
+
+### Fixed
+
+- Note editor: a PMG scrape now reads the denomination from descriptions that carry a `Pick Unlisted` reference and a trailing qualifier — `Romania / Foreign Exchange Certificate, 0.10 Lei Pick Unlisted ND (ca. 1970s) - Navrom` fills `0.10 Lei`, and the `10 Centi` variety fills `10 Centi`, instead of leaving the field empty. Spaced date ranges such as `1944 - 1945` are no longer mistaken for qualifiers.
+
 ## [2.21.0] - 2026-11-18
 
 ### Changed
