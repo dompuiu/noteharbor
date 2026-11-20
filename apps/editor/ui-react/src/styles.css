@@ -278,7 +278,9 @@ input[type="radio"] {
   outline: none;
 }
 
-.table-sticky-cell.align-center:has(> input[type="checkbox"]:focus-visible)::before {
+.table-sticky-cell.align-center:has(
+    > input[type="checkbox"]:focus-visible
+  )::before {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -331,7 +333,7 @@ input[type="radio"] {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 16px 24px;
+  padding: 16px 24px 6px;
 }
 
 /* ── Catalog sidebar: hover-expanding rail ──────────────────────────────
@@ -809,13 +811,19 @@ input[type="radio"] {
    rail hides them with the labels. Hover, keyboard-open and pin all keep them
    in the row's flow (and the row's own hover or focus reveals them). The grip
    shares the item icon slot, so it stays in the row without adding width. */
-.sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(:hover):not(:has(:focus-visible)) .sidebar-row-moves {
+.sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(
+    :hover
+  ):not(:has(:focus-visible))
+  .sidebar-row-moves {
   display: none;
 }
 
 /* The pill only makes sense beside the readable name, so the truly collapsed
    rail keeps just the dashed hairline and italic mark. */
-.sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(:hover):not(:has(:focus-visible)) .sidebar-link-pending {
+.sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(
+    :hover
+  ):not(:has(:focus-visible))
+  .sidebar-link-pending {
   display: none;
 }
 
@@ -978,7 +986,10 @@ input[type="radio"] {
    rail otherwise shows just the brand mark plus each link's own icon. The
    collapsed rules yield to the keyboard-open class so they never fight the
    open layout while focus visibility settles between key presses. */
-.sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(:hover):not(:has(:focus-visible)) .sidebar-link--cursor {
+.sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(
+    :hover
+  ):not(:has(:focus-visible))
+  .sidebar-link--cursor {
   display: inline-flex;
 }
 
@@ -986,15 +997,24 @@ input[type="radio"] {
    the rail visually bare. The label keeps its base padding, so its box —
    and the marker inside it — is identical to the expanded state; only the
    name's `display` toggles. */
-.sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(:hover):not(:has(:focus-visible)) .sidebar-head {
+.sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(
+    :hover
+  ):not(:has(:focus-visible))
+  .sidebar-head {
   justify-content: center;
   padding: 0;
 }
 
 /* Collapsed, the category label and its reorderable rows centre their markers
    while the move buttons hide. */
-.sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(:hover):not(:has(:focus-visible)) .sidebar-group-label,
-.sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(:hover):not(:has(:focus-visible)) .sidebar-row {
+.sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(
+    :hover
+  ):not(:has(:focus-visible))
+  .sidebar-group-label,
+.sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(
+    :hover
+  ):not(:has(:focus-visible))
+  .sidebar-row {
   justify-content: center;
 }
 
@@ -2089,7 +2109,8 @@ input[type="radio"] {
   clip-path: inset(0 0 0 0);
 }
 
-.showcase-reorder-cell:has(.showcase-card:focus-visible) .showcase-catalog-code {
+.showcase-reorder-cell:has(.showcase-card:focus-visible)
+  .showcase-catalog-code {
   color: var(--accent-strong);
 }
 
