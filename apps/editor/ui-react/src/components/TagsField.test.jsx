@@ -1,11 +1,28 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
-import { TagsField } from "./TagsField.jsx";
+import { HighlightMatch, TagsField } from "./TagsField.jsx";
 
 function renderField(props = {}) {
   return render(<TagsField value={["alpha", "beta"]} {...props} />);
 }
+
+describe("HighlightMatch", () => {
+  // Suggestion rows are flex containers with a gap, so returning the match as
+  // loose text nodes would space the unhighlighted halves away from the
+  // highlighted one ("or ange tint"). The whole label must stay one item.
+  test("keeps the matched and unmatched text in one flow", () => {
+    const { container } = render(
+      <HighlightMatch text="orange tint" query="ang" />,
+    );
+
+    const label = container.firstElementChild;
+    expect(container.childElementCount).toBe(1);
+    expect(label).toBeInstanceOf(HTMLSpanElement);
+    expect(label).toHaveTextContent("orange tint");
+    expect(label.querySelector("span")).toHaveTextContent("ang");
+  });
+});
 
 describe("TagsField chips", () => {
   // The note editor's tags must read as the same chips as the table filter's,

@@ -53,13 +53,13 @@ export function HighlightMatch({ text, query }) {
     return text;
   }
   return (
-    <>
+    <span>
       {text.slice(0, index)}
       <span style={{ background: "var(--accent-soft)", borderRadius: 3 }}>
         {text.slice(index, index + needle.length)}
       </span>
       {text.slice(index + needle.length)}
-    </>
+    </span>
   );
 }
 
