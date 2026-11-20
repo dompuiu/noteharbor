@@ -9,7 +9,7 @@ import { MenuIcon } from "./MenuIcon.jsx";
 // - note: mark it owned or not
 // - note: edit the note
 // - note: replace it with another library note in place
-// - grouping: open, rename, set/clear its cover
+// - grouping: open, rename, set/clear its cover, duplicate to another showcase
 // - category: duplicate to another showcase
 // - note inside a grouping: make it the grouping's cover
 // - anything inside a grouping: move out one level, to its grandparent
@@ -32,7 +32,7 @@ function ShowcaseItemMenu({
   onEditDetails,
   onEditNote,
   onDuplicate,
-  canDuplicate = true,
+  canDuplicate = false,
   onMoveUp,
   onMoveDown,
   onMoveOut,
@@ -133,7 +133,7 @@ function ShowcaseItemMenu({
           run: onEditDetails,
         }
       : null,
-    isCategory && onDuplicate
+    (isCategory || isGrouping) && onDuplicate
       ? {
           key: "duplicate",
           label: "Duplicate to showcase…",

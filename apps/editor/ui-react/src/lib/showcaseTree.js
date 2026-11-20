@@ -50,6 +50,24 @@ function findNodeIdPath(nodes, targetId) {
   return [];
 }
 
+// Every Category Placement or Grouping in preorder, each with the names that
+// lead to it, so same-named Groupings at different levels stay distinct.
+function containerNodes(nodes, trail = []) {
+  const found = [];
+
+  for (const node of nodes ?? []) {
+    if (node.node_type !== "category" && node.node_type !== "grouping") {
+      continue;
+    }
+
+    const path = [...trail, node.name ?? "Untitled"];
+    found.push({ id: node.id, path });
+    found.push(...containerNodes(node.children, path));
+  }
+
+  return found;
+}
+
 function findNodeById(nodes, nodeId) {
   for (const node of nodes) {
     if (node.id === nodeId) {
@@ -593,6 +611,7 @@ export {
   catalogEntryLabel,
   catalogEntryState,
   catalogPresentationNotes,
+  containerNodes,
   countNoteNodes,
   filterCatalogTree,
   findNodeById,

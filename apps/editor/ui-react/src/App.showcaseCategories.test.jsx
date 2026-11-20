@@ -644,7 +644,7 @@ describe("the showcase category canvas", () => {
     await user.click(duplicateButton);
 
     await waitFor(() => {
-      expect(duplicateNode).toHaveBeenCalledWith(10, 2);
+      expect(duplicateNode).toHaveBeenCalledWith(10, 2, undefined);
     });
     expect(
       await screen.findByText("Duplicated Summer to Second"),

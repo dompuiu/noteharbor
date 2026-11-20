@@ -204,7 +204,7 @@ function ShowcaseScreen() {
   const [editShellId, setEditShellId] = useState(null);
   // The card whose "Move into…" dialog is open.
   const [moveTargetId, setMoveTargetId] = useState(null);
-  // The top-level Category whose subtree is being copied to another Showcase.
+  // The Category or Grouping whose subtree is being copied to another Showcase.
   const [duplicateSourceId, setDuplicateSourceId] = useState(null);
   // Card to refocus when the overlay closes; not part of the URL.
   const noteEditorReturnNodeIdRef = useRef(null);
@@ -239,6 +239,8 @@ function ShowcaseScreen() {
   const presentReturnNodeIdRef = useRef(null);
   const ownershipFocusRef = useRef(null);
   const restoreFocusNodeIdRef = useRef(null);
+  // Card whose menu opened the duplicate dialog; it takes focus back on close.
+  const duplicateReturnNodeIdRef = useRef(null);
 
   // Keep the local name draft in step with the provider row. The draft only
   // exists while the title is a field; opening the field seeds it from the row
@@ -922,27 +924,44 @@ function ShowcaseScreen() {
     });
   }
 
-  async function handleDuplicateCategory(targetShowcaseId) {
+  function openDuplicate(node) {
+    duplicateReturnNodeIdRef.current = node.id;
+    setDuplicateSourceId(node.id);
+  }
+
+  function closeDuplicate() {
+    setDuplicateSourceId(null);
+  }
+
+  async function handleDuplicateNode(targetShowcaseId, parentId) {
     const source =
       duplicateSourceId == null
         ? null
         : findNodeById(nodesRef.current, duplicateSourceId);
 
     if (!source) {
-      throw new Error("This category is no longer on the canvas.");
+      throw new Error("This item is no longer on the canvas.");
     }
 
     const target = showcases.find((entry) => entry.id === targetShowcaseId);
 
     // The copy lives in the target: the source canvas stays exactly as it is.
-    const { node } = await duplicateNode(source.id, targetShowcaseId);
+    // `parentId` is undefined for a Category, and the client omits it there.
+    const { node } = await duplicateNode(
+      source.id,
+      targetShowcaseId,
+      parentId,
+    );
     setActionError("");
     toastHost?.current?.show(
       `Duplicated ${node?.name ?? source.name} to ${target?.name ?? "showcase"}`,
       "success",
     );
 
-    await refreshCategoryPool();
+    // Only a Category copy touches the shared pool.
+    if (source.node_type === "category") {
+      await refreshCategoryPool();
+    }
     refreshShowcases?.().catch(() => {});
   }
 
@@ -1947,6 +1966,31 @@ function ShowcaseScreen() {
     card?.focus();
   }, [drillKey, loading]);
 
+  // Closing the duplicate dialog returns focus to the menu trigger that opened
+  // it, so keyboard flow is not lost with the overlay.
+  useEffect(() => {
+    if (duplicateSourceId != null) {
+      return;
+    }
+
+    const nodeId = duplicateReturnNodeIdRef.current;
+
+    if (nodeId == null) {
+      return;
+    }
+
+    duplicateReturnNodeIdRef.current = null;
+
+    const card = sectionRef.current?.querySelector(
+      `.showcase-card[data-showcase-node-id="${nodeId}"]`,
+    );
+    // The menu trigger is the card's sibling, not a descendant.
+    const trigger =
+      card?.parentElement?.querySelector(".showcase-item-menu-trigger");
+
+    (trigger ?? card)?.focus();
+  }, [duplicateSourceId]);
+
   const replaceNode =
     replaceNodeId == null ? null : findNodeById(nodes, replaceNodeId);
   const editShellNode =
@@ -1997,6 +2041,7 @@ function ShowcaseScreen() {
   }
 
   const gridProps = {
+    canDuplicate: otherShowcases.length > 0,
     catalogLayout,
     onAdd: (parent) => openAdd(parent, null, "notes"),
     onAddGroupingAfter: openAddAfter,
@@ -2018,6 +2063,7 @@ function ShowcaseScreen() {
     onMoveOut: handleMoveOut,
     onMoveInto: (node) => setMoveTargetId(node.id),
     onDragState: handleDragState,
+    onDuplicate: openDuplicate,
     onSetCover: handleSetCover,
     photoSize,
     reorderEnabled,
@@ -2296,13 +2342,11 @@ function ShowcaseScreen() {
 
                 return (
                   <ShowcaseCategorySection
-                    canDuplicate={otherShowcases.length > 0}
                     canMoveDown={rootIndex >= 0 && rootIndex < nodes.length - 1}
                     canMoveUp={rootIndex > 0}
                     category={node}
                     key={node.id}
                     {...gridProps}
-                    onDuplicate={(target) => setDuplicateSourceId(target.id)}
                     onMoveDown={(target) => handleMoveCategory(target, 1)}
                     onMoveUp={(target) => handleMoveCategory(target, -1)}
                     onRemove={handleRemove}
@@ -2398,9 +2442,9 @@ function ShowcaseScreen() {
 
       {duplicateSourceNode ? (
         <ShowcaseDuplicateDialog
-          category={duplicateSourceNode}
-          onClose={() => setDuplicateSourceId(null)}
-          onDuplicate={handleDuplicateCategory}
+          source={duplicateSourceNode}
+          onClose={closeDuplicate}
+          onDuplicate={handleDuplicateNode}
           showcases={otherShowcases}
         />
       ) : null}

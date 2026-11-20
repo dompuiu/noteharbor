@@ -32,6 +32,8 @@ function ShowcaseItemsGrid({
   onMove,
   onMoveOut,
   onDragState,
+  onDuplicate,
+  canDuplicate = false,
   onAdd,
   onAddNoteAfter,
   onAddGroupingAfter,
@@ -103,6 +105,7 @@ function ShowcaseItemsGrid({
     return (
       <ShowcaseItemMenu
         canClearCover={isGrouping && node.cover_note_id != null}
+        canDuplicate={canDuplicate}
         canSetCover={isGroupingParent}
         isGrouping={isGrouping}
         isNote={isNoteNode(node)}
@@ -133,6 +136,7 @@ function ShowcaseItemsGrid({
         }
         onMoveInto={reorderEnabled && onMoveInto ? () => onMoveInto(node) : undefined}
         onOpen={() => onOpenGrouping(node)}
+        onDuplicate={onDuplicate ? () => onDuplicate(node) : undefined}
         onRemove={() => onRemove(node)}
         onRename={() => onRenameGrouping(node)}
         onReplaceShell={() => onOpenShell(node)}

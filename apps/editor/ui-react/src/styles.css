@@ -11818,6 +11818,30 @@ td.table-col-collection {
   padding-top: 12px;
 }
 
+/* The destination parent is a second picker below the showcase list; a deep
+   tree scrolls instead of pushing the dialog's actions out of reach. */
+.showcase-duplicate-parents {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.showcase-duplicate-parents > .showcase-manager-list {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.showcase-duplicate-parents > p {
+  margin: 0;
+}
+
+.showcase-duplicate-load-error {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
 .showcase-dialog {
   width: min(560px, 100%);
 }

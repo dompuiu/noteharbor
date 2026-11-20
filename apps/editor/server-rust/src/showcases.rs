@@ -995,44 +995,96 @@ fn insert_copied_node(
     }
 }
 
-/// Copy a top-level Category placement and its whole subtree into another
-/// Showcase, inside one transaction. Notes are referenced, never cloned; the
-/// shared pool label is reused. The copy appends after the target's last
-/// top-level Category and keeps every sibling order below it.
-fn duplicate_category_placement(
+/// Where a copy lands: the chosen parent for a Grouping, or the target's top
+/// level for a Category. Each refusal names its own cause so a stale client
+/// learns why the copy cannot land.
+fn resolve_duplicate_parent(
+    conn: &Connection,
+    source: &NodeRow,
+    target_showcase_id: i64,
+    parent_id: Option<i64>,
+) -> Result<Option<i64>, DbError> {
+    match source.node_type.as_str() {
+        "category" => {
+            if source.parent_node_id.is_some() {
+                return Err(DbError::Failed(
+                    "Only a top-level category can be duplicated.".to_owned(),
+                ));
+            }
+            if parent_id.is_some() {
+                return Err(DbError::Failed(
+                    "A category placement is duplicated at the top level.".to_owned(),
+                ));
+            }
+            // The source Showcase already places the label, so this reads as
+            // the same conflict a second placement would.
+            if target_showcase_id == source.showcase_id {
+                return Err(DbError::Failed(CATEGORY_ALREADY_PLACED.to_owned()));
+            }
+            Ok(None)
+        }
+        "grouping" => {
+            let Some(parent_id) = parent_id else {
+                return Err(DbError::Failed(
+                    "A destination parent is required for a grouping.".to_owned(),
+                ));
+            };
+            let Some(parent) = get_node_row(conn, parent_id)? else {
+                return Err(DbError::Failed("Parent node not found.".to_owned()));
+            };
+            if parent.showcase_id != target_showcase_id {
+                return Err(DbError::Failed(
+                    "The destination parent is not in the target showcase.".to_owned(),
+                ));
+            }
+            if parent.node_type != "category" && parent.node_type != "grouping" {
+                return Err(DbError::Failed(
+                    "A grouping cannot be duplicated under a note or catalog entry.".to_owned(),
+                ));
+            }
+            Ok(Some(parent_id))
+        }
+        _ => Err(DbError::Failed(
+            "Only categories and groupings can be duplicated.".to_owned(),
+        )),
+    }
+}
+
+/// Copy a Category placement or a Grouping and its whole subtree into another
+/// Showcase, inside one transaction. Notes are referenced, never cloned. A
+/// Category copy keeps the shared pool label and appends at the target's top
+/// level; a Grouping copy appends under the chosen parent and keeps every
+/// sibling order below it.
+fn duplicate_node(
     conn: &mut Connection,
     node_id: i64,
     target_showcase_id: i64,
+    parent_id: Option<i64>,
 ) -> Result<ShowcaseNode, DbError> {
     let source = get_node_row(conn, node_id)?
         .ok_or_else(|| DbError::Failed("Node not found.".to_owned()))?;
-    if source.node_type != "category" || source.parent_node_id.is_some() {
-        return Err(DbError::Failed(
-            "Only a top-level category can be duplicated.".to_owned(),
-        ));
-    }
-    // The source Showcase already places the label, so this reads as the same
-    // conflict a second placement would.
-    if target_showcase_id == source.showcase_id {
-        return Err(DbError::Failed(
-            CATEGORY_ALREADY_PLACED.to_owned(),
-        ));
-    }
     ensure_showcase(conn, target_showcase_id)?;
+    let destination_parent =
+        resolve_duplicate_parent(conn, &source, target_showcase_id, parent_id)?;
     let rows = subtree_rows(conn, source)?;
     let tx = conn.transaction().map_err(classify)?;
-    let root_position = next_position(&tx, target_showcase_id, None)?;
+    let root_position = next_position(&tx, target_showcase_id, destination_parent)?;
     let mut copied: HashMap<i64, i64> = HashMap::with_capacity(rows.len());
     for row in &rows {
-        let parent_node_id = match row.parent_node_id {
-            None => None,
-            Some(old_parent) => Some(*copied.get(&old_parent).ok_or_else(|| {
-                DbError::Failed("The copied subtree lost a parent.".to_owned())
-            })?),
+        let is_root = row.id == node_id;
+        let parent_node_id = if is_root {
+            destination_parent
+        } else {
+            match row.parent_node_id {
+                Some(old_parent) => Some(*copied.get(&old_parent).ok_or_else(|| {
+                    DbError::Failed("The copied subtree lost a parent.".to_owned())
+                })?),
+                None => None,
+            }
         };
-        // The root takes the target's next top-level slot; every descendant
-        // keeps the position it had under its now-copied parent.
-        let position = if row.parent_node_id.is_none() {
+        // The root takes the target's next slot under its new parent; every
+        // descendant keeps the position it had under its now-copied parent.
+        let position = if is_root {
             root_position
         } else {
             row.position.unwrap_or(0)
@@ -1932,6 +1984,14 @@ async fn duplicate_node_handler(
     else {
         return bad_request("A valid showcase ID is required.");
     };
+    let parent_id = match payload.get("parent_id") {
+        None => None,
+        Some(value) if value.is_null() => None,
+        Some(value) => match js_number(value).filter(|id| *id > 0) {
+            Some(parent_id) => Some(parent_id),
+            None => return bad_request("A valid parent node is required."),
+        },
+    };
     let exists = match db::with_conn(&state.pool, move |conn| get_node_row(conn, id)).await {
         Ok(node) => node.is_some(),
         Err(error) => return db_failure(error),
@@ -1949,7 +2009,7 @@ async fn duplicate_node_handler(
         return not_found("Showcase not found.");
     }
     match db::with_conn(&state.pool, move |conn| {
-        duplicate_category_placement(conn, id, target_showcase_id)
+        duplicate_node(conn, id, target_showcase_id, parent_id)
     })
     .await
     {

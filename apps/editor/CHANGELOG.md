@@ -4,6 +4,10 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+### Added
+
+- Showcase: every grouping's `⋯` menu now offers **Duplicate to showcase…**. Pick another showcase, then the category or grouping inside it that should hold the copy; each destination is labelled with its full path so same-named groupings stay distinguishable. The copy appends after the chosen parent's last child and carries every nested grouping, note card, placeholder, manual cover, and sibling order. Notes are referenced rather than cloned, and the source showcase is untouched. Targets with nowhere to put the copy are explained, a failed tree load can be retried, and the category duplicate flow is unchanged.
+
 ### Changed
 
 - Showcase: a Catalog entry is only a planned position. The retired specimen model is gone end to end — the `showcase_catalog_notes` join and its triggers, `PUT /api/nodes/:id/notes`, `note_ids` on entry creation, the `specimens`/`primary_note_id` wire fields, and the card's specimen rendering. An entry from an older database keeps its catalog metadata and loses its specimen links; replace it with a library note when the slot is filled.

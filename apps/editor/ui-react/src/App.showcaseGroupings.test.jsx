@@ -15,6 +15,7 @@ vi.mock("./lib/api.js", () => ({
   deleteCategory: vi.fn(),
   deleteCollection: vi.fn(),
   deleteNode: vi.fn(),
+  duplicateNode: vi.fn(),
   getCategories: vi.fn(),
   getCollections: vi.fn(),
   getAllNotes: vi.fn(async () => ({ notes: [] })),
@@ -50,6 +51,7 @@ import { ShellContent } from "./App.jsx";
 import {
   createShowcaseNode,
   deleteNode,
+  duplicateNode,
   getCategories,
   getCollections,
   getHealth,
@@ -192,6 +194,7 @@ async function openSub() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  duplicateNode.mockReset();
   window.localStorage.clear();
   getHealth.mockResolvedValue({ connected: true });
   getCollections.mockResolvedValue({
@@ -583,5 +586,198 @@ describe("setting a grouping cover from the canvas", () => {
     await waitFor(() => {
       expect(updateNode).toHaveBeenCalledWith(20, { cover_note_id: null });
     });
+  });
+});
+
+// A category placement "Winter" holding a "Proofs" grouping with a nested
+// grouping, so the destination picker has three path-labelled choices.
+function winterTree() {
+  return {
+    id: 40,
+    node_type: "category",
+    name: "Winter",
+    category_id: 2,
+    parent_node_id: null,
+    note_id: null,
+    cover_note_id: null,
+    position: 1,
+    note: null,
+    cover_note: null,
+    children: [
+      groupingNode({
+        id: 41,
+        name: "Proofs",
+        children: [groupingNode({ id: 42, name: "Nested" })],
+      }),
+    ],
+  };
+}
+
+function twoShowcases() {
+  return {
+    showcases: [
+      { id: 1, name: "My showcase", entry_count: 3, category_ids: [1] },
+      { id: 2, name: "Target", entry_count: 1, category_ids: [2] },
+    ],
+  };
+}
+
+describe("duplicating a grouping into another showcase", () => {
+  test("the duplicate item is disabled when there is no other showcase", async () => {
+    const user = userEvent.setup();
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    await screen.findByRole("button", { name: "Open grouping Sub" });
+
+    await user.click(screen.getByRole("button", { name: "Actions for Sub" }));
+
+    expect(
+      screen.getByRole("menuitem", { name: "Duplicate to showcase…" }),
+    ).toBeDisabled();
+  });
+
+  test("picks a target and parent, then confirms with a toast", async () => {
+    const user = userEvent.setup();
+    getShowcases.mockResolvedValue(twoShowcases());
+    getShowcaseTree.mockImplementation((id) =>
+      id === 1
+        ? Promise.resolve({ showcase_id: 1, nodes: [summerTree()] })
+        : Promise.resolve({ showcase_id: 2, nodes: [winterTree()] }),
+    );
+    duplicateNode.mockResolvedValue({
+      node: groupingNode({ id: 90, name: "Sub" }),
+    });
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    await screen.findByRole("button", { name: "Open grouping Sub" });
+
+    await user.click(screen.getByRole("button", { name: "Actions for Sub" }));
+    await user.click(
+      screen.getByRole("menuitem", { name: "Duplicate to showcase…" }),
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: "Duplicate “Sub”" }),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("radio", { name: /Target/ })).toBeChecked();
+    // The first container in the loaded tree is preselected.
+    expect(
+      await within(dialog).findByRole("radio", { name: "Winter" }),
+    ).toBeChecked();
+    expect(
+      within(dialog).getByRole("radio", { name: "Winter › Proofs › Nested" }),
+    ).toBeInTheDocument();
+
+    await user.click(
+      within(dialog).getByRole("radio", { name: "Winter › Proofs" }),
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Duplicate" }));
+
+    await waitFor(() => {
+      expect(duplicateNode).toHaveBeenCalledWith(20, 2, 41);
+    });
+    expect(
+      await screen.findByText("Duplicated Sub to Target"),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(getShowcases).toHaveBeenCalledTimes(2));
+    // A grouping copy never touches the category pool.
+    expect(getCategories).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // Closing returns focus to the menu trigger that opened the dialog.
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Actions for Sub" }),
+      ).toHaveFocus(),
+    );
+  });
+
+  test("explains a target with nowhere to put the copy", async () => {
+    const user = userEvent.setup();
+    getShowcases.mockResolvedValue(twoShowcases());
+    getShowcaseTree.mockImplementation((id) =>
+      id === 1
+        ? Promise.resolve({ showcase_id: 1, nodes: [summerTree()] })
+        : Promise.resolve({ showcase_id: 2, nodes: [] }),
+    );
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    await screen.findByRole("button", { name: "Open grouping Sub" });
+
+    await user.click(screen.getByRole("button", { name: "Actions for Sub" }));
+    await user.click(
+      screen.getByRole("menuitem", { name: "Duplicate to showcase…" }),
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      await within(dialog).findByText(
+        "This showcase has no category or grouping to hold the copy.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "Duplicate" }),
+    ).toBeDisabled();
+  });
+
+  test("a failed tree load shows an error that can be retried", async () => {
+    const user = userEvent.setup();
+    let failed = false;
+    getShowcases.mockResolvedValue(twoShowcases());
+    getShowcaseTree.mockImplementation((id) => {
+      if (id === 1) {
+        return Promise.resolve({ showcase_id: 1, nodes: [summerTree()] });
+      }
+
+      if (!failed) {
+        failed = true;
+        return Promise.reject(new Error("Tree unavailable."));
+      }
+
+      return Promise.resolve({ showcase_id: 2, nodes: [winterTree()] });
+    });
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    await screen.findByRole("button", { name: "Open grouping Sub" });
+
+    await user.click(screen.getByRole("button", { name: "Actions for Sub" }));
+    await user.click(
+      screen.getByRole("menuitem", { name: "Duplicate to showcase…" }),
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "Tree unavailable.",
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Try again" }));
+
+    expect(
+      await within(dialog).findByRole("radio", { name: "Winter" }),
+    ).toBeChecked();
+  });
+
+  test("a refused duplicate keeps the dialog open and shows the message", async () => {
+    const user = userEvent.setup();
+    getShowcases.mockResolvedValue(twoShowcases());
+    getShowcaseTree.mockImplementation((id) =>
+      id === 1
+        ? Promise.resolve({ showcase_id: 1, nodes: [summerTree()] })
+        : Promise.resolve({ showcase_id: 2, nodes: [winterTree()] }),
+    );
+    duplicateNode.mockRejectedValue(
+      new Error("The destination parent is not in the target showcase."),
+    );
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    await screen.findByRole("button", { name: "Open grouping Sub" });
+
+    await user.click(screen.getByRole("button", { name: "Actions for Sub" }));
+    await user.click(
+      screen.getByRole("menuitem", { name: "Duplicate to showcase…" }),
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByRole("radio", { name: "Winter" });
+    await user.click(within(dialog).getByRole("button", { name: "Duplicate" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "The destination parent is not in the target showcase.",
+    );
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 });

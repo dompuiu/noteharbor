@@ -551,13 +551,18 @@ async function createShowcaseNode(showcaseId, payload) {
   return handleResponse(response);
 }
 
-// Copy a top-level category placement and its whole subtree into another
-// showcase. The server reuses the pool label and returns the new root node.
-async function duplicateNode(id, showcaseId) {
+// Copy a category placement or grouping subtree into another showcase. A
+// category stays top-level; a grouping appends under `parentId`. The server
+// returns the new root node.
+async function duplicateNode(id, showcaseId, parentId) {
+  const payload = { showcase_id: showcaseId };
+  if (parentId != null) {
+    payload.parent_id = parentId;
+  }
   const response = await request(`/api/nodes/${id}/duplicate`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ showcase_id: showcaseId })
+    body: JSON.stringify(payload)
   });
 
   return handleResponse(response);

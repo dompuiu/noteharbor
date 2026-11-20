@@ -467,11 +467,15 @@ Body: { name? }                     // a Grouping's name, or a Category Placemen
               // and the label left behind is pruned when it has no placements.
 
 POST /api/nodes/:nodeId/duplicate
-Body: { showcase_id }
--> 201 { node }   // copies a top-level Category Placement's whole subtree into
-                  // another Showcase as a separate placement: the pool label is
-                  // reused, notes are referenced, and the copy appends after the
-                  // target's last top-level Category
+Body: { showcase_id, parent_id? }
+-> 201 { node }   // copies a Category Placement or Grouping subtree into another
+                  // Showcase: notes are referenced and the source stays put.
+                  // A Category stays top-level (no parent_id), reuses the pool
+                  // label, and appends after the target's last top-level
+                  // Category. A Grouping requires parent_id — a Category
+                  // Placement or Grouping in the target Showcase — and appends
+                  // after that parent's last child. Notes and Catalog entries
+                  // are not duplicate sources or parents.
 
 DELETE /api/nodes/:nodeId
 -> { success: true }   // removes the node and its subtree; a Category label stays in the pool

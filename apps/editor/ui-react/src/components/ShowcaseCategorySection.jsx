@@ -81,6 +81,7 @@ function ShowcaseCategorySection({
       </div>
 
       <ShowcaseItemsGrid
+        canDuplicate={canDuplicate}
         catalogLayout={catalogLayout}
         items={children}
         onAdd={onAdd}
@@ -90,6 +91,7 @@ function ShowcaseCategorySection({
         onClearCover={onClearCover}
         onEditShell={onEditShell}
         onEditNote={onEditNote}
+        onDuplicate={onDuplicate}
         onReplaceNote={onReplaceNote}
         onOpenGrouping={onOpenGrouping}
         onOpenNote={onOpenNote}

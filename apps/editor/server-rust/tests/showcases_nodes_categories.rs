@@ -2029,21 +2029,30 @@ async fn duplicate_category_reports_unknown_and_invalid_targets() {
         json!("This category is already in the showcase.")
     );
 
-    // Only a top-level Category is a source.
-    let (status, body) = add_grouping(app.clone(), source_id, root_id, "Nested").await;
-    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    // A Category copy stays at the top level, so a destination parent is
+    // refused.
     let (status, body) = call(
         app.clone(),
         "POST",
-        &format!("/api/nodes/{}/duplicate", body["node"]["id"]),
-        Some(json!({ "showcase_id": target_id })),
+        &format!("/api/nodes/{root_id}/duplicate"),
+        Some(json!({ "showcase_id": target_id, "parent_id": root_id })),
     )
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(
         body["error"],
-        json!("Only a top-level category can be duplicated.")
+        json!("A category placement is duplicated at the top level.")
     );
+
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/nodes/{root_id}/duplicate"),
+        Some(json!({ "showcase_id": target_id, "parent_id": "nope" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"], json!("A valid parent node is required."));
 }
 
 #[tokio::test]
@@ -2098,4 +2107,291 @@ async fn duplicate_category_rolls_back_when_a_copy_clashes() {
     let roots = tree["nodes"].as_array().unwrap();
     assert_eq!(roots.len(), 1);
     assert_eq!(roots[0]["name"], json!("Nested"));
+}
+
+// --- duplicating a grouping --------------------------------------------------
+
+#[tokio::test]
+async fn duplicate_grouping_copies_the_subtree_under_the_chosen_parent() {
+    let (dir, state) = fresh_state();
+    let app = create_app(state);
+    let source = create_showcase(app.clone(), Some("Source")).await;
+    let source_id = source["id"].as_i64().unwrap();
+    let target = create_showcase(app.clone(), Some("Target")).await;
+    let target_id = target["id"].as_i64().unwrap();
+    let collection = create_collection(app.clone(), "Duplicated groupings").await;
+    let collection_id = collection["id"].as_i64().unwrap();
+    let first = create_note(app.clone(), collection_id, "1 leu").await;
+    let second = create_note(app.clone(), collection_id, "2 lei").await;
+
+    let source_root = place_category(app.clone(), source_id, "Themed").await;
+    let source_root_id = source_root["id"].as_i64().unwrap();
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/showcases/{source_id}/nodes"),
+        Some(json!({
+            "type": "notes",
+            "parent_id": source_root_id,
+            "note_ids": [first["id"]],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let (status, body) = add_grouping(app.clone(), source_id, source_root_id, "Proofs").await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let grouping_id = body["node"]["id"].as_i64().unwrap();
+    let (status, body) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/nodes/{grouping_id}"),
+        Some(json!({ "cover_note_id": first["id"] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let (status, body) = add_catalog_entry(app.clone(), source_id, grouping_id).await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let entry_id = body["node"]["id"].as_i64().unwrap();
+    let (status, body) = add_grouping(app.clone(), source_id, grouping_id, "Nested").await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let nested_id = body["node"]["id"].as_i64().unwrap();
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/showcases/{source_id}/nodes"),
+        Some(json!({
+            "type": "notes",
+            "parent_id": nested_id,
+            "note_ids": [first["id"]],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+
+    // The target's holder already has a child: the copy appends after it.
+    let target_root = place_category(app.clone(), target_id, "Other").await;
+    let target_root_id = target_root["id"].as_i64().unwrap();
+    let holder = place_category(app.clone(), target_id, "Holder").await;
+    let holder_id = holder["id"].as_i64().unwrap();
+    let (status, body) = add_grouping(app.clone(), target_id, holder_id, "Destination").await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let destination_id = body["node"]["id"].as_i64().unwrap();
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/showcases/{target_id}/nodes"),
+        Some(json!({
+            "type": "notes",
+            "parent_id": destination_id,
+            "note_ids": [second["id"]],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let before_notes = note_count(&dir);
+
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/nodes/{grouping_id}/duplicate"),
+        Some(json!({ "showcase_id": target_id, "parent_id": destination_id })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let copy = body["node"].clone();
+    assert_eq!(copy["node_type"], json!("grouping"));
+    assert_eq!(copy["name"], json!("Proofs"));
+    assert_eq!(copy["parent_node_id"], json!(destination_id));
+    assert_eq!(copy["position"], json!(2));
+    assert_eq!(copy["cover_note_id"], first["id"]);
+    assert_ne!(copy["id"], json!(grouping_id));
+
+    // The copy is in the target tree under the chosen grouping.
+    let (status, target_tree) = call(
+        app.clone(),
+        "GET",
+        &format!("/api/showcases/{target_id}/tree"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{target_tree:?}");
+    let roots = target_tree["nodes"].as_array().unwrap();
+    let holder_node = roots
+        .iter()
+        .find(|node| node["id"] == json!(holder_id))
+        .expect("holder in target tree");
+    let destination_node = holder_node["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["id"] == json!(destination_id))
+        .expect("destination in target tree");
+    let copy_in_tree = destination_node["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["id"] == copy["id"])
+        .expect("copy under destination");
+    let children = copy_in_tree["children"].as_array().expect("copy children");
+    assert_eq!(children.len(), 2);
+    let entry_copy = &children[0];
+    assert_eq!(entry_copy["node_type"], json!("catalog_entry"));
+    assert_ne!(entry_copy["id"], json!(entry_id));
+    assert_eq!(entry_copy["entry"]["catalog_number"], json!("22a"));
+    assert_eq!(entry_copy["entry"]["denomination"], json!("20 lei"));
+    assert_eq!(entry_copy["entry"]["issue_date"], json!("1877"));
+    assert_eq!(entry_copy["entry"]["source"], json!("Pick catalog"));
+    let nested_copy = &children[1];
+    assert_eq!(nested_copy["node_type"], json!("grouping"));
+    assert_eq!(nested_copy["name"], json!("Nested"));
+    assert_ne!(nested_copy["id"], json!(nested_id));
+    assert_eq!(nested_copy["children"][0]["note_id"], first["id"]);
+
+    // A top-level Category Placement is the other legal parent type.
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/nodes/{grouping_id}/duplicate"),
+        Some(json!({ "showcase_id": target_id, "parent_id": target_root_id })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let top_level_copy = body["node"].clone();
+    assert_eq!(top_level_copy["parent_node_id"], json!(target_root_id));
+    assert_eq!(top_level_copy["position"], json!(1));
+
+    // The source is untouched and no Note was cloned.
+    let (_, source_tree) = call(
+        app.clone(),
+        "GET",
+        &format!("/api/showcases/{source_id}/tree"),
+        None,
+    )
+    .await;
+    let source_children = source_tree["nodes"][0]["children"].as_array().unwrap();
+    assert_eq!(source_children.len(), 2);
+    assert_eq!(source_children[1]["id"], json!(grouping_id));
+    assert_eq!(source_children[1]["children"].as_array().unwrap().len(), 2);
+    assert_eq!(note_count(&dir), before_notes);
+}
+
+#[tokio::test]
+async fn duplicate_grouping_validates_source_and_destination() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let source = create_showcase(app.clone(), Some("Source")).await;
+    let source_id = source["id"].as_i64().unwrap();
+    let target = create_showcase(app.clone(), Some("Target")).await;
+    let target_id = target["id"].as_i64().unwrap();
+    let collection = create_collection(app.clone(), "Validation notes").await;
+    let collection_id = collection["id"].as_i64().unwrap();
+    let note = create_note(app.clone(), collection_id, "1 leu").await;
+
+    let source_root = place_category(app.clone(), source_id, "Themed").await;
+    let source_root_id = source_root["id"].as_i64().unwrap();
+    let (status, body) = add_grouping(app.clone(), source_id, source_root_id, "Proofs").await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let grouping_id = body["node"]["id"].as_i64().unwrap();
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/showcases/{source_id}/nodes"),
+        Some(json!({
+            "type": "notes",
+            "parent_id": source_root_id,
+            "note_ids": [note["id"]],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let source_note_id = body["nodes"][0]["id"].as_i64().unwrap();
+
+    let target_root = place_category(app.clone(), target_id, "Holder").await;
+    let target_root_id = target_root["id"].as_i64().unwrap();
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/showcases/{target_id}/nodes"),
+        Some(json!({
+            "type": "notes",
+            "parent_id": target_root_id,
+            "note_ids": [note["id"]],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let target_note_id = body["nodes"][0]["id"].as_i64().unwrap();
+    let (status, body) = add_catalog_entry(app.clone(), target_id, target_root_id).await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let target_entry_id = body["node"]["id"].as_i64().unwrap();
+
+    // A Grouping needs a destination parent.
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/nodes/{grouping_id}/duplicate"),
+        Some(json!({ "showcase_id": target_id })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["error"],
+        json!("A destination parent is required for a grouping.")
+    );
+
+    // The parent must belong to the target Showcase.
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/nodes/{grouping_id}/duplicate"),
+        Some(json!({ "showcase_id": target_id, "parent_id": source_root_id })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["error"],
+        json!("The destination parent is not in the target showcase.")
+    );
+
+    // A note or a Catalog entry cannot hold a Grouping.
+    for parent_id in [target_note_id, target_entry_id] {
+        let (status, body) = call(
+            app.clone(),
+            "POST",
+            &format!("/api/nodes/{grouping_id}/duplicate"),
+            Some(json!({ "showcase_id": target_id, "parent_id": parent_id })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            body["error"],
+            json!("A grouping cannot be duplicated under a note or catalog entry.")
+        );
+    }
+
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/nodes/{grouping_id}/duplicate"),
+        Some(json!({ "showcase_id": target_id, "parent_id": 999999 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"], json!("Parent node not found."));
+
+    // Notes and Catalog entries are not duplicate sources.
+    for source_node_id in [source_note_id, target_entry_id] {
+        let (status, body) = call(
+            app.clone(),
+            "POST",
+            &format!("/api/nodes/{source_node_id}/duplicate"),
+            Some(json!({ "showcase_id": target_id, "parent_id": target_root_id })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            body["error"],
+            json!("Only categories and groupings can be duplicated.")
+        );
+    }
 }

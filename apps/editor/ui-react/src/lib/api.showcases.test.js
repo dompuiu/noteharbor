@@ -3,6 +3,7 @@ import {
   createCatalogEntry,
   createShowcase,
   deleteShowcase,
+  duplicateNode,
   getShowcases,
   moveNode,
   renameShowcase,
@@ -162,6 +163,36 @@ describe("catalog entry API calls", () => {
         parent_id: 7,
         entry,
       }),
+    });
+  });
+});
+
+describe("duplicateNode", () => {
+  test("a category copy sends only the target showcase", async () => {
+    const fetchMock = stubFetch(async () =>
+      jsonResponse(201, { node: { id: 8 } }),
+    );
+
+    await duplicateNode(3, 2);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/nodes/3/duplicate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ showcase_id: 2 }),
+    });
+  });
+
+  test("a grouping copy sends the destination parent", async () => {
+    const fetchMock = stubFetch(async () =>
+      jsonResponse(201, { node: { id: 9 } }),
+    );
+
+    await duplicateNode(3, 2, 7);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/nodes/3/duplicate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ showcase_id: 2, parent_id: 7 }),
     });
   });
 });
