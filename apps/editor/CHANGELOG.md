@@ -4,6 +4,18 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.21.3] - 2026-11-19
+
+### Changed
+
+- Editor: every screen's bottom inset narrows from 16px to 6px, so the content sits closer to the window's bottom edge.
+
+### Fixed
+
+- Showcase note picker: the filter field's focus ring is no longer clipped at the top and bottom edges of the Add notes and Replace dialogs. The scrolling bodies now reserve the ring's reach on every side instead of only inline.
+
+- Tag suggestions: a highlighted match stays in the label's text flow, so a row no longer spaces the unhighlighted halves away from the match and reads "or ange tint".
+
 ## [2.21.2] - 2026-11-19
 
 ### Fixed
