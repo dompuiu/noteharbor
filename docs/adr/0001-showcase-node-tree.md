@@ -24,7 +24,7 @@ An older build let one entry hold zero-or-more specimens through the `showcase_c
 
 ## Extension: placeholder notes
 
-A catalog entry may carry its own free-text `notes`, a reminder for hunting the planned card. It is not a library Note and has no specimen semantics: once a note is picked the row becomes a note card, the field is cleared, and the card shows only that Note's notes.
+A catalog entry may carry its own free-text `notes`, a reminder for hunting the planned card. It is not a library Note and has no specimen semantics: once a note is picked the row becomes a note card, the field is cleared, and the card shows only that Note's notes. On the card it reads through the same notes block as a Note's notes, under the single label **Note**, in both layouts and the add/edit preview; a position with a reminder does not also print “No specimen recorded yet.”
 
 ## Extension: re-binding a Category Placement to another label
 

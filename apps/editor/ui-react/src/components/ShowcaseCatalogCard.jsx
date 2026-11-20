@@ -12,7 +12,6 @@ import {
   isCatalogEntry,
   nodeCatalogState,
 } from "../lib/showcaseTree.js";
-import { ShowcaseCatalogNotes } from "./ShowcaseCatalogNotes.jsx";
 import { ShowcaseCatalogWell } from "./ShowcaseCatalogWell.jsx";
 import { ShowcaseCardNotes } from "./ShowcaseCardNotes.jsx";
 import { ShowcaseFlipControl } from "./ShowcaseFlipControl.jsx";
@@ -41,8 +40,10 @@ import { ShowcaseFlipControl } from "./ShowcaseFlipControl.jsx";
 // read the same in either layout. The state label is the ownership toggle and
 // a sibling of the card button (buttons cannot nest); the photo never changes
 // opacity or colour, because only the label says whether the record is owned.
-// A note card's notes read on the card: two lines under the metadata
-// in the Library label, four lines in the identity rail.
+// Both leaves read their own free text through the same notes block, in the
+// same place: two lines under the metadata in the Library label, four lines in
+// the identity rail. A note's text is its record's notes; a placeholder's is
+// the reminder the collector wrote while planning the card.
 function noteLabel(note) {
   return formatShowcaseCatalogNumber(note?.catalog_number, { compact: true });
 }
@@ -243,9 +244,9 @@ function ShowcaseCatalogCard({
   const grade = gradeOf(note);
   const notes = text(note?.notes);
   // A placeholder's own reminder is not the specimen's notes: it lives on the
-  // entry and reads only while the slot is unseen.
+  // entry and reads only while the slot is unseen. It shares the block above.
   const placeholderNotes = text(node?.entry?.notes);
-  const notesDescriptionId = notes ? notesId : undefined;
+  const notesDescriptionId = notes || placeholderNotes ? notesId : undefined;
 
   function handleMouseEnter() {
     setHovered(true);
@@ -327,6 +328,7 @@ function ShowcaseCatalogCard({
           data-showcase-node-id={node?.id}
         >
           <CatalogCardFrame
+            describedBy={notesDescriptionId}
             label={`${label} is unseen. Replace with note`}
             node={node}
             onClick={openFinder}
@@ -345,10 +347,16 @@ function ShowcaseCatalogCard({
                   <span className="showcase-catalog-denom">{denomination}</span>
                 ) : null}
                 {date ? <span className="showcase-catalog-date">{date}</span> : null}
-                <ShowcaseCatalogNotes text={placeholderNotes} />
-                <span className="showcase-catalog-empty">
-                  No specimen recorded yet.
-                </span>
+                <ShowcaseCardNotes
+                  id={notesDescriptionId}
+                  layout="rail"
+                  text={placeholderNotes}
+                />
+                {placeholderNotes ? null : (
+                  <span className="showcase-catalog-empty">
+                    No specimen recorded yet.
+                  </span>
+                )}
               </span>
             </span>
             <span className="showcase-catalog-add">Replace with note →</span>
@@ -364,6 +372,7 @@ function ShowcaseCatalogCard({
         data-showcase-node-id={node?.id}
       >
         <CatalogCardFrame
+          describedBy={notesDescriptionId}
           label={`${label} is unseen. Replace with note`}
           node={node}
           onClick={openFinder}
@@ -377,10 +386,13 @@ function ShowcaseCatalogCard({
           <span className="showcase-catalog-wellshot">
             <ShowcaseCatalogWell />
           </span>
-          <span className="showcase-catalog-meta showcase-catalog-meta--placeholder">
+          <span className="showcase-catalog-meta">
             <span className="showcase-catalog-line">{metaLine}</span>
-            <ShowcaseCatalogNotes text={placeholderNotes} />
           </span>
+          <ShowcaseCardNotes
+            id={notesDescriptionId}
+            text={placeholderNotes}
+          />
           <span className="showcase-catalog-add">Replace with note →</span>
         </CatalogCardFrame>
         {menu}

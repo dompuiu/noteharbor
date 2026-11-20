@@ -4,6 +4,11 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+### Changed
+
+- Showcase: a note card and a placeholder now read their free text through the same notes block, titled **Note** — two lines under the metadata in the Library label, four in the Auction rail, and the same block in the add/edit preview. The placeholder's separate inline line is gone, and a placeholder that carries a note no longer repeats “No specimen recorded yet.” Clamped text keeps the full string in `title` and the card's description, so a long reminder never loses its tail.
+- Showcase: the **Edit placeholder** dialog now uses the Add dialog's width, so the shared form reads the same in both modes and Source / Notes stay under the metadata column.
+
 ## [2.22.0] - 2026-11-20
 
 ### Added

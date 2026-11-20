@@ -293,9 +293,8 @@ describe("ShowcaseCatalogCard face flip", () => {
     });
 
     expect(card.querySelector(".showcase-card-notes")).toBeNull();
-    expect(card.querySelector(".showcase-catalog-notes")).toBeNull();
     expect(card.querySelector(".showcase-catalog-wellshot")).not.toBeNull();
-    expect(card).not.toHaveAccessibleDescription(/Notes/);
+    expect(card).not.toHaveAccessibleDescription(/Note/);
   });
 
   test("the auction rail says a shell holds no specimen", () => {
@@ -308,7 +307,6 @@ describe("ShowcaseCatalogCard face flip", () => {
 
     expect(rail).toHaveTextContent("No specimen recorded yet.");
     expect(rail.querySelector(".showcase-card-notes")).toBeNull();
-    expect(rail.querySelector(".showcase-catalog-notes")).toBeNull();
   });
 });
 
@@ -319,25 +317,27 @@ describe("ShowcaseCatalogCard placeholder notes", () => {
     return { ...node, entry: { ...node.entry, notes } };
   }
 
-  test("the library label reads the placeholder's notes under the date", () => {
+  test("the library label reads the placeholder's notes in the shared block", () => {
     render(<ShowcaseCatalogCard node={unseenEntry("Hunt the overprint.")} />);
 
     const card = screen.getByRole("button", {
       name: /is unseen\. Replace with note/,
     });
-    const line = card.querySelector(".showcase-catalog-notes");
+    const block = card.querySelector(".showcase-card-notes");
 
-    expect(line).toHaveTextContent("Hunt the overprint.");
-    expect(line).toHaveAttribute("title", "Hunt the overprint.");
-    expect(line.querySelector(".showcase-catalog-notes-label")).toHaveTextContent(
-      "Note",
+    expect(block).toHaveTextContent("Hunt the overprint.");
+    expect(block).toHaveAttribute("title", "Hunt the overprint.");
+    expect(block.className).toContain("showcase-card-notes--labels");
+    expect(
+      block.querySelector(".showcase-card-notes-label"),
+    ).toHaveTextContent("Note");
+    // The block is the note card's block: a sibling under the metadata row,
+    // never inside it.
+    expect(block.parentElement).toBe(card);
+    expect(block.previousElementSibling?.className).toBe(
+      "showcase-catalog-meta",
     );
-    expect(line.parentElement?.className).toBe(
-      "showcase-catalog-meta showcase-catalog-meta--placeholder",
-    );
-    expect(line.previousElementSibling?.className).toBe(
-      "showcase-catalog-line",
-    );
+    expect(card).toHaveAccessibleDescription(/Hunt the overprint/);
   });
 
   test("the auction rail reads the placeholder's notes under the date", () => {
@@ -351,13 +351,15 @@ describe("ShowcaseCatalogCard placeholder notes", () => {
     const card = screen.getByRole("button", {
       name: /is unseen\. Replace with note/,
     });
-    const line = card.querySelector(
-      ".showcase-catalog-rail .showcase-catalog-notes",
-    );
+    const rail = card.querySelector(".showcase-catalog-rail");
+    const block = rail.querySelector(".showcase-card-notes");
 
-    expect(line).toHaveTextContent("Hunt the overprint.");
-    expect(line.previousElementSibling?.className).toBe(
+    expect(block).toHaveTextContent("Hunt the overprint.");
+    expect(block.className).toContain("showcase-card-notes--rail");
+    expect(block.previousElementSibling?.className).toBe(
       "showcase-catalog-date",
     );
+    // The note takes the bottom slot; the empty line is for a bare position.
+    expect(rail).not.toHaveTextContent("No specimen recorded yet.");
   });
 });

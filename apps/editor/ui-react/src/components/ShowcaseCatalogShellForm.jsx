@@ -4,12 +4,12 @@ import {
   catalogEntryIdentity,
   normalizeCatalogEntry,
 } from "../lib/showcaseTree.js";
-import { ShowcaseCatalogNotes } from "./ShowcaseCatalogNotes.jsx";
+import { ShowcaseCardNotes } from "./ShowcaseCardNotes.jsx";
 import { ShowcaseCatalogWell } from "./ShowcaseCatalogWell.jsx";
 
 // Shared by the merged Add dialog and the Edit details dialog. A catalog shell
-// is only a planned position: catalog metadata, no note. Commas split several
-// shells that share the remaining fields.
+// is only a planned position: catalog metadata and its own reminder, never a
+// library note. Commas split several shells that share the remaining fields.
 function parseCatalogNumbers(raw) {
   return String(raw ?? "")
     .split(",")
@@ -160,7 +160,7 @@ function ShowcaseCatalogShellForm({
                 {catalogEntryCaption(preview)}
               </span>
             </span>
-            <ShowcaseCatalogNotes text={preview.notes} />
+            <ShowcaseCardNotes text={preview.notes} />
             <span className="showcase-catalog-foot">
               <span>Replace with a note</span>
               <span aria-hidden="true" className="showcase-catalog-arrow">

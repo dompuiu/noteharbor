@@ -2475,6 +2475,7 @@ function ShowcaseScreen() {
 
       {editShellNode && isCatalogEntry(editShellNode) ? (
         <ShowcaseDialog
+          className="showcase-shell-dialog"
           onClose={() => setEditShellId(null)}
           subtitle="Only this planned card's catalog metadata changes."
           title="Edit placeholder"
