@@ -31,7 +31,6 @@ vi.mock("./lib/api.js", () => ({
   replaceCatalogEntryWithNote: vi.fn(),
   updateCatalogEntry: vi.fn(),
   updateNode: vi.fn(),
-  updateNodeNotes: vi.fn(),
 }));
 
 vi.mock("./components/NotesTable.jsx", () => ({
@@ -307,8 +306,6 @@ describe("the merged add dialog", () => {
           issue_date: "",
           source: "",
         },
-        specimens: [],
-        primary_note_id: null,
         children: [],
       },
     });

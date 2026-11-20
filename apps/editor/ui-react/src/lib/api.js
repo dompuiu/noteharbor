@@ -594,19 +594,6 @@ async function replaceCatalogEntryWithNote(id, noteId) {
   return updateNode(id, { node_type: 'note', note_id: noteId });
 }
 
-// Replace an entry's specimen set atomically. The payload is the full ordered
-// `{ note_ids, primary_note_id? }`: adding, removing, reordering, and promoting
-// are all this one call, so Undo is a repeat of the previous payload.
-async function updateNodeNotes(id, payload) {
-  const response = await request(`/api/nodes/${id}/notes`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify(payload)
-  });
-
-  return handleResponse(response);
-}
-
 async function deleteNode(id) {
   const response = await request(`/api/nodes/${id}`, {
     method: 'DELETE'
@@ -759,7 +746,6 @@ export {
   scrapeTimeoutMessage,
   updateCatalogEntry,
   updateNode,
-  updateNodeNotes,
   updateNote,
   updateNotesOwned,
   updateNotesTags

@@ -969,10 +969,10 @@ async fn tree_returns_empty_and_reports_missing_showcase() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
-// --- catalog entries and specimens -----------------------------------------
+// --- catalog entries -------------------------------------------------------
 
-fn catalog_entry_body(parent_id: i64, note_ids: Option<Value>) -> Value {
-    let mut body = json!({
+fn catalog_entry_body(parent_id: i64) -> Value {
+    json!({
         "node_type": "catalog_entry",
         "parent_id": parent_id,
         "entry": {
@@ -981,24 +981,19 @@ fn catalog_entry_body(parent_id: i64, note_ids: Option<Value>) -> Value {
             "issue_date": "1877",
             "source": "Pick catalog",
         },
-    });
-    if let Some(ids) = note_ids {
-        body["note_ids"] = ids;
-    }
-    body
+    })
 }
 
 async fn add_catalog_entry(
     app: Router,
     showcase_id: i64,
     parent_id: i64,
-    note_ids: Option<Value>,
 ) -> (StatusCode, Value) {
     call(
         app,
         "POST",
         &format!("/api/showcases/{showcase_id}/nodes"),
-        Some(catalog_entry_body(parent_id, note_ids)),
+        Some(catalog_entry_body(parent_id)),
     )
     .await
 }
@@ -1010,36 +1005,6 @@ fn set_owned(dir: &tempfile::TempDir, note_id: i64, owned: bool) {
         rusqlite::params![i64::from(owned), note_id],
     )
     .expect("ownership updates");
-}
-
-fn specimen_rows(dir: &tempfile::TempDir, node_id: i64) -> Vec<(i64, i64, bool)> {
-    let conn = rusqlite::Connection::open(dir.path().join("banknotes.db")).expect("db opens");
-    let mut stmt = conn
-        .prepare(
-            "SELECT note_id, position, is_primary
-             FROM showcase_catalog_notes
-             WHERE node_id = ?1
-             ORDER BY position ASC, note_id ASC",
-        )
-        .expect("query prepares");
-    let rows = stmt
-        .query_map(rusqlite::params![node_id], |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
-        })
-        .expect("rows read")
-        .collect::<Result<Vec<_>, _>>()
-        .expect("rows collect");
-    rows
-}
-
-/// The specimen ids of a node payload, in wire order.
-fn specimen_ids(node: &Value) -> Vec<Value> {
-    node["specimens"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|specimen| specimen["id"].clone())
-        .collect()
 }
 
 /// Fetch the tree and return one direct child of the first root, by id.
@@ -1062,101 +1027,72 @@ async fn tree_child(app: Router, showcase_id: i64, node_id: Value) -> Value {
 }
 
 #[tokio::test]
-async fn catalog_entry_creates_with_zero_one_and_many_specimens() {
-    let (dir, state) = fresh_state();
+async fn catalog_entry_is_a_placeholder() {
+    let (_dir, state) = fresh_state();
     let app = create_app(state);
     let showcase = create_showcase(app.clone(), Some("Catalog entries")).await;
     let showcase_id = showcase["id"].as_i64().unwrap();
     let category = place_category(app.clone(), showcase_id, "Kingdom").await;
     let category_id = category["id"].as_i64().unwrap();
-    let collection = create_collection(app.clone(), "Specimen notes").await;
+    let collection = create_collection(app.clone(), "Shell notes").await;
     let collection_id = collection["id"].as_i64().unwrap();
-    let first = create_note(app.clone(), collection_id, "1 leu").await;
-    let second = create_note(app.clone(), collection_id, "2 lei").await;
-    let third = create_note(app.clone(), collection_id, "3 lei").await;
-    set_owned(&dir, second["id"].as_i64().unwrap(), true);
+    let note = create_note(app.clone(), collection_id, "1 leu").await;
 
-    // Zero specimens: a planned position, still a catalog entry.
-    let (status, body) = add_catalog_entry(app.clone(), showcase_id, category_id, None).await;
+    let (status, body) = add_catalog_entry(app.clone(), showcase_id, category_id).await;
     assert_eq!(status, StatusCode::CREATED, "{body:?}");
-    let empty = body["node"].clone();
-    assert_eq!(empty["node_type"], json!("catalog_entry"));
-    assert_eq!(empty["parent_node_id"], json!(category_id));
-    assert_eq!(empty["entry"]["catalog_number"], json!("22a"));
-    assert_eq!(empty["entry"]["denomination"], json!("20 lei"));
-    assert_eq!(empty["specimens"], json!([]));
-    assert!(empty["primary_note_id"].is_null());
-    assert!(empty.as_object().unwrap().contains_key("primary_note_id"));
-    assert_eq!(empty["children"], json!([]));
+    let entry = body["node"].clone();
+    assert_eq!(entry["node_type"], json!("catalog_entry"));
+    assert_eq!(entry["parent_node_id"], json!(category_id));
+    assert_eq!(entry["entry"]["catalog_number"], json!("22a"));
+    assert_eq!(entry["entry"]["denomination"], json!("20 lei"));
+    assert_eq!(entry["entry"]["issue_date"], json!("1877"));
+    assert_eq!(entry["entry"]["source"], json!("Pick catalog"));
+    assert_eq!(entry["children"], json!([]));
+    // A Placeholder holds no note: the wire carries no specimen fields at all.
+    assert!(entry.get("specimens").is_none());
+    assert!(entry.get("primary_note_id").is_none());
 
-    // One specimen: it is the primary.
-    let (status, body) = add_catalog_entry(
-        app.clone(),
-        showcase_id,
-        category_id,
-        Some(json!([second["id"]])),
-    )
-    .await;
-    assert_eq!(status, StatusCode::CREATED, "{body:?}");
-    let single = body["node"].clone();
-    assert_eq!(single["specimens"].as_array().unwrap().len(), 1);
-    assert_eq!(single["specimens"][0]["id"], second["id"]);
-    assert_eq!(single["specimens"][0]["owned"], json!(true));
-    assert_eq!(single["primary_note_id"], second["id"]);
-
-    // Several specimens keep the caller's order; the first id is primary.
-    let (status, body) = add_catalog_entry(
-        app.clone(),
-        showcase_id,
-        category_id,
-        Some(json!([third["id"], first["id"], second["id"]])),
-    )
-    .await;
-    assert_eq!(status, StatusCode::CREATED, "{body:?}");
-    let many = body["node"].clone();
-    let ordered = specimen_ids(&many);
-    assert_eq!(ordered, vec![third["id"].clone(), first["id"].clone(), second["id"].clone()]);
-    assert_eq!(many["primary_note_id"], third["id"]);
-
-    // The tree batches every specimen and reports them in position order.
+    // A stale client that still sends note_ids creates a plain shell; the
+    // extra key is ignored.
     let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/showcases/{showcase_id}/nodes"),
+        Some(json!({
+            "node_type": "catalog_entry",
+            "parent_id": category_id,
+            "entry": { "catalog_number": "22b" },
+            "note_ids": [note["id"]],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert!(body["node"].get("specimens").is_none());
+
+    let (status, tree) = call(
         app.clone(),
         "GET",
         &format!("/api/showcases/{showcase_id}/tree"),
         None,
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "{body:?}");
-    let children = body["nodes"][0]["children"].as_array().unwrap();
-    assert_eq!(children.len(), 3);
-    let tree_many = children
-        .iter()
-        .find(|node| node["id"] == many["id"])
-        .expect("entry in tree");
-    assert_eq!(tree_many["entry"]["source"], json!("Pick catalog"));
-    assert_eq!(tree_many["specimens"].as_array().unwrap().len(), 3);
-    assert_eq!(tree_many["specimens"][0]["id"], third["id"]);
-    assert_eq!(tree_many["specimens"][1]["issue_date"], first["issue_date"]);
-    assert_eq!(tree_many["primary_note_id"], third["id"]);
+    assert_eq!(status, StatusCode::OK, "{tree:?}");
+    let children = tree["nodes"][0]["children"].as_array().unwrap();
+    assert_eq!(children.len(), 2);
+    assert_eq!(children[0]["entry"]["catalog_number"], json!("22a"));
+    assert_eq!(children[1]["entry"]["catalog_number"], json!("22b"));
+    assert!(children.iter().all(|node| node.get("specimens").is_none()));
 }
 
 #[tokio::test]
-async fn catalog_entry_metadata_update_leaves_the_note_alone() {
+async fn catalog_entry_metadata_update_replaces_the_entry() {
     let (_dir, state) = fresh_state();
     let app = create_app(state);
     let showcase = create_showcase(app.clone(), Some("Entry metadata")).await;
     let showcase_id = showcase["id"].as_i64().unwrap();
     let category = place_category(app.clone(), showcase_id, "Metadata").await;
-    let collection = create_collection(app.clone(), "Metadata notes").await;
-    let collection_id = collection["id"].as_i64().unwrap();
-    let note = create_note(app.clone(), collection_id, "5 lei").await;
-    let (_, body) = add_catalog_entry(
-        app.clone(),
-        showcase_id,
-        category["id"].as_i64().unwrap(),
-        Some(json!([note["id"]])),
-    )
-    .await;
+    let (_, body) =
+        add_catalog_entry(app.clone(), showcase_id, category["id"].as_i64().unwrap()).await;
     let node_id = body["node"]["id"].as_i64().unwrap();
 
     let (status, body) = call(
@@ -1174,12 +1110,12 @@ async fn catalog_entry_metadata_update_leaves_the_note_alone() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["node"]["node_type"], json!("catalog_entry"));
+    assert_eq!(body["node"]["id"], json!(node_id));
     assert_eq!(body["node"]["entry"]["catalog_number"], json!("22b"));
     assert_eq!(body["node"]["entry"]["denomination"], json!("50 lei"));
     assert_eq!(body["node"]["entry"]["issue_date"], json!(""));
-    assert_eq!(body["node"]["specimens"][0]["id"], note["id"]);
-    // The library record keeps its own catalog number.
-    assert_eq!(body["node"]["specimens"][0]["catalog_number"], note["catalog_number"]);
+    assert_eq!(body["node"]["entry"]["source"], json!("My collection"));
 
     let invalid = call(
         app.clone(),
@@ -1192,153 +1128,24 @@ async fn catalog_entry_metadata_update_leaves_the_note_alone() {
 }
 
 #[tokio::test]
-async fn catalog_entry_notes_replace_reorder_promote_and_clear() {
-    let (dir, state) = fresh_state();
+async fn the_catalog_specimen_route_is_gone() {
+    let (_dir, state) = fresh_state();
     let app = create_app(state);
-    let showcase = create_showcase(app.clone(), Some("Specimen sets")).await;
+    let showcase = create_showcase(app.clone(), Some("Specimen route")).await;
     let showcase_id = showcase["id"].as_i64().unwrap();
-    let category = place_category(app.clone(), showcase_id, "Sets").await;
-    let collection = create_collection(app.clone(), "Set notes").await;
-    let collection_id = collection["id"].as_i64().unwrap();
-    let first = create_note(app.clone(), collection_id, "1").await;
-    let second = create_note(app.clone(), collection_id, "2").await;
-    let third = create_note(app.clone(), collection_id, "3").await;
-    let (_, body) = add_catalog_entry(
-        app.clone(),
-        showcase_id,
-        category["id"].as_i64().unwrap(),
-        Some(json!([first["id"], second["id"], third["id"]])),
-    )
-    .await;
-    let node_id = body["node"]["id"].as_i64().unwrap();
+    let category = place_category(app.clone(), showcase_id, "Kingdom").await;
+    let (_, body) =
+        add_catalog_entry(app.clone(), showcase_id, category["id"].as_i64().unwrap()).await;
+    let entry_id = body["node"]["id"].as_i64().unwrap();
 
-    // Replace with a shorter set and no primary: the first id promotes.
-    let (status, body) = call(
-        app.clone(),
-        "PUT",
-        &format!("/api/nodes/{node_id}/notes"),
-        Some(json!({ "note_ids": [third["id"], first["id"]] })),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK, "{body:?}");
-    let ids = specimen_ids(&body["node"]);
-    assert_eq!(ids, vec![third["id"].clone(), first["id"].clone()]);
-    assert_eq!(body["node"]["primary_note_id"], third["id"]);
-
-    // Reorder and promote an explicit primary in one call.
-    let (status, body) = call(
-        app.clone(),
-        "PUT",
-        &format!("/api/nodes/{node_id}/notes"),
-        Some(json!({
-            "note_ids": [first["id"], third["id"]],
-            "primary_note_id": third["id"],
-        })),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK, "{body:?}");
-    let ids = specimen_ids(&body["node"]);
-    assert_eq!(ids, vec![first["id"].clone(), third["id"].clone()]);
-    assert_eq!(body["node"]["primary_note_id"], third["id"]);
-
-    // An explicit primary may sit anywhere in the list.
-    let (status, body) = call(
-        app.clone(),
-        "PUT",
-        &format!("/api/nodes/{node_id}/notes"),
-        Some(json!({
-            "note_ids": [first["id"], second["id"], third["id"]],
-            "primary_note_id": second["id"],
-        })),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK, "{body:?}");
-    assert_eq!(body["node"]["primary_note_id"], second["id"]);
-
-    // Empty is allowed: the entry degrades to unseen, never disappears.
-    let (status, body) = call(
-        app.clone(),
-        "PUT",
-        &format!("/api/nodes/{node_id}/notes"),
-        Some(json!({ "note_ids": [] })),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK, "{body:?}");
-    assert_eq!(body["node"]["node_type"], json!("catalog_entry"));
-    assert_eq!(body["node"]["specimens"], json!([]));
-    assert!(body["node"]["primary_note_id"].is_null());
-    assert!(body["node"].as_object().unwrap().contains_key("primary_note_id"));
-
-    // Failed replacements leave the previous set untouched (atomic).
     let (status, _) = call(
-        app.clone(),
+        app,
         "PUT",
-        &format!("/api/nodes/{node_id}/notes"),
-        Some(json!({ "note_ids": [first["id"], second["id"]], "primary_note_id": second["id"] })),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    let before = specimen_rows(&dir, node_id);
-    assert_eq!(before.len(), 2);
-
-    let outside = call(
-        app.clone(),
-        "PUT",
-        &format!("/api/nodes/{node_id}/notes"),
-        Some(json!({ "note_ids": [first["id"]], "primary_note_id": second["id"] })),
-    )
-    .await;
-    assert_eq!(outside.0, StatusCode::BAD_REQUEST);
-    assert_eq!(specimen_rows(&dir, node_id), before);
-
-    let duplicated = call(
-        app.clone(),
-        "PUT",
-        &format!("/api/nodes/{node_id}/notes"),
-        Some(json!({ "note_ids": [first["id"], first["id"]] })),
-    )
-    .await;
-    assert_eq!(duplicated.0, StatusCode::BAD_REQUEST);
-    assert_eq!(specimen_rows(&dir, node_id), before);
-
-    let unknown_note = call(
-        app.clone(),
-        "PUT",
-        &format!("/api/nodes/{node_id}/notes"),
-        Some(json!({ "note_ids": [999999] })),
-    )
-    .await;
-    assert_eq!(unknown_note.0, StatusCode::BAD_REQUEST);
-    assert_eq!(specimen_rows(&dir, node_id), before);
-
-    let missing = call(
-        app.clone(),
-        "PUT",
-        &format!("/api/nodes/{node_id}/notes"),
-        Some(json!({})),
-    )
-    .await;
-    assert_eq!(missing.0, StatusCode::BAD_REQUEST);
-    assert_eq!(specimen_rows(&dir, node_id), before);
-
-    let unknown_node = call(
-        app.clone(),
-        "PUT",
-        "/api/nodes/999999/notes",
+        &format!("/api/nodes/{entry_id}/notes"),
         Some(json!({ "note_ids": [] })),
     )
     .await;
-    assert_eq!(unknown_node.0, StatusCode::NOT_FOUND);
-
-    // A category placement is not a specimen set.
-    let category_node = call(
-        app.clone(),
-        "PUT",
-        &format!("/api/nodes/{}/notes", category["id"]),
-        Some(json!({ "note_ids": [first["id"]] })),
-    )
-    .await;
-    assert_eq!(category_node.0, StatusCode::BAD_REQUEST);
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
@@ -1381,16 +1188,16 @@ async fn catalog_entry_placement_rules_are_unchanged() {
     )
     .await;
     let note_node_id = placed["nodes"][0]["id"].as_i64().unwrap();
-    let under_note = add_catalog_entry(app.clone(), showcase_id, note_node_id, None).await;
+    let under_note = add_catalog_entry(app.clone(), showcase_id, note_node_id).await;
     assert_eq!(under_note.0, StatusCode::BAD_REQUEST);
 
     // A Grouping is a valid parent.
-    let (status, body) = add_catalog_entry(app.clone(), showcase_id, grouping_id, None).await;
+    let (status, body) = add_catalog_entry(app.clone(), showcase_id, grouping_id).await;
     assert_eq!(status, StatusCode::CREATED, "{body:?}");
     let entry_id = body["node"]["id"].as_i64().unwrap();
 
     // Not under another catalog entry.
-    let under_entry = add_catalog_entry(app.clone(), showcase_id, entry_id, None).await;
+    let under_entry = add_catalog_entry(app.clone(), showcase_id, entry_id).await;
     assert_eq!(under_entry.0, StatusCode::BAD_REQUEST);
 
     // A parent must belong to this Showcase.
@@ -1401,7 +1208,6 @@ async fn catalog_entry_placement_rules_are_unchanged() {
         app.clone(),
         showcase_id,
         other_category["id"].as_i64().unwrap(),
-        None,
     )
     .await;
     assert_eq!(foreign.0, StatusCode::BAD_REQUEST);
@@ -1416,76 +1222,21 @@ async fn catalog_entry_placement_rules_are_unchanged() {
     .await;
     assert_eq!(missing_entry.0, StatusCode::BAD_REQUEST);
 
-    let unknown_note = add_catalog_entry(
-        app.clone(),
-        showcase_id,
-        category_id,
-        Some(json!([999999])),
-    )
-    .await;
-    assert_eq!(unknown_note.0, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
-async fn catalog_entry_survives_note_deletion_and_cascades_on_entry_delete() {
-    let (dir, state) = fresh_state();
+async fn deleting_a_catalog_entry_removes_only_that_planned_position() {
+    let (_dir, state) = fresh_state();
     let app = create_app(state);
     let showcase = create_showcase(app.clone(), Some("Entry deletion")).await;
     let showcase_id = showcase["id"].as_i64().unwrap();
     let category = place_category(app.clone(), showcase_id, "Deletion").await;
     let category_id = category["id"].as_i64().unwrap();
-    let collection = create_collection(app.clone(), "Deletion notes").await;
-    let collection_id = collection["id"].as_i64().unwrap();
-    let first = create_note(app.clone(), collection_id, "1").await;
-    let second = create_note(app.clone(), collection_id, "2").await;
-    let lone = create_note(app.clone(), collection_id, "3").await;
-    let (_, body) = add_catalog_entry(
-        app.clone(),
-        showcase_id,
-        category_id,
-        Some(json!([first["id"], second["id"]])),
-    )
-    .await;
+    let (_, body) = add_catalog_entry(app.clone(), showcase_id, category_id).await;
     let entry_id = body["node"]["id"].as_i64().unwrap();
-    let (_, body) = add_catalog_entry(
-        app.clone(),
-        showcase_id,
-        category_id,
-        Some(json!([lone["id"]])),
-    )
-    .await;
-    let lone_entry_id = body["node"]["id"].as_i64().unwrap();
+    let (_, body) = add_catalog_entry(app.clone(), showcase_id, category_id).await;
+    let keeper_id = body["node"]["id"].as_i64().unwrap();
 
-    // Deleting the primary Note promotes the lowest-position survivor.
-    let (status, body) = call(
-        app.clone(),
-        "DELETE",
-        &format!("/api/notes/{}", first["id"]),
-        None,
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK, "{body:?}");
-    let entry = tree_child(app.clone(), showcase_id, json!(entry_id)).await;
-    assert_eq!(entry["specimens"].as_array().unwrap().len(), 1);
-    assert_eq!(entry["specimens"][0]["id"], second["id"]);
-    assert_eq!(entry["primary_note_id"], second["id"]);
-
-    // Deleting its last Note leaves the entry unseen, not deleted.
-    let (status, _) = call(
-        app.clone(),
-        "DELETE",
-        &format!("/api/notes/{}", lone["id"]),
-        None,
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    let lone_entry = tree_child(app.clone(), showcase_id, json!(lone_entry_id)).await;
-    assert_eq!(lone_entry["specimens"], json!([]));
-    assert!(lone_entry["primary_note_id"].is_null());
-    assert!(lone_entry.as_object().unwrap().contains_key("primary_note_id"));
-
-    // Deleting an entry cascades its join rows.
-    assert_eq!(specimen_rows(&dir, entry_id).len(), 1);
     let (status, body) = call(
         app.clone(),
         "DELETE",
@@ -1494,7 +1245,16 @@ async fn catalog_entry_survives_note_deletion_and_cascades_on_entry_delete() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
-    assert!(specimen_rows(&dir, entry_id).is_empty());
+    let (_, tree) = call(
+        app.clone(),
+        "GET",
+        &format!("/api/showcases/{showcase_id}/tree"),
+        None,
+    )
+    .await;
+    let children = tree["nodes"][0]["children"].as_array().unwrap();
+    assert_eq!(children.len(), 1);
+    assert_eq!(children[0]["id"], json!(keeper_id));
 }
 
 #[tokio::test]
@@ -1509,12 +1269,8 @@ async fn showcase_counts_positions_by_ownership() {
     let collection_id = collection["id"].as_i64().unwrap();
     let owned_note = create_note(app.clone(), collection_id, "owned").await;
     let seen_note = create_note(app.clone(), collection_id, "seen").await;
-    let owned_specimen = create_note(app.clone(), collection_id, "owned specimen").await;
-    let seen_specimen = create_note(app.clone(), collection_id, "seen specimen").await;
     set_owned(&dir, owned_note["id"].as_i64().unwrap(), true);
-    set_owned(&dir, owned_specimen["id"].as_i64().unwrap(), true);
     set_owned(&dir, seen_note["id"].as_i64().unwrap(), false);
-    set_owned(&dir, seen_specimen["id"].as_i64().unwrap(), false);
 
     // Two note leaves (one owned, one seen).
     let (status, _) = call(
@@ -1529,22 +1285,10 @@ async fn showcase_counts_positions_by_ownership() {
     )
     .await;
     assert_eq!(status, StatusCode::CREATED);
-    // One owned entry, one seen entry, one unseen entry.
-    add_catalog_entry(
-        app.clone(),
-        showcase_id,
-        category_id,
-        Some(json!([owned_specimen["id"]])),
-    )
-    .await;
-    add_catalog_entry(
-        app.clone(),
-        showcase_id,
-        category_id,
-        Some(json!([seen_specimen["id"]])),
-    )
-    .await;
-    add_catalog_entry(app.clone(), showcase_id, category_id, None).await;
+    // Three planned positions; a shell is never owned or seen.
+    for _ in 0..3 {
+        add_catalog_entry(app.clone(), showcase_id, category_id).await;
+    }
 
     let (status, body) = call(app.clone(), "GET", "/api/showcases", None).await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
@@ -1557,7 +1301,7 @@ async fn showcase_counts_positions_by_ownership() {
     assert_eq!(counted["note_count"], json!(2));
     assert_eq!(counted["catalog_entry_count"], json!(3));
     assert_eq!(counted["entry_count"], json!(5));
-    assert_eq!(counted["owned_count"], json!(2));
+    assert_eq!(counted["owned_count"], json!(1));
 
     // The single-showcase payload carries the same counts.
     let (status, body) = call(
@@ -1571,9 +1315,9 @@ async fn showcase_counts_positions_by_ownership() {
     assert_eq!(body["showcase"]["note_count"], json!(2));
     assert_eq!(body["showcase"]["catalog_entry_count"], json!(3));
     assert_eq!(body["showcase"]["entry_count"], json!(5));
-    assert_eq!(body["showcase"]["owned_count"], json!(2));
+    assert_eq!(body["showcase"]["owned_count"], json!(1));
 
-    // The tree's note payloads carry the owned flag for leaves and specimens.
+    // The tree's note payloads carry the owned flag for leaves.
     let (_, tree) = call(
         app.clone(),
         "GET",
@@ -1587,11 +1331,11 @@ async fn showcase_counts_positions_by_ownership() {
         .find(|node| node["note_id"] == seen_note["id"])
         .expect("seen leaf");
     assert_eq!(seen_leaf["note"]["owned"], json!(false));
-    let seen_entry = children
+    let owned_leaf = children
         .iter()
-        .find(|node| node["specimens"][0]["id"] == seen_specimen["id"])
-        .expect("seen entry");
-    assert_eq!(seen_entry["specimens"][0]["owned"], json!(false));
+        .find(|node| node["note_id"] == owned_note["id"])
+        .expect("owned leaf");
+    assert_eq!(owned_leaf["note"]["owned"], json!(true));
 
     // A presentation-only Showcase keeps note_count and reports no entries.
     let plain = create_showcase(app.clone(), Some("Plain")).await;
@@ -1623,7 +1367,7 @@ async fn showcase_counts_positions_by_ownership() {
 
 #[tokio::test]
 async fn catalog_entry_becomes_a_note_in_place() {
-    let (dir, state) = fresh_state();
+    let (_dir, state) = fresh_state();
     let app = create_app(state);
     let showcase = create_showcase(app.clone(), Some("Shell replacement")).await;
     let showcase_id = showcase["id"].as_i64().unwrap();
@@ -1631,23 +1375,15 @@ async fn catalog_entry_becomes_a_note_in_place() {
     let category_id = category["id"].as_i64().unwrap();
     let collection = create_collection(app.clone(), "Replacement notes").await;
     let collection_id = collection["id"].as_i64().unwrap();
-    let first = create_note(app.clone(), collection_id, "1 leu").await;
     let second = create_note(app.clone(), collection_id, "2 lei").await;
 
-    let (status, body) = add_catalog_entry(
-        app.clone(),
-        showcase_id,
-        category_id,
-        Some(json!([first["id"], second["id"]])),
-    )
-    .await;
+    let (status, body) = add_catalog_entry(app.clone(), showcase_id, category_id).await;
     assert_eq!(status, StatusCode::CREATED, "{body:?}");
     let entry = body["node"].clone();
     let entry_id = entry["id"].as_i64().unwrap();
-    assert_eq!(entry["specimens"].as_array().unwrap().len(), 2);
 
     // Picking a library note turns the planned position into that one note,
-    // keeping its id and parent. The extra specimen links leave with the shell.
+    // keeping its id and parent.
     let (status, body) = call(
         app.clone(),
         "PUT",
@@ -1662,9 +1398,6 @@ async fn catalog_entry_becomes_a_note_in_place() {
     assert_eq!(replaced["parent_node_id"], json!(category_id));
     assert_eq!(replaced["note"]["denomination"], second["denomination"]);
     assert!(replaced.get("entry").is_none());
-    assert!(replaced.get("specimens").is_none());
-    assert!(replaced.get("primary_note_id").is_none());
-    assert!(specimen_rows(&dir, entry_id).is_empty());
 
     let in_tree = tree_child(app, showcase_id, json!(entry_id)).await;
     assert_eq!(in_tree["node_type"], json!("note"));
@@ -1794,51 +1527,51 @@ async fn replacing_a_cover_note_card_repoints_the_grouping_cover() {
 }
 
 #[tokio::test]
-async fn legacy_specimen_entries_migrate_to_single_note_cards() {
+async fn a_legacy_specimen_table_is_dropped_on_open() {
     let (dir, state) = fresh_state();
     let app = create_app(state);
     let showcase = create_showcase(app.clone(), Some("Legacy catalog")).await;
     let showcase_id = showcase["id"].as_i64().unwrap();
     let category = place_category(app.clone(), showcase_id, "Kingdom").await;
     let category_id = category["id"].as_i64().unwrap();
-    let collection = create_collection(app.clone(), "Legacy notes").await;
-    let collection_id = collection["id"].as_i64().unwrap();
-    let first = create_note(app.clone(), collection_id, "1 leu").await;
-    let second = create_note(app.clone(), collection_id, "2 lei").await;
-
-    let (status, body) = add_catalog_entry(
-        app.clone(),
-        showcase_id,
-        category_id,
-        Some(json!([first["id"], second["id"]])),
-    )
-    .await;
-    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let (_, body) = add_catalog_entry(app.clone(), showcase_id, category_id).await;
     let entry_id = body["node"]["id"].as_i64().unwrap();
-    assert_eq!(specimen_rows(&dir, entry_id).len(), 2);
-
-    // Reopening the database runs the shell migration: the primary specimen
-    // becomes the node's note, and the extra specimen links are dropped.
     drop(app);
+
+    // A database from a build that authored specimen sets still carries the
+    // join. Reopening drops it and leaves the planned position untouched.
+    {
+        let conn = rusqlite::Connection::open(dir.path().join("banknotes.db")).expect("db opens");
+        conn.execute_batch(
+            "CREATE TABLE showcase_catalog_notes (
+               node_id INTEGER NOT NULL,
+               note_id INTEGER NOT NULL,
+               position INTEGER NOT NULL,
+               is_primary INTEGER NOT NULL DEFAULT 0
+             );",
+        )
+        .expect("legacy join created");
+    }
     let pool: DbPool = db::open_pool(&dir.path().join("banknotes.db")).expect("pool reopens");
     let conn = pool.get().expect("connection");
+    let remaining: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master
+             WHERE type = 'table' AND name = 'showcase_catalog_notes'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("table lookup");
+    assert_eq!(remaining, 0);
     let (node_type, note_id): (String, Option<i64>) = conn
         .query_row(
             "SELECT node_type, note_id FROM showcase_nodes WHERE id = ?1",
             rusqlite::params![entry_id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
-        .expect("migrated node");
-    assert_eq!(node_type, "note");
-    assert_eq!(note_id, first["id"].as_i64());
-    let remaining: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM showcase_catalog_notes WHERE node_id = ?1",
-            rusqlite::params![entry_id],
-            |row| row.get(0),
-        )
-        .expect("specimen count");
-    assert_eq!(remaining, 0);
+        .expect("entry row");
+    assert_eq!(node_type, "catalog_entry");
+    assert_eq!(note_id, None);
 }
 
 // --- moves ------------------------------------------------------------------------
@@ -2052,7 +1785,6 @@ async fn duplicate_category_copies_the_whole_subtree_and_appends_it() {
     let collection = create_collection(app.clone(), "Duplicated notes").await;
     let collection_id = collection["id"].as_i64().unwrap();
     let first = create_note(app.clone(), collection_id, "1 leu").await;
-    let second = create_note(app.clone(), collection_id, "2 lei").await;
 
     let root = place_category(app.clone(), source_id, "Themed").await;
     let root_id = root["id"].as_i64().unwrap();
@@ -2094,13 +1826,7 @@ async fn duplicate_category_copies_the_whole_subtree_and_appends_it() {
     )
     .await;
     assert_eq!(status, StatusCode::CREATED, "{body:?}");
-    let (status, body) = add_catalog_entry(
-        app.clone(),
-        source_id,
-        grouping_id,
-        Some(json!([second["id"], first["id"]])),
-    )
-    .await;
+    let (status, body) = add_catalog_entry(app.clone(), source_id, grouping_id).await;
     assert_eq!(status, StatusCode::CREATED, "{body:?}");
     let entry_id = body["node"]["id"].as_i64().unwrap();
     // Put the later-created entry first: the copy must follow position, not id.
@@ -2169,11 +1895,7 @@ async fn duplicate_category_copies_the_whole_subtree_and_appends_it() {
     assert_eq!(entry_copy["entry"]["denomination"], json!("20 lei"));
     assert_eq!(entry_copy["entry"]["issue_date"], json!("1877"));
     assert_eq!(entry_copy["entry"]["source"], json!("Pick catalog"));
-    assert_eq!(
-        specimen_ids(entry_copy),
-        vec![second["id"].clone(), first["id"].clone()]
-    );
-    assert_eq!(entry_copy["primary_note_id"], second["id"]);
+    assert!(entry_copy.get("specimens").is_none());
     // The third level copies too, and its order is position, not id: the entry
     // was created after the nested grouping.
     let nested_copy = &grouping_copy["children"][1];

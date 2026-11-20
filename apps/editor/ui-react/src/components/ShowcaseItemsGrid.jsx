@@ -2,7 +2,6 @@ import {
   isCatalogEntry,
   isNoteNode,
   nodeCatalogState,
-  primarySpecimen,
   showcaseNodeLabel,
 } from "../lib/showcaseTree.js";
 import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
@@ -97,18 +96,9 @@ function ShowcaseItemsGrid({
   function menuFor(node, { isGrouping = false, isShell = false } = {}) {
     const index = items.findIndex((entry) => entry.id === node.id);
     const label = showcaseNodeLabel(node);
-    const ownershipNote = isCatalogEntry(node)
-      ? primarySpecimen(node)
-      : node.node_type === "note"
-        ? node.note
-        : null;
+    const ownershipNote = node.node_type === "note" ? node.note : null;
     const catalogState =
       ownershipNote != null ? nodeCatalogState(node) : null;
-    const displayedNote = isCatalogEntry(node)
-      ? primarySpecimen(node)
-      : node.node_type === "note"
-        ? node.note
-        : null;
 
     return (
       <ShowcaseItemMenu
@@ -126,8 +116,8 @@ function ShowcaseItemsGrid({
         canMoveUp={index > 0}
         onEditDetails={() => onEditShell(node)}
         onEditNote={
-          displayedNote && onEditNote
-            ? () => onEditNote(displayedNote, node.id)
+          ownershipNote && onEditNote
+            ? () => onEditNote(ownershipNote, node.id)
             : undefined
         }
         onMoveDown={

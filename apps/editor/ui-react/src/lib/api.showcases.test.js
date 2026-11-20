@@ -8,7 +8,6 @@ import {
   renameShowcase,
   reorderShowcases,
   updateCatalogEntry,
-  updateNodeNotes,
 } from "./api.js";
 
 function stubFetch(implementation) {
@@ -163,32 +162,6 @@ describe("catalog entry API calls", () => {
         parent_id: 7,
         entry,
       }),
-    });
-  });
-
-  test("updateNodeNotes replaces the full ordered specimen set", async () => {
-    const fetchMock = stubFetch(async () =>
-      jsonResponse(200, { node: { id: 9, primary_note_id: 5 } }),
-    );
-
-    await updateNodeNotes(9, { note_ids: [4, 5], primary_note_id: 5 });
-
-    expect(fetchMock).toHaveBeenCalledWith("/api/nodes/9/notes", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ note_ids: [4, 5], primary_note_id: 5 }),
-    });
-  });
-
-  test("updateNodeNotes can clear the set", async () => {
-    const fetchMock = stubFetch(async () => jsonResponse(200, { node: { id: 9 } }));
-
-    await updateNodeNotes(9, { note_ids: [] });
-
-    expect(fetchMock).toHaveBeenCalledWith("/api/nodes/9/notes", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ note_ids: [] }),
     });
   });
 });

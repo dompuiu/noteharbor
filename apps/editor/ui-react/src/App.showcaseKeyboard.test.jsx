@@ -38,7 +38,6 @@ vi.mock("./lib/api.js", () => ({
   replaceCatalogEntryWithNote: vi.fn(),
   updateCatalogEntry: vi.fn(),
   updateNode: vi.fn(),
-  updateNodeNotes: vi.fn(),
 }));
 
 vi.mock("./components/NotesTable.jsx", () => ({

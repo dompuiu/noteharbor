@@ -338,49 +338,6 @@ mod catalog_schema {
         conn.last_insert_rowid()
     }
 
-    fn seed_entry(conn: &Connection) -> (i64, i64) {
-        conn.execute("INSERT INTO collections (name) VALUES ('Holder')", [])
-            .expect("insert collection");
-        let collection_id = conn.last_insert_rowid();
-        conn.execute("INSERT INTO showcases (name) VALUES ('Catalog')", [])
-            .expect("insert showcase");
-        let showcase_id = conn.last_insert_rowid();
-        conn.execute(
-            "INSERT INTO showcase_nodes (showcase_id, node_type, name, position)
-             VALUES (?1, 'grouping', 'Group', 1)",
-            params![showcase_id],
-        )
-        .expect("insert grouping");
-        let parent_id = conn.last_insert_rowid();
-        conn.execute(
-            "INSERT INTO showcase_nodes
-               (showcase_id, parent_node_id, node_type, catalog_number, denomination, position)
-             VALUES (?1, ?2, 'catalog_entry', '22a', '1 dollar', 1)",
-            params![showcase_id, parent_id],
-        )
-        .expect("insert catalog entry");
-        (collection_id, conn.last_insert_rowid())
-    }
-
-    fn specimen(conn: &Connection, node_id: i64, note_id: i64, position: i64, primary: bool) {
-        conn.execute(
-            "INSERT INTO showcase_catalog_notes (node_id, note_id, position, is_primary)
-             VALUES (?1, ?2, ?3, ?4)",
-            params![node_id, note_id, position, primary],
-        )
-        .expect("insert specimen");
-    }
-
-    fn primary_note(conn: &Connection, node_id: i64) -> Option<i64> {
-        conn.query_row(
-            "SELECT note_id FROM showcase_catalog_notes
-             WHERE node_id = ?1 AND is_primary = 1",
-            params![node_id],
-            |row| row.get(0),
-        )
-        .ok()
-    }
-
     fn read_owned(conn: &Connection, id: i64) -> i64 {
         conn.query_row("SELECT owned FROM banknotes WHERE id = ?1", params![id], |row| row.get(0))
             .expect("read owned")
@@ -429,42 +386,23 @@ mod catalog_schema {
         );
 
         let indexes = objects(&conn, "index");
-        for index in [
-            "idx_showcase_nodes_category_once",
-            "idx_showcase_nodes_parent",
-            "idx_showcase_catalog_notes_primary",
-            "idx_showcase_catalog_notes_position",
-        ] {
+        for index in ["idx_showcase_nodes_category_once", "idx_showcase_nodes_parent"] {
             assert!(
                 indexes.iter().any(|value| value == index),
                 "missing index {index}"
             );
         }
 
-        let triggers = objects(&conn, "trigger");
-        for trigger in [
-            "trg_showcase_catalog_notes_demote_insert",
-            "trg_showcase_catalog_notes_demote_update",
-            "trg_showcase_catalog_notes_first_primary",
-            "trg_showcase_catalog_notes_promote_primary",
-        ] {
-            assert!(
-                triggers.iter().any(|value| value == trigger),
-                "missing trigger {trigger}"
-            );
-        }
-
-        let key_columns = rows(
-            &conn,
-            "SELECT name, pk FROM pragma_table_info('showcase_catalog_notes')
-             WHERE pk > 0 ORDER BY pk",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+        // The retired specimen join must not come back.
+        assert!(
+            !objects(&conn, "table")
+                .iter()
+                .any(|value| value == "showcase_catalog_notes"),
+            "a fresh database has no specimen join"
         );
-        assert_eq!(
-            key_columns,
-            vec![("node_id".to_owned(), 1), ("note_id".to_owned(), 2)],
-            "the specimen key must be (node_id, note_id)"
+        assert!(
+            !indexes.iter().any(|value| value.starts_with("idx_showcase_catalog_notes")),
+            "no specimen indexes"
         );
     }
 
@@ -491,102 +429,6 @@ mod catalog_schema {
         assert_eq!(read_owned(&conn, owned), 1);
     }
 
-    #[test]
-    fn specimen_triggers_keep_exactly_one_primary() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let conn = initialized(&dir);
-
-        let (collection_id, entry_id) = seed_entry(&conn);
-        let first = seed_note(&conn, collection_id, "22a1");
-        let second = seed_note(&conn, collection_id, "22a2");
-        let third = seed_note(&conn, collection_id, "22a3");
-        let fourth = seed_note(&conn, collection_id, "22a4");
-
-        // An explicit primary inserted first wins; the following row keeps it.
-        specimen(&conn, entry_id, second, 2, true);
-        specimen(&conn, entry_id, first, 1, false);
-        assert_eq!(
-            primary_note(&conn, entry_id),
-            Some(second),
-            "an explicit primary survives later inserts"
-        );
-
-        // A later explicit primary takes over instead of colliding with the
-        // partial unique index: the schema demotes the old one.
-        specimen(&conn, entry_id, third, 3, true);
-        assert_eq!(primary_note(&conn, entry_id), Some(third), "an explicit primary takes over");
-        let primaries = rows(
-            &conn,
-            "SELECT note_id FROM showcase_catalog_notes WHERE node_id = ?1 AND is_primary = 1",
-            params![entry_id],
-            |row| row.get::<_, i64>(0),
-        );
-        assert_eq!(primaries, vec![third], "at most one primary");
-
-        let invalid_primary = conn.execute(
-            "INSERT INTO showcase_catalog_notes (node_id, note_id, position, is_primary)
-             VALUES (?1, ?2, 4, 2)",
-            params![entry_id, fourth],
-        );
-        assert!(invalid_primary.is_err(), "is_primary is a 0/1 flag");
-
-        // Promoting by update moves primacy the same way.
-        conn.execute(
-            "UPDATE showcase_catalog_notes SET is_primary = 1
-             WHERE node_id = ?1 AND note_id = ?2",
-            params![entry_id, first],
-        )
-        .expect("promote by update");
-        assert_eq!(primary_note(&conn, entry_id), Some(first), "update promotes");
-
-        // Removing the primary promotes the lowest-position specimen.
-        conn.execute(
-            "DELETE FROM showcase_catalog_notes WHERE node_id = ?1 AND note_id = ?2",
-            params![entry_id, first],
-        )
-        .expect("delete primary");
-        assert_eq!(primary_note(&conn, entry_id), Some(second), "promotion by position");
-
-        // Deleting the Note from the library cascades and promotes as well.
-        conn.execute("DELETE FROM banknotes WHERE id = ?1", params![second])
-            .expect("delete note");
-        let remaining = rows(
-            &conn,
-            "SELECT note_id FROM showcase_catalog_notes WHERE node_id = ?1",
-            params![entry_id],
-            |row| row.get::<_, i64>(0),
-        );
-        assert_eq!(remaining, vec![third], "only the other specimen survives");
-        assert_eq!(primary_note(&conn, entry_id), Some(third), "cascade promotes");
-
-        // The entry outlives its specimens: unseen, not deleted.
-        conn.execute(
-            "DELETE FROM showcase_catalog_notes WHERE node_id = ?1",
-            params![entry_id],
-        )
-        .expect("delete specimens");
-        assert_eq!(primary_note(&conn, entry_id), None);
-        let entry_type: String = conn
-            .query_row(
-                "SELECT node_type FROM showcase_nodes WHERE id = ?1",
-                params![entry_id],
-                |row| row.get(0),
-            )
-            .expect("entry survives");
-        assert_eq!(entry_type, "catalog_entry");
-
-        // Deleting the entry takes its specimens with it.
-        specimen(&conn, entry_id, third, 1, false);
-        conn.execute("DELETE FROM showcase_nodes WHERE id = ?1", params![entry_id])
-            .expect("delete entry");
-        let joins = rows(&conn, "SELECT note_id FROM showcase_catalog_notes", [], |row| {
-            row.get::<_, i64>(0)
-        });
-        assert!(joins.is_empty(), "node delete cascades the joins");
-    }
-
-    /// A database written before catalog entries keeps its showcase tree, its
-    /// indexes, and its notes when it is opened by this build.
     #[test]
     fn existing_presentation_showcase_survives_the_migration() {
         let dir = tempfile::tempdir().expect("tempdir");

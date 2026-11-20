@@ -240,9 +240,9 @@ function ShowcaseNotePicker({
     [node],
   );
 
-  // The Add dialog hides the entry's own specimens instead of showing them
-  // disabled: there is nothing to pick on a note that is already attached. A
-  // missing list keeps the standalone finder unchanged.
+  // The replacement finder hides the note the card already presents instead of
+  // showing it disabled: there is nothing to pick on a note already attached.
+  // A missing list keeps the standalone finder unchanged.
   const excludedIds = useMemo(
     () => new Set(excludeNoteIds ?? []),
     [excludeNoteIds],

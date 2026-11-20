@@ -26,7 +26,6 @@ vi.mock("./lib/api.js", () => ({
   reorderCollections: vi.fn(),
   updateCatalogEntry: vi.fn(),
   updateNode: vi.fn(),
-  updateNodeNotes: vi.fn(),
 }));
 
 vi.mock("./components/CollectionScreen.jsx", () => ({

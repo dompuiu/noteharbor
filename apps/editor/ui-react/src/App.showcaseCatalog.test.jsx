@@ -30,7 +30,6 @@ vi.mock("./lib/api.js", () => ({
   updateCatalogEntry: vi.fn(),
   updateNode: vi.fn(),
   updateNote: vi.fn(),
-  updateNodeNotes: vi.fn(),
   reorderNodes: vi.fn(),
   replaceCatalogEntryWithNote: vi.fn(),
 }));
@@ -72,7 +71,6 @@ import {
   replaceCatalogEntryWithNote,
   updateCatalogEntry,
   updateNode,
-  updateNodeNotes,
   updateNote,
 } from "./lib/api.js";
 import { CollectionsProvider } from "./lib/collections.jsx";
@@ -151,7 +149,7 @@ function noteNode(id, theNote, position = 1) {
 
 function entryNode(
   id,
-  { catalog_number, specimens = [], primary = null, denomination = "1 leu", issue_date = "1917" },
+  { catalog_number, denomination = "1 leu", issue_date = "1917" } = {},
   position = 1,
 ) {
   return {
@@ -172,8 +170,6 @@ function entryNode(
       issue_date,
       source: "",
     },
-    specimens,
-    primary_note_id: primary,
   };
 }
 
@@ -196,48 +192,14 @@ function categoryNode(children = []) {
 function catalogTree() {
   return [
     categoryNode([
-      // Owned through an owned primary, with a seen reference beside it.
-      entryNode(
-        20,
-        {
-          catalog_number: "22a",
-          specimens: [OWNED_NOTE, REFERENCE_NOTE],
-          primary: OWNED_NOTE.id,
-        },
-        1,
-      ),
-      // Seen: specimens exist, none owned.
-      entryNode(
-        21,
-        {
-          catalog_number: "24c",
-          denomination: "5 lei",
-          issue_date: "1920",
-          specimens: [SEEN_NOTE],
-          primary: SEEN_NOTE.id,
-        },
-        2,
-      ),
-      // Unseen: a position with no record at all.
+      // Two owned note leaves, one seen reference, and one planned shell: the
+      // three card states the checklist paints.
+      noteNode(30, OWNED_NOTE, 1),
+      noteNode(31, SECOND_OWNED_ENTRY_NOTE, 2),
+      noteNode(32, SEEN_NOTE, 3),
       entryNode(
         22,
-        {
-          catalog_number: "25d",
-          denomination: "10 lei",
-          issue_date: "1921",
-        },
-        3,
-      ),
-      // A second owned entry, for the presentation count.
-      entryNode(
-        23,
-        {
-          catalog_number: "23b",
-          denomination: "2 lei",
-          issue_date: "1919",
-          specimens: [SECOND_OWNED_ENTRY_NOTE],
-          primary: SECOND_OWNED_ENTRY_NOTE.id,
-        },
+        { catalog_number: "25d", denomination: "10 lei", issue_date: "1921" },
         4,
       ),
     ]),
@@ -304,7 +266,6 @@ beforeEach(() => {
   updateNote.mockImplementation(async (id, payload) => ({
     note: { ...OWNED_NOTE, ...payload, id },
   }));
-  updateNodeNotes.mockResolvedValue({ node: null });
 });
 
 describe("a presentation-only showcase", () => {
@@ -650,15 +611,7 @@ describe("the catalog card layouts", () => {
     };
     await openShowcase([
       categoryNode([
-        entryNode(
-          20,
-          {
-            catalog_number: "22a",
-            specimens: [OWNED_NOTE],
-            primary: OWNED_NOTE.id,
-          },
-          1,
-        ),
+        entryNode(20, { catalog_number: "22a" }, 1),
         group,
       ]),
     ]);
@@ -678,7 +631,7 @@ describe("the catalog card layouts", () => {
     expect(grouping.querySelector(".showcase-grouping-head")).toBeNull();
   });
 
-  test("prints the specimen grade in both layouts", async () => {
+  test("prints the note's grade in both layouts", async () => {
     const user = userEvent.setup();
     const graded = note(106, {
       catalog_number: "26e",
@@ -689,19 +642,7 @@ describe("the catalog card layouts", () => {
     graded.grading_company = "PMG";
 
     const { container } = await openShowcase([
-      categoryNode([
-        entryNode(
-          30,
-          {
-            catalog_number: "26e",
-            denomination: "50 lei",
-            issue_date: "1922",
-            specimens: [graded],
-            primary: graded.id,
-          },
-          1,
-        ),
-      ]),
+      categoryNode([noteNode(30, graded, 1)]),
     ]);
 
     expect(container.querySelector(".showcase-catalog-grade b")).toHaveTextContent(
@@ -727,16 +668,12 @@ describe("the keyboard path through a catalog card", () => {
     const { container } = await openShowcase();
 
     const cell = container.querySelector(
-      '.showcase-reorder-cell:has(.showcase-catalog-cell[data-showcase-node-id="20"])',
+      '.showcase-reorder-cell:has(.showcase-catalog-cell[data-showcase-node-id="30"])',
     );
-    const card = within(cell).getByRole("button", {
-      name: "Slideshow from Pick 22a · 1917 · 1 leu",
-    });
-    const trigger = within(cell).getByRole("button", {
-      name: "Actions for Pick 22a",
-    });
+    const card = within(cell).getByRole("button", { name: /^Pick 22a · 1917 · 1 leu$/ });
+    const trigger = within(cell).getByRole("button", { name: /^Actions for / });
     const ownership = within(cell).getByRole("button", {
-      name: "Pick 22a · 1917 · 1 leu is owned. Mark as not owned",
+      name: /is owned\. Mark as not owned/,
     });
 
     card.focus();
@@ -748,9 +685,9 @@ describe("the keyboard path through a catalog card", () => {
     await user.tab();
     const nextCard = within(
       container.querySelector(
-        '.showcase-reorder-cell:has(.showcase-catalog-cell[data-showcase-node-id="21"])',
+        '.showcase-reorder-cell:has(.showcase-catalog-cell[data-showcase-node-id="31"])',
       ),
-    ).getByRole("button", { name: /^Slideshow from Pick 24c/ });
+    ).getByRole("button", { name: /^Pick 23b · 1919 · 2 lei$/ });
     expect(nextCard).toHaveFocus();
   });
 
@@ -766,16 +703,12 @@ describe("the keyboard path through a catalog card", () => {
     );
 
     const cell = container.querySelector(
-      '.showcase-reorder-cell:has(.showcase-catalog-cell[data-showcase-node-id="20"])',
+      '.showcase-reorder-cell:has(.showcase-catalog-cell[data-showcase-node-id="30"])',
     );
-    const card = within(cell).getByRole("button", {
-      name: "Slideshow from Pick 22a · 1917 · 1 leu",
-    });
-    const trigger = within(cell).getByRole("button", {
-      name: "Actions for Pick 22a",
-    });
+    const card = within(cell).getByRole("button", { name: /^Pick 22a · 1917 · 1 leu$/ });
+    const trigger = within(cell).getByRole("button", { name: /^Actions for / });
     const ownership = within(cell).getByRole("button", {
-      name: "Pick 22a · 1917 · 1 leu is owned. Mark as not owned",
+      name: /is owned\. Mark as not owned/,
     });
 
     card.focus();
@@ -830,42 +763,13 @@ describe("the catalog checklist", () => {
       note: null,
       cover_note: null,
       children: [
-        entryNode(
-          30,
-          {
-            catalog_number: "22a",
-            specimens: [OWNED_NOTE],
-            primary: OWNED_NOTE.id,
-          },
-          1,
-        ),
-        entryNode(
-          31,
-          {
-            catalog_number: "23b",
-            specimens: [SECOND_OWNED_ENTRY_NOTE],
-            primary: SECOND_OWNED_ENTRY_NOTE.id,
-          },
-          2,
-        ),
+        noteNode(30, OWNED_NOTE, 1),
+        noteNode(31, SECOND_OWNED_ENTRY_NOTE, 2),
         entryNode(32, { catalog_number: "25d" }, 3),
       ],
     };
 
-    await openShowcase([
-      categoryNode([
-        entryNode(
-          20,
-          {
-            catalog_number: "24c",
-            specimens: [SEEN_NOTE],
-            primary: SEEN_NOTE.id,
-          },
-          1,
-        ),
-        group,
-      ]),
-    ]);
+    await openShowcase([categoryNode([noteNode(20, SEEN_NOTE, 1), group])]);
 
     // At the root the counts describe the whole showcase tree.
     expect(
@@ -913,15 +817,7 @@ describe("the catalog checklist", () => {
       note: null,
       cover_note: null,
       children: [
-        entryNode(
-          30,
-          {
-            catalog_number: "22a",
-            specimens: [OWNED_NOTE],
-            primary: OWNED_NOTE.id,
-          },
-          1,
-        ),
+        noteNode(30, OWNED_NOTE, 1),
       ],
     };
 
@@ -987,9 +883,9 @@ describe("the catalog checklist", () => {
     ).toBeInTheDocument();
     expect(summary(container)).toHaveTextContent("50%");
 
-    // Owned: primary photo, a Slideshow action, and the OWNED state label.
+    // Owned: the note's photo and the OWNED state label.
     expect(
-      screen.getByRole("button", { name: "Slideshow from Pick 22a · 1917 · 1 leu" }),
+      screen.getByRole("button", { name: "Pick 22a · 1917 · 1 leu" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", {
@@ -1016,16 +912,16 @@ describe("the catalog checklist", () => {
       [...container.querySelectorAll(".showcase-catalog-code")].map(
         (code) => code.textContent,
       ),
-    ).toEqual(["P22a", "P24c", "P25d", "P23b"]);
+    ).toEqual(["P22a", "P23b", "P24c", "P25d"]);
     expect(
       [...container.querySelectorAll(".showcase-catalog-line")].map(
         (line) => line.textContent,
       ),
     ).toEqual([
       "1 leu · 1917",
+      "2 lei · 1919",
       "5 lei · 1920",
       "10 lei · 1921",
-      "2 lei · 1919",
     ]);
     expect(
       container.querySelector(".showcase-catalog-cell .showcase-card-caption"),
@@ -1036,52 +932,6 @@ describe("the catalog checklist", () => {
         name: "Pick 25d · 1921 · 10 lei is unseen. Replace with note",
       }),
     ).toBeInTheDocument();
-  });
-
-  test("a catalog entry card with a back flips in place", async () => {
-    const user = userEvent.setup();
-    const flippable = note(106, {
-      catalog_number: "26a",
-      denomination: "2 lei",
-      issue_date: "1922",
-      images: [FRONT(106), BACK(106)],
-    });
-    await openShowcase([
-      categoryNode([
-        entryNode(
-          400,
-          {
-            catalog_number: "26a",
-            denomination: "2 lei",
-            issue_date: "1922",
-            specimens: [flippable],
-            primary: flippable.id,
-          },
-          1,
-        ),
-      ]),
-    ]);
-
-    const card = await screen.findByRole("button", {
-      name: "Slideshow from Pick 26a · 1922 · 2 lei",
-    });
-    expect(card.querySelector(".showcase-card-flip")).toBeNull();
-
-    fireEvent.mouseEnter(card.closest(".showcase-cell"));
-    await user.click(card.querySelector(".showcase-card-flip"));
-
-    expect(card).toHaveAttribute("aria-pressed", "true");
-    expect(within(card).getByRole("img")).toHaveAttribute(
-      "src",
-      "/api/images/notes/106/back.jpg?v=rev-106",
-    );
-
-    await user.unhover(card);
-    expect(card).toHaveAttribute("aria-pressed", "false");
-    expect(within(card).getByRole("img")).toHaveAttribute(
-      "src",
-      "/api/images/notes/106/front.jpg?v=rev-106",
-    );
   });
 
   test("the flip chord flips without moving card focus", async () => {
@@ -1098,34 +948,11 @@ describe("the catalog checklist", () => {
       images: [FRONT(107), BACK(107)],
     });
     await openShowcase([
-      categoryNode([
-        entryNode(
-          400,
-          {
-            catalog_number: "26a",
-            denomination: "2 lei",
-            issue_date: "1922",
-            specimens: [first],
-            primary: first.id,
-          },
-          1,
-        ),
-        entryNode(
-          401,
-          {
-            catalog_number: "27a",
-            denomination: "3 lei",
-            issue_date: "1923",
-            specimens: [second],
-            primary: second.id,
-          },
-          2,
-        ),
-      ]),
+      categoryNode([noteNode(400, first, 1), noteNode(401, second, 2)]),
     ]);
 
     const card = await screen.findByRole("button", {
-      name: "Slideshow from Pick 26a · 1922 · 2 lei",
+      name: /^Pick 26a · 1922 · 2 lei$/,
     });
     act(() => card.focus());
 
@@ -1134,9 +961,7 @@ describe("the catalog checklist", () => {
     expect(card).toHaveAttribute("aria-pressed", "true");
     expect(card).toHaveFocus();
     expect(
-      screen.getByRole("button", {
-        name: "Slideshow from Pick 27a · 1923 · 3 lei",
-      }),
+      screen.getByRole("button", { name: /^Pick 27a · 1923 · 3 lei$/ }),
     ).not.toHaveFocus();
   });
 
@@ -1169,15 +994,7 @@ describe("the catalog checklist", () => {
     const user = userEvent.setup();
     const tree = [
       categoryNode([
-        entryNode(
-          20,
-          {
-            catalog_number: "22a",
-            specimens: [OWNED_NOTE],
-            primary: OWNED_NOTE.id,
-          },
-          1,
-        ),
+        noteNode(20, OWNED_NOTE, 1),
         entryNode(
           22,
           {
@@ -1193,7 +1010,7 @@ describe("the catalog checklist", () => {
 
     await user.click(screen.getByRole("button", { name: /^Owned/ }));
     expect(
-      screen.getByRole("button", { name: "Slideshow from Pick 22a · 1917 · 1 leu" }),
+      screen.getByRole("button", { name: "Pick 22a · 1917 · 1 leu" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", {
@@ -1204,7 +1021,7 @@ describe("the catalog checklist", () => {
     await user.click(screen.getByRole("button", { name: /^Seen/ }));
     expect(screen.getByText("No seen cards.")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Slideshow from Pick 22a · 1917 · 1 leu" }),
+      screen.queryByRole("button", { name: "Pick 22a · 1917 · 1 leu" }),
     ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /^All/ }));
@@ -1233,7 +1050,7 @@ describe("the catalog checklist", () => {
       expect.objectContaining({ owned: false }),
       1,
     );
-    // The other specimen is a seen reference, so the entry drops to Seen.
+    // The note leaf's own flag is now seen.
     expect(
       await screen.findByRole("button", {
         name: "Pick 22a · 1917 · 1 leu is seen. Mark as owned",
@@ -1362,9 +1179,9 @@ describe("the catalog checklist", () => {
     await openShowcase();
 
     await user.click(
-      screen.getByRole("button", { name: "Actions for Pick 22a" }),
+      screen.getByRole("button", { name: /^Actions for .*22a/ }),
     );
-    const menu = screen.getByRole("menu", { name: "Actions for Pick 22a" });
+    const menu = screen.getByRole("menu", { name: /^Actions for .*22a/ });
     const items = within(menu).getAllByRole("menuitem");
     expect(items.length).toBeGreaterThan(1);
     items.forEach((item) => expect(item.querySelector("svg")).not.toBeNull());
@@ -1393,9 +1210,9 @@ describe("the catalog checklist", () => {
     await openShowcase();
 
     await user.click(
-      screen.getByRole("button", { name: "Actions for Pick 22a" }),
+      screen.getByRole("button", { name: /^Actions for .*22a/ }),
     );
-    const menu = screen.getByRole("menu", { name: "Actions for Pick 22a" });
+    const menu = screen.getByRole("menu", { name: /^Actions for .*22a/ });
     await user.click(
       within(menu).getByRole("menuitem", { name: "Edit note…" }),
     );
@@ -1412,17 +1229,15 @@ describe("the catalog checklist", () => {
     expectNoteEditorOpen(101, 1);
   });
 
-  test("Slideshow lists only owned entries and uses the primary", async () => {
+  test("Slideshow lists only owned notes", async () => {
     const user = userEvent.setup();
     await openShowcase();
 
     await user.click(screen.getByRole("button", { name: "Slideshow" }));
 
     const slideshow = await screen.findByRole("dialog", { name: "1 leu" });
-    expect(
-      within(slideshow).getByText(/1 of 2/),
-    ).toBeInTheDocument();
-    // The seen entry's note is skipped entirely.
+    expect(within(slideshow).getByText(/1 of 2/)).toBeInTheDocument();
+    // The seen note is skipped entirely.
     expect(within(slideshow).queryByText(/5 lei/)).not.toBeInTheDocument();
 
     await user.click(
@@ -1436,71 +1251,24 @@ describe("the catalog checklist", () => {
     await waitFor(() =>
       expect(
         screen.getByRole("button", {
-          name: "Slideshow from Pick 22a · 1917 · 1 leu",
+          name: "Pick 22a · 1917 · 1 leu",
         }),
       ).toHaveFocus(),
     );
   });
 
-  test("keeps the check when the primary is a seen reference", async () => {
-    const tree = [
-      categoryNode([
-        entryNode(
-          20,
-          {
-            catalog_number: "22a",
-            specimens: [OWNED_NOTE, REFERENCE_NOTE],
-            primary: REFERENCE_NOTE.id,
-          },
-          1,
-        ),
-      ]),
-    ];
-    await openShowcase(tree);
-
-    expect(
-      screen.getByRole("button", {
-        name: "Pick 22a · 1917 · 1 leu is owned. Mark as not owned",
-      }),
-    ).toBeInTheDocument();  });
-
   test("a complete catalog wears the Complete chip", async () => {
-    const tree = [
-      categoryNode([
-        entryNode(
-          20,
-          {
-            catalog_number: "22a",
-            specimens: [OWNED_NOTE],
-            primary: OWNED_NOTE.id,
-          },
-          1,
-        ),
-      ]),
-    ];
+    const tree = [categoryNode([noteNode(20, OWNED_NOTE, 1)])];
     const { container } = await openShowcase(tree);
 
     expect(summary(container)).toHaveTextContent("Complete");
-    expect(
-      screen.queryByRole("button", {
-        name: "Pick 22a · 1917 · 1 leu is seen. Mark as owned",
-      }),
-    ).not.toBeInTheDocument();
   });
 
   test("a note leaf in a catalog gets the state treatment but no manager", async () => {
     const user = userEvent.setup();
     const tree = [
       categoryNode([
-        entryNode(
-          20,
-          {
-            catalog_number: "22a",
-            specimens: [OWNED_NOTE],
-            primary: OWNED_NOTE.id,
-          },
-          1,
-        ),
+        entryNode(20, { catalog_number: "22a" }, 1),
         noteNode(400, SEEN_NOTE, 2),
       ]),
     ];

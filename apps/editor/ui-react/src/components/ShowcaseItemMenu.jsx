@@ -6,8 +6,8 @@ import { MenuIcon } from "./MenuIcon.jsx";
 // owns one; the items only depend on what the item is:
 //
 // - every item: add a note, a grouping, or a catalog shell after it, remove it
-// - catalog entry or catalog-mode note: mark the displayed note owned or not
-// - note, or an entry's displayed note: edit the note
+// - note: mark it owned or not
+// - note: edit the note
 // - note: replace it with another library note in place
 // - grouping: open, rename, set/clear its cover
 // - category: duplicate to another showcase

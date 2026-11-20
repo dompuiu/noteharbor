@@ -83,15 +83,11 @@ pub struct CatalogEntry {
     pub source: String,
 }
 
-/// A Catalog entry's position fields: its own catalog metadata, the ordered
-/// specimens, and the primary. Flattened into `ShowcaseNode` so only a
-/// `catalog_entry` carries them. An entry with no specimens still sends
-/// `specimens: []` and `primary_note_id: null`.
+/// A Catalog entry's payload: its own catalog metadata. Flattened into
+/// `ShowcaseNode` so only a `catalog_entry` carries it.
 #[derive(Debug, Clone, Serialize)]
 pub struct CatalogEntryPayload {
     pub entry: CatalogEntry,
-    pub specimens: Vec<Note>,
-    pub primary_note_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -208,7 +204,7 @@ fn map_showcase(
         created_at: row.get(3)?,
         updated_at: row.get(4)?,
         // A catalog Showcase counts every presentable position: note leaves
-        // plus Catalog entries (an entry with no specimens is still a slot).
+        // plus Catalog entries.
         note_count,
         entry_count: note_count + catalog_entry_count,
         owned_count: row.get(7)?,
@@ -219,19 +215,13 @@ fn map_showcase(
 }
 
 /// `owned_count`: the owned positions in a Showcase — a note leaf whose Note is
-/// owned, plus a Catalog entry with at least one owned specimen. The primary is
-/// display-only and never decides ownership.
+/// owned. A Catalog entry is a planned position and never adds to it.
 const OWNED_COUNT_SQL: &str = "(SELECT COUNT(*) FROM showcase_nodes owned_nodes
           WHERE owned_nodes.showcase_id = showcases.id
-            AND (
-              (owned_nodes.node_type = 'note' AND EXISTS (
+            AND owned_nodes.node_type = 'note' AND EXISTS (
                  SELECT 1 FROM banknotes owned_note
-                 WHERE owned_note.id = owned_nodes.note_id AND owned_note.owned = 1))
-              OR (owned_nodes.node_type = 'catalog_entry' AND EXISTS (
-                 SELECT 1 FROM showcase_catalog_notes owned_specimen
-                 INNER JOIN banknotes owned_note ON owned_note.id = owned_specimen.note_id
-                 WHERE owned_specimen.node_id = owned_nodes.id AND owned_note.owned = 1))
-            )) AS owned_count";
+                 WHERE owned_note.id = owned_nodes.note_id AND owned_note.owned = 1)
+            ) AS owned_count";
 
 fn required_map(conn: &Connection) -> Result<HashMap<i64, Vec<i64>>, DbError> {
     let mut stmt = conn
@@ -701,71 +691,7 @@ fn note_exists(conn: &Connection, id: i64) -> Result<bool, DbError> {
 // Node tree
 // ---------------------------------------------------------------------------
 
-/// One entry's specimens in display order, plus the id the server marks
-/// primary. The triggers keep this set consistent with the database.
-#[derive(Debug, Default)]
-struct SpecimenSet {
-    ordered: Vec<i64>,
-    primary: Option<i64>,
-}
-
-/// Specimen rows for a `showcase_nodes` filter column, grouped by entry node.
-/// `filter` is one of the two internal column paths below, never user input.
-fn query_specimens(
-    conn: &Connection,
-    filter: &str,
-    key: i64,
-) -> Result<HashMap<i64, SpecimenSet>, DbError> {
-    let mut stmt = conn
-        .prepare(&format!(
-            "SELECT showcase_catalog_notes.node_id,
-                    showcase_catalog_notes.note_id,
-                    showcase_catalog_notes.is_primary
-             FROM showcase_catalog_notes
-             INNER JOIN showcase_nodes
-               ON showcase_nodes.id = showcase_catalog_notes.node_id
-             WHERE {filter} = ?1
-             ORDER BY showcase_catalog_notes.node_id ASC,
-                      showcase_catalog_notes.position ASC,
-                      showcase_catalog_notes.note_id ASC"
-        ))
-        .map_err(classify)?;
-    let rows: Vec<(i64, i64, bool)> = stmt
-        .query_map(params![key], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
-        .map_err(classify)?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(classify)?;
-    let mut out: HashMap<i64, SpecimenSet> = HashMap::new();
-    for (node_id, note_id, is_primary) in rows {
-        let set = out.entry(node_id).or_default();
-        set.ordered.push(note_id);
-        if is_primary {
-            set.primary = Some(note_id);
-        }
-    }
-    Ok(out)
-}
-
-/// Every specimen in a Showcase, grouped by its entry node.
-fn fetch_specimens(
-    conn: &Connection,
-    showcase_id: i64,
-) -> Result<HashMap<i64, SpecimenSet>, DbError> {
-    query_specimens(conn, "showcase_nodes.showcase_id", showcase_id)
-}
-
-/// One entry's specimens, without reading the rest of its Showcase.
-fn fetch_entry_specimens(conn: &Connection, node_id: i64) -> Result<SpecimenSet, DbError> {
-    Ok(query_specimens(conn, "showcase_catalog_notes.node_id", node_id)?
-        .remove(&node_id)
-        .unwrap_or_default())
-}
-
-fn node_from_row(
-    row: NodeRow,
-    notes: &HashMap<i64, Note>,
-    specimens: Option<&SpecimenSet>,
-) -> ShowcaseNode {
+fn node_from_row(row: NodeRow, notes: &HashMap<i64, Note>) -> ShowcaseNode {
     // Only a catalog_entry carries the catalog payload; every other node kind
     // omits it from the wire.
     let is_entry = row.node_type == "catalog_entry";
@@ -787,25 +713,12 @@ fn node_from_row(
                 issue_date: row.issue_date.unwrap_or_default(),
                 source: row.source.unwrap_or_default(),
             },
-            specimens: specimens
-                .map(|set| {
-                    set.ordered
-                        .iter()
-                        .filter_map(|id| notes.get(id).cloned())
-                        .collect()
-                })
-                .unwrap_or_default(),
-            primary_note_id: specimens.and_then(|set| set.primary),
         }),
         children: Vec::new(),
     }
 }
 
-fn build_tree(
-    rows: Vec<NodeRow>,
-    notes: &HashMap<i64, Note>,
-    specimens: &HashMap<i64, SpecimenSet>,
-) -> Vec<ShowcaseNode> {
+fn build_tree(rows: Vec<NodeRow>, notes: &HashMap<i64, Note>) -> Vec<ShowcaseNode> {
     let mut by_id: HashMap<i64, ShowcaseNode> = HashMap::new();
     let mut parents: HashMap<i64, Option<i64>> = HashMap::new();
     let mut order: Vec<i64> = Vec::new();
@@ -813,7 +726,7 @@ fn build_tree(
         let id = row.id;
         order.push(id);
         parents.insert(id, row.parent_node_id);
-        by_id.insert(id, node_from_row(row, notes, specimens.get(&id)));
+        by_id.insert(id, node_from_row(row, notes));
     }
     // Rows arrive ordered `position, id`; appending in that order keeps every
     // sibling group ordered without a second sort.
@@ -858,15 +771,13 @@ fn get_tree(conn: &Connection, showcase_id: i64) -> Result<Vec<ShowcaseNode>, Db
         .map_err(classify)?
         .collect::<Result<Vec<_>, _>>()
         .map_err(classify)?;
-    let specimens = fetch_specimens(conn, showcase_id)?;
-    let mut wanted: Vec<i64> = rows
+    let wanted: Vec<i64> = rows
         .iter()
         .flat_map(|row| [row.note_id, row.cover_note_id])
         .flatten()
         .collect();
-    wanted.extend(specimens.values().flat_map(|set| set.ordered.iter().copied()));
     let notes = fetch_notes(conn, &wanted)?;
-    Ok(build_tree(rows, &notes, &specimens))
+    Ok(build_tree(rows, &notes))
 }
 
 fn get_node(conn: &Connection, id: i64) -> Result<Option<ShowcaseNode>, DbError> {
@@ -878,14 +789,12 @@ fn get_node(conn: &Connection, id: i64) -> Result<Option<ShowcaseNode>, DbError>
         Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
         Err(error) => return Err(classify(error)),
     };
-    let specimens = fetch_entry_specimens(conn, id)?;
-    let mut wanted: Vec<i64> = [row.note_id, row.cover_note_id]
+    let wanted: Vec<i64> = [row.note_id, row.cover_note_id]
         .into_iter()
         .flatten()
         .collect();
-    wanted.extend(specimens.ordered.iter().copied());
     let notes = fetch_notes(conn, &wanted)?;
-    Ok(Some(node_from_row(row, &notes, Some(&specimens))))
+    Ok(Some(node_from_row(row, &notes)))
 }
 
 fn next_position(
@@ -1110,9 +1019,7 @@ fn duplicate_category_placement(
         ));
     }
     ensure_showcase(conn, target_showcase_id)?;
-    let source_showcase_id = source.showcase_id;
     let rows = subtree_rows(conn, source)?;
-    let specimens = fetch_specimens(conn, source_showcase_id)?;
     let tx = conn.transaction().map_err(classify)?;
     let root_position = next_position(&tx, target_showcase_id, None)?;
     let mut copied: HashMap<i64, i64> = HashMap::with_capacity(rows.len());
@@ -1131,9 +1038,6 @@ fn duplicate_category_placement(
             row.position.unwrap_or(0)
         };
         let new_id = insert_copied_node(&tx, target_showcase_id, row, parent_node_id, position)?;
-        if let Some(set) = specimens.get(&row.id) {
-            insert_specimens(&tx, new_id, &set.ordered, set.primary)?;
-        }
         copied.insert(row.id, new_id);
     }
     let root_id = *copied
@@ -1318,58 +1222,7 @@ fn parse_catalog_entry(body: &Value) -> Result<CatalogEntryValues, DbError> {
     })
 }
 
-/// A specimen list: ids stay in the caller's order, must be unique, and must
-/// exist. An empty list is allowed (an entry with no specimens is unseen).
-fn parse_specimen_ids(conn: &Connection, raw: &Value) -> Result<Vec<i64>, DbError> {
-    let Some(values) = raw.as_array() else {
-        return Err(DbError::Failed(
-            "A list of note ids is required.".to_owned(),
-        ));
-    };
-    let mut note_ids = Vec::with_capacity(values.len());
-    for value in values {
-        let Some(note_id) = js_number(value).filter(|id| *id > 0) else {
-            return Err(DbError::Failed("A valid note id is required.".to_owned()));
-        };
-        if note_ids.contains(&note_id) {
-            return Err(DbError::Failed(
-                "A note can only appear once on an entry.".to_owned(),
-            ));
-        }
-        if !note_exists(conn, note_id)? {
-            return Err(DbError::Failed(format!("Note {note_id} was not found.")));
-        }
-        note_ids.push(note_id);
-    }
-    Ok(note_ids)
-}
-
-/// Insert a specimen set in order. The schema triggers make the explicit
-/// primary win wherever it sits and fall back to the first row when none is
-/// named, so insertion order does not matter.
-fn insert_specimens(
-    conn: &Connection,
-    node_id: i64,
-    note_ids: &[i64],
-    primary: Option<i64>,
-) -> Result<(), DbError> {
-    for (index, note_id) in note_ids.iter().enumerate() {
-        let is_primary = match primary {
-            Some(primary) => *note_id == primary,
-            None => index == 0,
-        };
-        conn.execute(
-            "INSERT INTO showcase_catalog_notes (node_id, note_id, position, is_primary)
-             VALUES (?1, ?2, ?3, ?4)",
-            params![node_id, note_id, (index + 1) as i64, i64::from(is_primary)],
-        )
-        .map_err(classify)?;
-    }
-    Ok(())
-}
-
-/// A Catalog entry leaf: its own catalog metadata plus zero or more specimens,
-/// the first of which becomes primary.
+/// A Catalog entry leaf: its own catalog metadata.
 fn add_catalog_entry(
     conn: &mut Connection,
     showcase_id: i64,
@@ -1389,13 +1242,8 @@ fn add_catalog_entry(
     }
     let parent_id = parent.id;
     let entry = parse_catalog_entry(body)?;
-    let note_ids = match body.get("note_ids") {
-        None | Some(Value::Null) => Vec::new(),
-        Some(raw) => parse_specimen_ids(conn, raw)?,
-    };
     let position = next_position(conn, showcase_id, Some(parent_id))?;
-    let tx = conn.transaction().map_err(classify)?;
-    tx.execute(
+    conn.execute(
         "INSERT INTO showcase_nodes (
            showcase_id, parent_node_id, node_type, category_id, name,
            note_id, cover_note_id, catalog_number, denomination, issue_date,
@@ -1414,52 +1262,8 @@ fn add_catalog_entry(
         ],
     )
     .map_err(classify)?;
-    let node_id = tx.last_insert_rowid();
-    insert_specimens(&tx, node_id, &note_ids, None)?;
-    tx.commit().map_err(classify)?;
+    let node_id = conn.last_insert_rowid();
     get_node(conn, node_id)?.ok_or_else(|| DbError::Failed("Node not found.".to_owned()))
-}
-
-/// Replace an entry's whole specimen set atomically: add, remove, reorder, and
-/// promote are all this one call. An omitted primary means the first id.
-fn replace_node_notes(
-    conn: &mut Connection,
-    id: i64,
-    body: &Value,
-) -> Result<ShowcaseNode, DbError> {
-    let existing = get_node_row(conn, id)?
-        .ok_or_else(|| DbError::Failed("Node not found.".to_owned()))?;
-    if existing.node_type != "catalog_entry" {
-        return Err(DbError::Failed(
-            "Only a catalog entry can hold specimens.".to_owned(),
-        ));
-    }
-    let Some(raw) = body.get("note_ids").filter(|value| !value.is_null()) else {
-        return Err(DbError::Failed(
-            "A list of note ids is required.".to_owned(),
-        ));
-    };
-    let note_ids = parse_specimen_ids(conn, raw)?;
-    let primary = match body.get("primary_note_id") {
-        None | Some(Value::Null) => None,
-        Some(value) => match js_number(value).filter(|id| *id > 0) {
-            Some(id) if note_ids.contains(&id) => Some(id),
-            _ => {
-                return Err(DbError::Failed(
-                    "The primary note must be one of the specimens.".to_owned(),
-                ));
-            }
-        },
-    };
-    let tx = conn.transaction().map_err(classify)?;
-    tx.execute(
-        "DELETE FROM showcase_catalog_notes WHERE node_id = ?1",
-        params![id],
-    )
-    .map_err(classify)?;
-    insert_specimens(&tx, id, &note_ids, primary)?;
-    tx.commit().map_err(classify)?;
-    get_node(conn, id)?.ok_or_else(|| DbError::Failed("Node not found.".to_owned()))
 }
 
 enum AddNodeResult {
@@ -1563,16 +1367,10 @@ fn update_showcase_node(
     } else if existing.node_type == "catalog_entry" {
         // A shell becomes a real note card in place: the node keeps its
         // parent, position, and id, so replacing a shell never disturbs the
-        // surrounding order. Any legacy specimen links are dropped with it.
+        // surrounding order.
         if body.get("note_id").is_some() {
             let note_id = required_note_id(conn, body)?;
-            let tx = conn.transaction().map_err(classify)?;
-            tx.execute(
-                "DELETE FROM showcase_catalog_notes WHERE node_id = ?1",
-                params![id],
-            )
-            .map_err(classify)?;
-            tx.execute(
+            conn.execute(
                 "UPDATE showcase_nodes
                  SET node_type = 'note', note_id = ?1, catalog_number = NULL,
                      denomination = NULL, issue_date = NULL, source = NULL,
@@ -1581,9 +1379,8 @@ fn update_showcase_node(
                 params![note_id, id],
             )
             .map_err(classify)?;
-            tx.commit().map_err(classify)?;
         } else if body.get("entry").is_some() {
-            // Metadata is replaced as a whole; the linked Notes stay untouched.
+            // Metadata is replaced as a whole; the Placeholder stays unwritten.
             let entry = parse_catalog_entry(body)?;
             conn.execute(
                 "UPDATE showcase_nodes
@@ -2119,29 +1916,6 @@ async fn move_node_handler(
     }
 }
 
-async fn update_node_notes_handler(
-    State(state): State<AppState>,
-    Path(raw_id): Path<String>,
-    body: Option<Json<Value>>,
-) -> Response {
-    let Some(id) = parse_id(&raw_id) else {
-        return bad_request("Node id must be a positive integer.");
-    };
-    let exists = match db::with_conn(&state.pool, move |conn| get_node_row(conn, id)).await {
-        Ok(node) => node.is_some(),
-        Err(error) => return db_failure(error),
-    };
-    if !exists {
-        return not_found("Node not found.");
-    }
-    let payload = body_or_empty(body);
-    let payload = if payload.is_null() { json!({}) } else { payload };
-    match db::with_conn(&state.pool, move |conn| replace_node_notes(conn, id, &payload)).await {
-        Ok(node) => ok(json!({ "node": node })),
-        Err(error) => db_failure(error),
-    }
-}
-
 async fn duplicate_node_handler(
     State(state): State<AppState>,
     Path(raw_id): Path<String>,
@@ -2293,7 +2067,6 @@ pub fn nodes_router() -> Router<AppState> {
         .route("/api/nodes/order", put(reorder_nodes_handler))
         .route("/api/nodes/{id}", put(update_node_handler).delete(delete_node_handler))
         .route("/api/nodes/{id}/move", put(move_node_handler))
-        .route("/api/nodes/{id}/notes", put(update_node_notes_handler))
         .route("/api/nodes/{id}/duplicate", post(duplicate_node_handler))
 }
 

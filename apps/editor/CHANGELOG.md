@@ -4,6 +4,10 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+### Changed
+
+- Showcase: a Catalog entry is only a planned position. The retired specimen model is gone end to end — the `showcase_catalog_notes` join and its triggers, `PUT /api/nodes/:id/notes`, `note_ids` on entry creation, the `specimens`/`primary_note_id` wire fields, and the card's specimen rendering. An entry from an older database keeps its catalog metadata and loses its specimen links; replace it with a library note when the slot is filled.
+
 ## [2.21.3] - 2026-11-19
 
 ### Changed

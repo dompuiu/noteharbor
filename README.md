@@ -466,10 +466,6 @@ Body: { name? }                     // a Grouping's name, or a Category Placemen
               // reusing a pool name adopts that label, a new name creates one,
               // and the label left behind is pruned when it has no placements.
 
-PUT /api/nodes/:nodeId/notes
-Body: { note_ids: [id, ...], primary_note_id? }   // a Catalog entry's whole specimen set
--> { node }
-
 POST /api/nodes/:nodeId/duplicate
 Body: { showcase_id }
 -> 201 { node }   // copies a top-level Category Placement's whole subtree into

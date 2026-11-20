@@ -318,50 +318,6 @@ struct NodeRow {
     cover_note_id: Option<i64>,
 }
 
-/// A catalog specimen link, captured before ids move so it can be rewritten
-/// through the node and note maps afterwards.
-#[derive(Debug, Clone)]
-struct SpecimenRow {
-    node_id: i64,
-    note_id: i64,
-    position: i64,
-    is_primary: i64,
-}
-
-fn query_specimen_rows(
-    conn: &Connection,
-    sql: &str,
-    params: &[&dyn rusqlite::ToSql],
-) -> Result<Vec<SpecimenRow>, ArchiveError> {
-    let mut stmt = conn.prepare(sql).map_err(db_failed)?;
-    let rows = stmt
-        .query_map(params, |row| {
-            Ok(SpecimenRow {
-                node_id: row.get(0)?,
-                note_id: row.get(1)?,
-                position: row.get(2)?,
-                is_primary: row.get(3)?,
-            })
-        })
-        .map_err(db_failed)?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(db_failed)
-}
-
-fn insert_specimen(
-    conn: &Connection,
-    node_id: i64,
-    note_id: i64,
-    row: &SpecimenRow,
-) -> Result<(), ArchiveError> {
-    conn.execute(
-        "INSERT INTO showcase_catalog_notes (node_id, note_id, position, is_primary)
-         VALUES (?1, ?2, ?3, ?4)",
-        params![node_id, note_id, row.position, row.is_primary],
-    )
-    .map_err(db_failed)?;
-    Ok(())
-}
-
 fn renumber_showcase_tables(
     conn: &Connection,
     category_map: &HashMap<i64, i64>,
@@ -369,7 +325,6 @@ fn renumber_showcase_tables(
     node_map: &HashMap<i64, i64>,
     note_map: &HashMap<i64, i64>,
     node_rows: &[NodeRow],
-    specimen_rows: &[SpecimenRow],
 ) -> Result<(), ArchiveError> {
     conn.execute_batch("UPDATE categories SET id = -id").map_err(db_failed)?;
     conn.execute_batch("UPDATE showcases SET id = -id").map_err(db_failed)?;
@@ -409,23 +364,6 @@ fn renumber_showcase_tables(
             ],
         )
         .map_err(db_failed)?;
-    }
-
-    // Specimen links hold both ids. Rebuild the rows from the captured mapping
-    // instead of updating in place, so an id that was already rewritten cannot
-    // match a different row's old id.
-    if table_exists(conn, "showcase_catalog_notes")? {
-        conn.execute("DELETE FROM showcase_catalog_notes", []).map_err(db_failed)?;
-        for row in specimen_rows {
-            let (Some(node_id), Some(note_id)) =
-                (node_map.get(&row.node_id), note_map.get(&row.note_id))
-            else {
-                return Err(ArchiveError::internal(
-                    "Export snapshot has invalid catalog specimen references.",
-                ));
-            };
-            insert_specimen(conn, *node_id, *note_id, row)?;
-        }
     }
     Ok(())
 }
@@ -529,18 +467,6 @@ pub fn renumber_snapshot(conn: &Connection) -> Result<RenumberPlan, ArchiveError
     } else {
         Vec::new()
     };
-    let specimen_rows: Vec<SpecimenRow> =
-        if has_showcases && table_exists(conn, "showcase_catalog_notes")? {
-            query_specimen_rows(
-                conn,
-                "SELECT node_id, note_id, position, is_primary
-                 FROM showcase_catalog_notes
-                 ORDER BY node_id ASC, position ASC, note_id ASC",
-                &[],
-            )?
-        } else {
-            Vec::new()
-        };
     let mut category_map = HashMap::new();
     for (index, id) in category_ids.iter().enumerate() {
         category_map.insert(*id, index as i64 + 1);
@@ -567,7 +493,6 @@ pub fn renumber_snapshot(conn: &Connection) -> Result<RenumberPlan, ArchiveError
         &tag_rows,
         &link_rows,
         &node_rows,
-        &specimen_rows,
         has_showcases,
     );
     conn.execute_batch("PRAGMA foreign_keys = ON").map_err(db_failed)?;
@@ -587,7 +512,6 @@ fn renumber_snapshot_inner(
     tag_rows: &[(i64, Option<i64>)],
     link_rows: &[(Option<i64>, Option<i64>)],
     node_rows: &[NodeRow],
-    specimen_rows: &[SpecimenRow],
     has_showcases: bool,
 ) -> Result<RenumberPlan, ArchiveError> {
     conn.execute_batch("UPDATE collections SET id = -id").map_err(db_failed)?;
@@ -688,7 +612,6 @@ fn renumber_snapshot_inner(
             node_map,
             note_map,
             node_rows,
-            specimen_rows,
         )?;
     }
 
@@ -740,48 +663,11 @@ fn delete_orphaned_snapshot_rows(conn: &Connection) -> Result<(), ArchiveError> 
                AND cover_note_id NOT IN (SELECT id FROM banknotes);",
         )
         .map_err(db_failed)?;
-        // Links whose node or note is gone would survive on a foreign-key-less
-        // legacy database. The entry and its showcase stay; only the invalid
-        // link goes.
-        if table_exists(conn, "showcase_catalog_notes")? {
-            conn.execute(
-                "DELETE FROM showcase_catalog_notes
-                 WHERE node_id NOT IN (SELECT id FROM showcase_nodes)
-                    OR note_id NOT IN (SELECT id FROM banknotes)",
-                [],
-            )
-            .map_err(db_failed)?;
-        }
     }
     Ok(())
 }
 
 // --- filtered-export showcase helpers --------------------------------------
-
-/// Drops specimen links to notes outside the kept collection selection before
-/// renumbering, so the exported join rows are all valid. The primary trigger
-/// promotes the next specimen (or clears the primary), so the entry degrades
-/// to Seen/Unseen; requirements never include specimens, so the showcase
-/// survives on its note leaves and covers alone.
-fn drop_unkept_catalog_specimens(conn: &Connection, kept: &[i64]) -> Result<(), ArchiveError> {
-    if !table_exists(conn, "showcase_catalog_notes")? || kept.is_empty() {
-        return Ok(());
-    }
-    let placeholders = kept.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
-    let params: Vec<&dyn rusqlite::ToSql> =
-        kept.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
-    conn.execute(
-        &format!(
-            "DELETE FROM showcase_catalog_notes
-             WHERE note_id NOT IN (
-               SELECT id FROM banknotes WHERE collection_id IN ({placeholders})
-             )"
-        ),
-        params.as_slice(),
-    )
-    .map_err(db_failed)?;
-    Ok(())
-}
 
 fn list_showcases_with_unkept_notes(
     conn: &Connection,
@@ -1010,7 +896,6 @@ pub fn build_filtered_export_snapshot(
         all_ids.iter().filter(|id| !kept.contains(id)).copied().collect();
 
     delete_orphaned_snapshot_rows(&conn)?;
-    drop_unkept_catalog_specimens(&conn, &kept)?;
 
     let mut omitted = Vec::new();
     let has_showcases = showcase_table_names_present(&conn)?;
@@ -1454,8 +1339,8 @@ fn import_showcases(
     };
 
     // Node rows also carry node_type/name/position and, on a catalog-aware
-    // archive, the entry metadata. An older archive has neither the metadata
-    // columns nor the specimen table, so both are feature-detected.
+    // archive, the entry metadata. An older archive has no metadata columns,
+    // so they are feature-detected.
     let node_columns = column_names(archive, "showcase_nodes")?;
     let carries_metadata = ["catalog_number", "denomination", "issue_date", "source"]
         .iter()
@@ -1593,56 +1478,13 @@ fn import_showcases(
         .map_err(db_failed)?;
     }
 
-    import_catalog_specimens(tx, archive, &node_rows, &node_map, note_map)
-}
-
-/// Copies the catalog specimen links for the imported nodes, remapping both
-/// ids. An archive from before the catalog tables has nothing to copy. Rows
-/// are written in stored order with their stored primary: the live schema's
-/// demote trigger lets an explicit primary take over, and its first-insert
-/// trigger promotes the first specimen when the archive names none.
-fn import_catalog_specimens(
-    tx: &rusqlite::Transaction<'_>,
-    archive: &Connection,
-    node_rows: &[NodeRow],
-    node_map: &HashMap<i64, i64>,
-    note_map: &HashMap<i64, i64>,
-) -> Result<(), ArchiveError> {
-    if node_rows.is_empty() || !table_exists(archive, "showcase_catalog_notes")? {
-        return Ok(());
-    }
-    let node_ids: Vec<i64> = node_rows.iter().map(|row| row.id).collect();
-    let placeholders = node_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
-    let params: Vec<&dyn rusqlite::ToSql> =
-        node_ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
-    let specimen_rows = query_specimen_rows(
-        archive,
-        &format!(
-            "SELECT node_id, note_id, position, is_primary
-             FROM showcase_catalog_notes
-             WHERE node_id IN ({placeholders})
-             ORDER BY node_id ASC, position ASC, note_id ASC"
-        ),
-        params.as_slice(),
-    )?;
-    for row in specimen_rows {
-        let (Some(node_id), Some(note_id)) =
-            (node_map.get(&row.node_id), note_map.get(&row.note_id))
-        else {
-            // An archive may reference a note it does not carry; the entry
-            // simply lands without that specimen.
-            continue;
-        };
-        insert_specimen(tx, *node_id, *note_id, &row)?;
-    }
     Ok(())
 }
 
 /// Wipes every user row (and the autoincrement counters) so a `replace`
 /// import restarts ids from 1 — the in-place counterpart of staging from a
 /// freshly initialized database.
-pub const WIPE_SQL: &str = "DELETE FROM showcase_catalog_notes;
-         DELETE FROM showcase_nodes;
+pub const WIPE_SQL: &str = "DELETE FROM showcase_nodes;
          DELETE FROM showcases;
          DELETE FROM categories;
          DELETE FROM banknote_tags;

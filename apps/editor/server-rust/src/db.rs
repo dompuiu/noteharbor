@@ -525,7 +525,10 @@ fn ensure_showcases_schema(conn: &mut Connection) -> Result<(), DbError> {
     .map_err(classify)?;
 
     ensure_showcase_nodes_table(conn)?;
-    ensure_showcase_catalog_notes(conn)?;
+    // The retired catalog specimen join. Earlier builds kept specimen sets per
+    // Catalog entry; nothing reads them now, so a leftover table is dropped.
+    conn.execute_batch("DROP TABLE IF EXISTS showcase_catalog_notes")
+        .map_err(classify)?;
 
     // Fill a null position, per sibling group, in id order. Only self-heals a
     // partially written tree.
@@ -654,129 +657,6 @@ fn ensure_showcase_nodes_table(conn: &mut Connection) -> Result<(), DbError> {
 
          CREATE INDEX IF NOT EXISTS idx_showcase_nodes_parent
            ON showcase_nodes(parent_node_id, position, id);",
-    )
-    .map_err(classify)?;
-    Ok(())
-}
-
-/// The catalog join: a Note attached to a Catalog entry. Specimens cascade
-/// from the node and from the note, so an entry degrades to unseen instead of
-/// disappearing when its last note goes.
-///
-/// The two demote triggers are deliberate: a caller may insert a specimen set
-/// in any order, with the chosen primary anywhere in it, so an explicit
-/// `is_primary = 1` takes over instead of colliding with the partial unique
-/// index. The index still guarantees at most one primary at rest, and a
-/// duplicate row that an `INSERT OR IGNORE` skips does not demote anyone.
-fn ensure_showcase_catalog_notes(conn: &Connection) -> Result<(), DbError> {
-    conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS showcase_catalog_notes (
-           node_id INTEGER NOT NULL REFERENCES showcase_nodes(id) ON DELETE CASCADE,
-           note_id INTEGER NOT NULL REFERENCES banknotes(id) ON DELETE CASCADE,
-           position INTEGER NOT NULL DEFAULT 0,
-           is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1)),
-           PRIMARY KEY (node_id, note_id)
-         );
-
-         CREATE INDEX IF NOT EXISTS idx_showcase_catalog_notes_position
-           ON showcase_catalog_notes(node_id, position, note_id);
-
-         CREATE UNIQUE INDEX IF NOT EXISTS idx_showcase_catalog_notes_primary
-           ON showcase_catalog_notes(node_id) WHERE is_primary = 1;
-
-         CREATE TRIGGER IF NOT EXISTS trg_showcase_catalog_notes_demote_insert
-         BEFORE INSERT ON showcase_catalog_notes
-         FOR EACH ROW
-         WHEN NEW.is_primary = 1
-          AND NOT EXISTS (
-            SELECT 1 FROM showcase_catalog_notes
-            WHERE node_id = NEW.node_id AND note_id = NEW.note_id
-          )
-         BEGIN
-           UPDATE showcase_catalog_notes
-           SET is_primary = 0
-           WHERE node_id = NEW.node_id AND is_primary = 1;
-         END;
-
-         CREATE TRIGGER IF NOT EXISTS trg_showcase_catalog_notes_demote_update
-         BEFORE UPDATE OF is_primary ON showcase_catalog_notes
-         FOR EACH ROW
-         WHEN NEW.is_primary = 1
-         BEGIN
-           UPDATE showcase_catalog_notes
-           SET is_primary = 0
-           WHERE node_id = NEW.node_id
-             AND is_primary = 1
-             AND note_id <> NEW.note_id;
-         END;
-
-         CREATE TRIGGER IF NOT EXISTS trg_showcase_catalog_notes_first_primary
-         AFTER INSERT ON showcase_catalog_notes
-         FOR EACH ROW
-         WHEN NEW.is_primary = 0
-          AND NOT EXISTS (
-            SELECT 1 FROM showcase_catalog_notes
-            WHERE node_id = NEW.node_id AND is_primary = 1
-          )
-         BEGIN
-           UPDATE showcase_catalog_notes
-           SET is_primary = 1
-           WHERE node_id = NEW.node_id AND note_id = NEW.note_id;
-         END;
-
-         CREATE TRIGGER IF NOT EXISTS trg_showcase_catalog_notes_promote_primary
-         AFTER DELETE ON showcase_catalog_notes
-         FOR EACH ROW
-         WHEN OLD.is_primary = 1
-         BEGIN
-           UPDATE showcase_catalog_notes
-           SET is_primary = 1
-           WHERE node_id = OLD.node_id
-             AND note_id = (
-               SELECT note_id FROM showcase_catalog_notes
-               WHERE node_id = OLD.node_id
-               ORDER BY position ASC, note_id ASC
-               LIMIT 1
-             )
-             AND NOT EXISTS (
-               SELECT 1 FROM showcase_catalog_notes
-               WHERE node_id = OLD.node_id AND is_primary = 1
-             );
-         END;
-
-         -- Catalog entries are shells now: one planned position that later
-         -- becomes a single note card. Collapse every legacy entry that still
-         -- holds specimens into a note node, keeping its primary (or first)
-         -- specimen in place and dropping the extra links. A shell with no
-         -- specimens stays a catalog_entry.
-         UPDATE showcase_nodes
-         SET node_type = 'note',
-             note_id = COALESCE(
-               (SELECT notes.note_id
-                FROM showcase_catalog_notes notes
-                WHERE notes.node_id = showcase_nodes.id AND notes.is_primary = 1
-                LIMIT 1),
-               (SELECT notes.note_id
-                FROM showcase_catalog_notes notes
-                WHERE notes.node_id = showcase_nodes.id
-                ORDER BY notes.position ASC, notes.note_id ASC
-                LIMIT 1)
-             ),
-             catalog_number = NULL,
-             denomination = NULL,
-             issue_date = NULL,
-             source = NULL,
-             updated_at = datetime('now')
-         WHERE node_type = 'catalog_entry'
-           AND EXISTS (
-             SELECT 1 FROM showcase_catalog_notes notes
-             WHERE notes.node_id = showcase_nodes.id
-           );
-
-         DELETE FROM showcase_catalog_notes
-         WHERE node_id IN (
-           SELECT id FROM showcase_nodes WHERE node_type <> 'catalog_entry'
-         );",
     )
     .map_err(classify)?;
     Ok(())

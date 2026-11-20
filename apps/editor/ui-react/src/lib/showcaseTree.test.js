@@ -8,7 +8,6 @@ import {
   catalogEntryIdentity,
   catalogEntryLabel,
   catalogEntryState,
-  catalogMergeKey,
   catalogPresentationNotes,
   countNoteNodes,
   filterCatalogTree,
@@ -16,16 +15,10 @@ import {
   findNodeIdForNote,
   findNodeIdPath,
   findNodePath,
-  hasSeenPrimary,
   moveNodeTree,
   nodeCatalogState,
   normalizeCatalogEntry,
-  planCatalogMerge,
-  planSpecimenAdd,
-  planSpecimenPromote,
-  planSpecimenRemove,
   noteOwnedInTree,
-  primarySpecimen,
   removeNodeTree,
   reorderNodeTree,
   sameCatalogEntry,
@@ -33,8 +26,6 @@ import {
   showcaseCountLabel,
   showcaseNodeLabel,
   showcaseNoteState,
-  specimenNoteIds,
-  specimenPayload,
   updateNodeTree,
   visibleChildNodes,
 } from "./showcaseTree.js";
@@ -258,8 +249,8 @@ describe("visibleChildNodes", () => {
     expect(visibleChildNodes(children, false)).toEqual([]);
   });
 
-  test("keeps a grouping that holds a catalog entry with no specimens", () => {
-    const children = [grouping(2, [entryNode(8, [])])];
+  test("keeps a grouping that holds a catalog entry", () => {
+    const children = [grouping(2, [entryNode(8)])];
 
     expect(visibleChildNodes(children, false).map((node) => node.id)).toEqual([
       2,
@@ -269,19 +260,7 @@ describe("visibleChildNodes", () => {
 
 // ── Catalog fixtures ──────────────────────────────────────────────────────
 
-function ownedSpecimen(id) {
-  return { id, owned: true };
-}
-
-function seenSpecimen(id) {
-  return { id, owned: false };
-}
-
-function entryNode(
-  id,
-  specimens,
-  { catalogNumber = "22a", primaryId = null } = {},
-) {
+function entryNode(id, { catalogNumber = "22a" } = {}) {
   return {
     id,
     node_type: "catalog_entry",
@@ -291,8 +270,6 @@ function entryNode(
       issue_date: "1877",
       source: "Pick catalog",
     },
-    specimens,
-    primary_note_id: primaryId ?? specimens[0]?.id ?? null,
     children: [],
   };
 }
@@ -306,44 +283,23 @@ function noteLeaf(id, owned) {
   };
 }
 
-// Category 1 > grouping 2 > owned entry 20, seen entry 21; unseen entry 22 and
-// owned note leaf 3 under category 1; category 5 > grouping 6 > seen entry 23,
-// seen note leaf 4.
+// Category 1 > grouping 2 > shells 20 and 21; shell 22 and owned note leaf 3
+// under category 1; category 5 > grouping 6 > shell 23, seen note leaf 4.
 function catalogTree() {
   return [
     category(1, [
-      grouping(2, [entryNode(20, [ownedSpecimen(201)]), entryNode(21, [seenSpecimen(211)])]),
-      entryNode(22, []),
+      grouping(2, [entryNode(20), entryNode(21)]),
+      entryNode(22),
       noteLeaf(3, true),
     ]),
-    category(5, [grouping(6, [entryNode(23, [seenSpecimen(231)])]), noteLeaf(4, false)]),
+    category(5, [grouping(6, [entryNode(23)]), noteLeaf(4, false)]),
   ];
 }
 
 describe("catalogEntryState", () => {
-  test("an entry with no specimens is unseen", () => {
-    expect(catalogEntryState(entryNode(20, []))).toBe("unseen");
-  });
-
-  test("an entry whose specimens are all unowned is seen", () => {
-    expect(catalogEntryState(entryNode(21, [seenSpecimen(211), seenSpecimen(212)]))).toBe(
-      "seen",
-    );
-  });
-
-  test("any owned specimen makes the entry owned", () => {
-    expect(catalogEntryState(entryNode(22, [seenSpecimen(221), ownedSpecimen(222)]))).toBe(
-      "owned",
-    );
-  });
-
-  test("the primary specimen never decides ownership", () => {
-    const entry = entryNode(30, [ownedSpecimen(301), seenSpecimen(302)], {
-      primaryId: 302,
-    });
-
-    expect(entry.primary_note_id).toBe(302);
-    expect(catalogEntryState(entry)).toBe("owned");
+  test("a planned shell is always unseen", () => {
+    expect(catalogEntryState(entryNode(20))).toBe("unseen");
+    expect(catalogEntryState(entryNode(21))).toBe("unseen");
   });
 });
 
@@ -354,98 +310,9 @@ describe("showcaseNoteState", () => {
   });
 });
 
-describe("specimenNoteIds", () => {
-  test("reads the ordered ids off a catalog entry", () => {
-    expect(specimenNoteIds(entryNode(20, [ownedSpecimen(201), seenSpecimen(202)]))).toEqual([
-      201, 202,
-    ]);
-  });
-
-  test("is empty for a node without specimens", () => {
-    expect(specimenNoteIds(noteNode(3))).toEqual([]);
-    expect(specimenNoteIds(entryNode(20, []))).toEqual([]);
-  });
-});
-
-describe("specimenPayload", () => {
-  test("carries the ordered ids and the stored primary", () => {
-    expect(
-      specimenPayload(
-        entryNode(20, [ownedSpecimen(201), seenSpecimen(202)], {
-          primaryId: 202,
-        }),
-      ),
-    ).toEqual({ note_ids: [201, 202], primary_note_id: 202 });
-  });
-
-  test("falls back to the first specimen when the primary is stale", () => {
-    expect(
-      specimenPayload(
-        entryNode(20, [ownedSpecimen(201), seenSpecimen(202)], {
-          primaryId: 999,
-        }),
-      ),
-    ).toEqual({ note_ids: [201, 202], primary_note_id: 201 });
-  });
-
-  test("clears the set without a primary", () => {
-    expect(specimenPayload(entryNode(20, []))).toEqual({ note_ids: [] });
-  });
-});
-
-describe("primarySpecimen", () => {
-  test("returns the stored primary note", () => {
-    expect(
-      primarySpecimen(
-        entryNode(20, [ownedSpecimen(201), seenSpecimen(202)], {
-          primaryId: 202,
-        }),
-      ),
-    ).toEqual(seenSpecimen(202));
-  });
-
-  test("falls back to the first specimen", () => {
-    expect(
-      primarySpecimen(
-        entryNode(20, [ownedSpecimen(201), seenSpecimen(202)], {
-          primaryId: 999,
-        }),
-      ),
-    ).toEqual(ownedSpecimen(201));
-  });
-
-  test("is null for an empty entry", () => {
-    expect(primarySpecimen(entryNode(20, []))).toBeNull();
-  });
-});
-
-describe("hasSeenPrimary", () => {
-  test("is true for an owned entry presenting an unowned reference", () => {
-    expect(
-      hasSeenPrimary(
-        entryNode(30, [ownedSpecimen(301), seenSpecimen(302)], {
-          primaryId: 302,
-        }),
-      ),
-    ).toBe(true);
-  });
-
-  test("is false when the primary is owned or the entry is not", () => {
-    expect(
-      hasSeenPrimary(
-        entryNode(30, [ownedSpecimen(301), seenSpecimen(302)], {
-          primaryId: 301,
-        }),
-      ),
-    ).toBe(false);
-    expect(hasSeenPrimary(entryNode(31, [seenSpecimen(311)]))).toBe(false);
-    expect(hasSeenPrimary(entryNode(32, []))).toBe(false);
-  });
-});
-
 describe("nodeCatalogState", () => {
   test("answers for entries and note leaves but not containers", () => {
-    expect(nodeCatalogState(entryNode(20, []))).toBe("unseen");
+    expect(nodeCatalogState(entryNode(20))).toBe("unseen");
     expect(nodeCatalogState(noteLeaf(3, true))).toBe("owned");
     expect(nodeCatalogState(category(1))).toBeNull();
     expect(nodeCatalogState(grouping(2))).toBeNull();
@@ -482,14 +349,10 @@ describe("normalizeCatalogEntry and sameCatalogEntry", () => {
 });
 
 describe("catalogPresentationNotes", () => {
-  test("keeps one slide per owned card and skips seen and unseen", () => {
+  test("keeps one slide per owned note leaf and skips seen notes and shells", () => {
     const tree = [
       category(1, [
-        grouping(2, [
-          entryNode(20, [ownedSpecimen(201)], { primaryId: 201 }),
-          entryNode(21, [seenSpecimen(211)]),
-          entryNode(22, []),
-        ]),
+        grouping(2, [entryNode(20), noteLeaf(5, true)]),
         noteLeaf(3, true),
         noteLeaf(4, false),
       ]),
@@ -497,18 +360,14 @@ describe("catalogPresentationNotes", () => {
 
     expect(
       catalogPresentationNotes(tree).map((slide) => slide.nodeId),
-    ).toEqual([20, 3]);
+    ).toEqual([5, 3]);
   });
 
-  test("a slide carries the entry's primary note", () => {
-    const tree = [
-      entryNode(30, [ownedSpecimen(301), ownedSpecimen(302)], {
-        primaryId: 302,
-      }),
-    ];
+  test("a slide carries the leaf's own note", () => {
+    const tree = [entryNode(30), noteLeaf(7, true)];
 
     expect(catalogPresentationNotes(tree)).toEqual([
-      { nodeId: 30, note: ownedSpecimen(302) },
+      { nodeId: 7, note: noteLeaf(7, true).note },
     ]);
   });
 });
@@ -516,18 +375,16 @@ describe("catalogPresentationNotes", () => {
 describe("catalogCounts", () => {
   test("counts entries and note leaves by state at every depth", () => {
     expect(catalogCounts(catalogTree())).toEqual({
-      owned: 2,
-      seen: 3,
-      unseen: 1,
+      owned: 1,
+      seen: 1,
+      unseen: 4,
       total: 6,
       complete: false,
     });
   });
 
   test("is complete only when nothing is seen or unseen", () => {
-    const tree = [
-      category(1, [entryNode(20, [ownedSpecimen(201)]), noteLeaf(3, true)]),
-    ];
+    const tree = [category(1, [noteLeaf(3, true), noteLeaf(5, true)])];
 
     expect(catalogCounts(tree)).toMatchObject({
       owned: 2,
@@ -552,34 +409,32 @@ describe("filterCatalogTree", () => {
     expect(filterCatalogTree(tree, "all")).toBe(tree);
   });
 
-  test("keeps owned cards and the groupings that hold them", () => {
+  test("keeps owned note leaves and drops the groupings around them", () => {
     const filtered = filterCatalogTree(catalogTree(), "owned");
 
-    expect(findNodeById(filtered, 20)?.id).toBe(20);
-    expect(findNodeById(filtered, 21)).toBeNull();
-    expect(findNodeById(filtered, 2)).not.toBeNull();
     expect(findNodeById(filtered, 3)?.id).toBe(3);
+    expect(findNodeById(filtered, 2)).toBeNull();
+    expect(findNodeById(filtered, 20)).toBeNull();
     expect(findNodeById(filtered, 5)).toBeNull();
   });
 
-  test("keeps a matching unseen entry and drops the grouping around it", () => {
+  test("keeps every shell and drops the note leaves", () => {
     const filtered = filterCatalogTree(catalogTree(), "unseen");
 
     expect(findNodeById(filtered, 22)?.id).toBe(22);
-    expect(findNodeById(filtered, 2)).toBeNull();
-    expect(findNodeById(filtered, 5)).toBeNull();
+    expect(findNodeById(filtered, 2)?.children.map((node) => node.id)).toEqual([
+      20, 21,
+    ]);
+    expect(findNodeById(filtered, 3)).toBeNull();
+    expect(findNodeById(filtered, 4)).toBeNull();
   });
 
-  test("keeps seen entries under their grouping", () => {
+  test("keeps seen note leaves", () => {
     const filtered = filterCatalogTree(catalogTree(), "seen");
 
-    expect(findNodeById(filtered, 6)?.children.map((node) => node.id)).toEqual([
-      23,
-    ]);
-    expect(findNodeById(filtered, 2)?.children.map((node) => node.id)).toEqual([
-      21,
-    ]);
     expect(findNodeById(filtered, 4)?.id).toBe(4);
+    expect(findNodeById(filtered, 6)).toBeNull();
+    expect(findNodeById(filtered, 3)).toBeNull();
   });
 
   test("returns an empty tree when nothing matches", () => {
@@ -591,9 +446,9 @@ describe("filterCatalogTree", () => {
   test("drops an empty sibling grouping but keeps the matching branch", () => {
     const tree = [
       category(1, [
-        grouping(2, [entryNode(20, [ownedSpecimen(201)])]),
-        grouping(3, [entryNode(21, [seenSpecimen(211)])]),
-        entryNode(22, []),
+        grouping(2, [noteLeaf(6, false)]),
+        grouping(3, [noteLeaf(7, true)]),
+        entryNode(22),
       ]),
     ];
     const filtered = filterCatalogTree(tree, "unseen");
@@ -651,172 +506,6 @@ describe("catalogEntryLabel", () => {  test("names the entry by catalog value, d
   });
 });
 
-describe("catalogMergeKey", () => {
-  test("trims, lowercases, and strips a Pick prefix", () => {
-    expect(catalogMergeKey("  Pick 22A ")).toBe("22a");
-    expect(catalogMergeKey("22a")).toBe("22a");
-  });
-
-  test("treats a bare P prefix as the same Pick formatting", () => {
-    expect(catalogMergeKey("P22a")).toBe("22a");
-  });
-
-  test("keeps exact values apart", () => {
-    expect(catalogMergeKey("22a")).not.toBe(catalogMergeKey("22b"));
-  });
-
-  test("is empty for a missing catalog number", () => {
-    expect(catalogMergeKey("  ")).toBe("");
-  });
-});
-
-describe("planCatalogMerge", () => {
-  test("appends notes to the existing entry with the same catalog value", () => {
-    const children = [entryNode(20, [ownedSpecimen(101)], {
-      catalogNumber: "Pick 22a",
-      primaryId: 101,
-    })];
-    const plan = planCatalogMerge(children, [
-      { id: 102, catalog_number: "22a", denomination: "20 lei", issue_date: "1877" },
-      { id: 103, catalog_number: " pick 22A " },
-    ]);
-
-    expect(plan.additions).toEqual([]);
-    expect(plan.skipped).toEqual([]);
-    expect(plan.merges).toEqual([
-      {
-        nodeId: 20,
-        noteIds: [101, 102, 103],
-        primaryNoteId: 101,
-        addedNoteIds: [102, 103],
-      },
-    ]);
-  });
-
-  test("creates one new entry per exact catalog value", () => {
-    const plan = planCatalogMerge([], [
-      { id: 201, catalog_number: "22a", denomination: "20 lei", issue_date: "1877" },
-      { id: 202, catalog_number: "22b", denomination: "20 lei", issue_date: "1877" },
-      { id: 203, catalog_number: "22A" },
-    ]);
-
-    expect(plan.additions.map((addition) => addition.noteIds)).toEqual([
-      [201, 203],
-      [202],
-    ]);
-    expect(plan.additions[0].entry).toEqual({
-      catalog_number: "22a",
-      denomination: "20 lei",
-      issue_date: "1877",
-      source: "",
-    });
-  });
-
-  test("skips notes without a catalog number", () => {
-    const plan = planCatalogMerge([], [{ id: 301, catalog_number: "" }]);
-
-    expect(plan.additions).toEqual([]);
-    expect(plan.skipped).toEqual([
-      { note: { id: 301, catalog_number: "" }, reason: "no-catalog-number" },
-    ]);
-  });
-
-  test("skips notes already attached to the matching entry", () => {
-    const children = [entryNode(20, [ownedSpecimen(101)])];
-    const plan = planCatalogMerge(children, [{ id: 101, catalog_number: "22a" }]);
-
-    expect(plan.merges).toEqual([]);
-    expect(plan.skipped).toEqual([
-      { note: { id: 101, catalog_number: "22a" }, reason: "already-on-entry" },
-    ]);
-  });
-
-  test("keeps an existing primary and promotes the first note when it is gone", () => {
-    const withPrimary = planCatalogMerge(
-      [entryNode(20, [ownedSpecimen(101)], { primaryId: 101 })],
-      [{ id: 102, catalog_number: "22a" }],
-    );
-    const withStalePrimary = planCatalogMerge(
-      [entryNode(20, [ownedSpecimen(101), ownedSpecimen(102)], {
-        primaryId: 999,
-      })],
-      [{ id: 103, catalog_number: "22a" }],
-    );
-
-    expect(withPrimary.merges[0].primaryNoteId).toBe(101);
-    expect(withStalePrimary.merges[0].primaryNoteId).toBe(101);
-  });
-
-  test("reports a draft entry id unchanged so the caller merges locally", () => {
-    const plan = planCatalogMerge(
-      [entryNode(-4, [ownedSpecimen(101)], { primaryId: 101 })],
-      [{ id: 102, catalog_number: "22a" }],
-    );
-
-    expect(plan.merges[0].nodeId).toBe(-4);
-    expect(plan.merges[0].noteIds).toEqual([101, 102]);
-  });
-});
-
-describe("specimen plans", () => {
-  test("adding appends new notes and makes the first one primary on an empty entry", () => {
-    const plan = planSpecimenAdd(entryNode(20, []), [101, 102], [
-      { id: 102, owned: false },
-    ]);
-
-    expect(plan.addedIds).toEqual([101, 102]);
-    expect(plan.specimens.map((specimen) => specimen.id)).toEqual([101, 102]);
-    expect(plan.payload).toEqual({
-      note_ids: [101, 102],
-      primary_note_id: 101,
-    });
-  });
-
-  test("adding skips notes already on the entry and ignores duplicates", () => {
-    const plan = planSpecimenAdd(
-      entryNode(20, [ownedSpecimen(101)], { primaryId: 101 }),
-      [101, 101, 102],
-      [{ id: 102, owned: false }],
-    );
-
-    expect(plan.addedIds).toEqual([102]);
-    expect(plan.payload).toEqual({
-      note_ids: [101, 102],
-      primary_note_id: 101,
-    });
-    expect(
-      planSpecimenAdd(entryNode(20, [ownedSpecimen(101)]), [101], []),
-    ).toBeNull();
-  });
-
-  test("promoting keeps the set and names the new primary", () => {
-    const entry = entryNode(20, [seenSpecimen(101), ownedSpecimen(102)], {
-      primaryId: 101,
-    });
-    const plan = planSpecimenPromote(entry, 102);
-
-    expect(plan.payload).toEqual({
-      note_ids: [101, 102],
-      primary_note_id: 102,
-    });
-    expect(planSpecimenPromote(entry, 101)).toBeNull();
-    expect(planSpecimenPromote(entry, 999)).toBeNull();
-  });
-
-  test("removing the primary promotes the first remaining specimen", () => {
-    const entry = entryNode(20, [ownedSpecimen(101), seenSpecimen(102)]);
-    const plan = planSpecimenRemove(entry, 101);
-
-    expect(plan.removed.id).toBe(101);
-    expect(plan.specimens.map((specimen) => specimen.id)).toEqual([102]);
-    expect(plan.payload).toEqual({
-      note_ids: [102],
-      primary_note_id: 102,
-    });
-    expect(planSpecimenRemove(entry, 999)).toBeNull();
-  });
-});
-
 describe("showcaseCountLabel", () => {
   test("a catalog showcase prints owned over entry count", () => {
     expect(
@@ -847,49 +536,31 @@ describe("showcaseCountLabel", () => {
 });
 
 describe("findNodeIdForNote", () => {
-  test("finds a note leaf and a specimen's card", () => {
-    const tree = [
-      category(1, [
-        entryNode(20, [seenSpecimen(201)]),
-        noteLeaf(3, true),
-      ]),
-    ];
+  test("finds the note leaf that shows the note", () => {
+    const tree = [category(1, [entryNode(20), noteLeaf(3, true)])];
 
-    expect(findNodeIdForNote(tree, 201)).toBe(20);
     expect(findNodeIdForNote(tree, 103)).toBe(3);
     expect(findNodeIdForNote(tree, 999)).toBeNull();
   });
 });
 
 describe("noteOwnedInTree", () => {
-  test("reads the live flag from a note leaf or a specimen", () => {
-    const tree = [
-      category(1, [
-        entryNode(20, [seenSpecimen(201)]),
-        noteLeaf(3, true),
-      ]),
-    ];
+  test("reads the live flag from the note leaf", () => {
+    const tree = [category(1, [entryNode(20), noteLeaf(3, true)])];
 
-    expect(noteOwnedInTree(tree, 201)).toBe(false);
     expect(noteOwnedInTree(tree, 103)).toBe(true);
     expect(noteOwnedInTree(tree, 999)).toBeUndefined();
   });
 });
 
 describe("setNoteOwned", () => {
-  test("marks a specimen in every entry that shows the note", () => {
-    const tree = [
-      category(1, [
-        entryNode(20, [seenSpecimen(201), ownedSpecimen(202)]),
-        noteLeaf(3, false),
-      ]),
-    ];
-    const next = setNoteOwned(tree, 201, true);
+  test("marks every note leaf that shows the note", () => {
+    const tree = [category(1, [entryNode(20), noteLeaf(3, false)])];
+    const next = setNoteOwned(tree, 103, true);
 
     expect(next).not.toBe(tree);
-    expect(next[0].children[0].specimens[0]).toEqual({ id: 201, owned: true });
-    expect(next[0].children[0].specimens[1]).toEqual({ id: 202, owned: true });
-    expect(next[0].children[1].note).toEqual({ id: 103, owned: false });
+    expect(next[0].children[1].note).toEqual({ id: 103, owned: true });
+    expect(next[0].children[0]).toBe(tree[0].children[0]);
   });
 
   test("marks a note leaf by the Note's own id", () => {

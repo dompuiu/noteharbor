@@ -28,7 +28,6 @@ vi.mock("./lib/api.js", () => ({
   reorderShowcases: vi.fn(),
   updateCatalogEntry: vi.fn(),
   updateNode: vi.fn(),
-  updateNodeNotes: vi.fn(),
   reorderNodes: vi.fn(),
 }));
 

@@ -11,7 +11,6 @@ import {
   catalogEntryCaption,
   isCatalogEntry,
   nodeCatalogState,
-  primarySpecimen,
 } from "../lib/showcaseTree.js";
 import { ShowcaseCatalogWell } from "./ShowcaseCatalogWell.jsx";
 import { ShowcaseCardNotes } from "./ShowcaseCardNotes.jsx";
@@ -41,7 +40,7 @@ import { ShowcaseFlipControl } from "./ShowcaseFlipControl.jsx";
 // read the same in either layout. The state label is the ownership toggle and
 // a sibling of the card button (buttons cannot nest); the photo never changes
 // opacity or colour, because only the label says whether the record is owned.
-// The primary specimen's notes read on the card: two lines under the metadata
+// A note card's notes read on the card: two lines under the metadata
 // in the Library label, four lines in the identity rail.
 function noteLabel(note) {
   return formatShowcaseCatalogNumber(note?.catalog_number, { compact: true });
@@ -59,8 +58,7 @@ function text(value) {
   return String(value ?? "").trim();
 }
 
-// The grade belongs to the specimen, not the position. An entry may hold
-// several notes; the primary one is the record the card shows.
+// The grade belongs to the note. An entry holds no note, so it has none.
 function gradeOf(note) {
   const grade = text(note?.grade);
 
@@ -227,7 +225,7 @@ function ShowcaseCatalogCard({
   const notesId = useId();
   const entry = isCatalogEntry(node);
   const state = nodeCatalogState(node);
-  const note = entry ? primarySpecimen(node) : node?.note;
+  const note = node?.note;
   const image = firstAvailableNoteImage(note);
   const backPath = pickBackImage(note);
   // A distinct back is a front primary with a back beside it. A back-only note

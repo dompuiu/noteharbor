@@ -3401,9 +3401,7 @@ input[type="radio"] {
   flex: none;
 }
 
-/* Edit mode's Catalog entry card: the same body as the checklist card, with a
-   draft-local remove icon, a details action, and a quiet specimen line that
-   opens the local manager. */
+/* A Catalog entry card's empty well and its details action. */
 .showcase-catalog-editcard {
   display: flex;
   flex: 1 1 auto;

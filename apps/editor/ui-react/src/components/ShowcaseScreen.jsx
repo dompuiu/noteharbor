@@ -228,10 +228,7 @@ function ShowcaseScreen() {
       return null;
     }
 
-    const note =
-      node.node_type === "note"
-        ? node.note
-        : node.specimens?.find((specimen) => specimen?.id === editingNoteId);
+    const note = node.note;
 
     return note
       ? { id: editingNoteId, collectionId: note.collection_id ?? null, nodeId }
