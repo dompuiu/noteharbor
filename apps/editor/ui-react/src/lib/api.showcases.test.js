@@ -140,7 +140,7 @@ describe("showcase API calls", () => {
 });
 
 describe("catalog entry API calls", () => {
-  test("createCatalogEntry posts metadata only, with no notes", async () => {
+  test("createCatalogEntry posts catalog metadata including notes", async () => {
     const fetchMock = stubFetch(async () =>
       jsonResponse(201, { node: { id: 9, node_type: "catalog_entry" } }),
     );
@@ -150,6 +150,7 @@ describe("catalog entry API calls", () => {
       denomination: "20 lei",
       issue_date: "1877",
       source: "Pick catalog",
+      notes: "Watch the overprint",
     };
 
     await expect(

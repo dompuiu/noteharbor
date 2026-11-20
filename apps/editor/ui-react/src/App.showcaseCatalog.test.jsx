@@ -169,6 +169,7 @@ function entryNode(
       denomination,
       issue_date,
       source: "",
+      notes: "",
     },
   };
 }
@@ -1300,7 +1301,7 @@ describe("the catalog checklist", () => {
 });
 
 describe("placeholders in the one view", () => {
-  test("the merged Add dialog creates placeholders with metadata and no notes", async () => {
+  test("the merged Add dialog creates placeholders with metadata and notes", async () => {
     const user = userEvent.setup();
     getShowcaseTree.mockResolvedValue({
       showcase_id: 1,
@@ -1325,6 +1326,13 @@ describe("placeholders in the one view", () => {
       "22a, 22b",
     );
     await user.type(within(dialog).getByLabelText("Denomination"), "20 lei");
+    await user.type(
+      within(dialog).getByLabelText("Notes"),
+      "Watch the overprint",
+    );
+    expect(
+      within(dialog).getByTitle("Watch the overprint"),
+    ).toHaveTextContent("Watch the overprint");
     await user.click(
       within(dialog).getByRole("button", { name: "Add 2 placeholders" }),
     );
@@ -1337,6 +1345,7 @@ describe("placeholders in the one view", () => {
         denomination: "20 lei",
         issue_date: "",
         source: "",
+        notes: "Watch the overprint",
       },
     });
     expect(createCatalogEntry).toHaveBeenNthCalledWith(2, 1, {
@@ -1346,6 +1355,7 @@ describe("placeholders in the one view", () => {
         denomination: "20 lei",
         issue_date: "",
         source: "",
+        notes: "Watch the overprint",
       },
     });
     expect(
@@ -1411,6 +1421,10 @@ describe("placeholders in the one view", () => {
     await user.clear(within(dialog).getByLabelText("Denomination"));
     await user.type(within(dialog).getByLabelText("Denomination"), "100 lei");
     await user.type(within(dialog).getByLabelText("Source"), "Pick catalog");
+    await user.type(
+      within(dialog).getByLabelText("Notes"),
+      "Watch the overprint",
+    );
     await user.click(
       within(dialog).getByRole("button", { name: "Save details" }),
     );
@@ -1421,6 +1435,7 @@ describe("placeholders in the one view", () => {
         denomination: "100 lei",
         issue_date: "1921",
         source: "Pick catalog",
+        notes: "Watch the overprint",
       }),
     );
     await waitFor(() =>

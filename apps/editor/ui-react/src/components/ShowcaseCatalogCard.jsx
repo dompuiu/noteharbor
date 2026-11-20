@@ -12,6 +12,7 @@ import {
   isCatalogEntry,
   nodeCatalogState,
 } from "../lib/showcaseTree.js";
+import { ShowcaseCatalogNotes } from "./ShowcaseCatalogNotes.jsx";
 import { ShowcaseCatalogWell } from "./ShowcaseCatalogWell.jsx";
 import { ShowcaseCardNotes } from "./ShowcaseCardNotes.jsx";
 import { ShowcaseFlipControl } from "./ShowcaseFlipControl.jsx";
@@ -241,6 +242,9 @@ function ShowcaseCatalogCard({
   const metaLine = [denomination, date].filter(Boolean).join(" · ");
   const grade = gradeOf(note);
   const notes = text(note?.notes);
+  // A placeholder's own reminder is not the specimen's notes: it lives on the
+  // entry and reads only while the slot is unseen.
+  const placeholderNotes = text(node?.entry?.notes);
   const notesDescriptionId = notes ? notesId : undefined;
 
   function handleMouseEnter() {
@@ -341,6 +345,7 @@ function ShowcaseCatalogCard({
                   <span className="showcase-catalog-denom">{denomination}</span>
                 ) : null}
                 {date ? <span className="showcase-catalog-date">{date}</span> : null}
+                <ShowcaseCatalogNotes text={placeholderNotes} />
                 <span className="showcase-catalog-empty">
                   No specimen recorded yet.
                 </span>
@@ -372,8 +377,9 @@ function ShowcaseCatalogCard({
           <span className="showcase-catalog-wellshot">
             <ShowcaseCatalogWell />
           </span>
-          <span className="showcase-catalog-meta">
+          <span className="showcase-catalog-meta showcase-catalog-meta--placeholder">
             <span className="showcase-catalog-line">{metaLine}</span>
+            <ShowcaseCatalogNotes text={placeholderNotes} />
           </span>
           <span className="showcase-catalog-add">Replace with note →</span>
         </CatalogCardFrame>

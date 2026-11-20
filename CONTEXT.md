@@ -78,7 +78,7 @@ One occurrence of a Category inside a Showcase, owning the notes, groupings, and
 _Avoid_: Instance, occurrence
 
 **Placeholder**:
-A planned Showcase leaf that represents one Catalog value. It carries catalog metadata only, never notes: it is a placeholder that becomes that note card in place once the collector picks a library note. A Showcase with placeholders reads as a catalog checklist; without them it stays a presentation-only Showcase.
+A planned Showcase leaf that represents one Catalog value. It carries catalog metadata and its own free-text Notes, never a library Note: it is a placeholder that becomes that note card in place once the collector picks a library note. A Showcase with placeholders reads as a catalog checklist; without them it stays a presentation-only Showcase.
 _Avoid_: Slot, want, specimen container, catalog shell
 
 **Owned / Seen / Unseen**:

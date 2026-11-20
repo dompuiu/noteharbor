@@ -4,6 +4,7 @@ import {
   catalogEntryIdentity,
   normalizeCatalogEntry,
 } from "../lib/showcaseTree.js";
+import { ShowcaseCatalogNotes } from "./ShowcaseCatalogNotes.jsx";
 import { ShowcaseCatalogWell } from "./ShowcaseCatalogWell.jsx";
 
 // Shared by the merged Add dialog and the Edit details dialog. A catalog shell
@@ -30,6 +31,7 @@ function ShowcaseCatalogShellForm({
   );
   const [issueDate, setIssueDate] = useState(entry?.issue_date ?? "");
   const [source, setSource] = useState(entry?.source ?? "");
+  const [notes, setNotes] = useState(entry?.notes ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const firstFieldRef = useRef(null);
@@ -45,6 +47,7 @@ function ShowcaseCatalogShellForm({
     denomination,
     issue_date: issueDate,
     source,
+    notes,
   });
   const previewIdentity = catalogEntryIdentity(preview);
   const canSubmit = entryCount > 0 && !busy;
@@ -56,7 +59,7 @@ function ShowcaseCatalogShellForm({
       return;
     }
 
-    const details = { denomination, issue_date: issueDate, source };
+    const details = { denomination, issue_date: issueDate, source, notes };
     const entries = editing
       ? [normalizeCatalogEntry({ ...details, catalog_number: catalogNumbers[0] })]
       : catalogNumbers.map((catalogNumber) =>
@@ -131,6 +134,19 @@ function ShowcaseCatalogShellForm({
               Where the planned card comes from, for example a catalog.
             </small>
           </label>
+
+          <label className="field-block">
+            <span>Notes</span>
+            <textarea
+              aria-label="Notes"
+              onChange={(event) => setNotes(event.target.value)}
+              rows={3}
+              value={notes}
+            />
+            <small className="field-help">
+              Anything to remember while hunting this one down.
+            </small>
+          </label>
         </div>
 
         <div className="showcase-entry-preview">
@@ -144,6 +160,7 @@ function ShowcaseCatalogShellForm({
                 {catalogEntryCaption(preview)}
               </span>
             </span>
+            <ShowcaseCatalogNotes text={preview.notes} />
             <span className="showcase-catalog-foot">
               <span>Replace with a note</span>
               <span aria-hidden="true" className="showcase-catalog-arrow">

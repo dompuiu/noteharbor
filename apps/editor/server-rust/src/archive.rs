@@ -1284,6 +1284,7 @@ struct FullNodeRow {
     denomination: Option<String>,
     issue_date: Option<String>,
     source: Option<String>,
+    notes: Option<String>,
 }
 
 #[allow(clippy::too_many_lines)]
@@ -1340,15 +1341,21 @@ fn import_showcases(
 
     // Node rows also carry node_type/name/position and, on a catalog-aware
     // archive, the entry metadata. An older archive has no metadata columns,
-    // so they are feature-detected.
+    // so they are feature-detected. Notes arrived after the other metadata
+    // columns, so an archive from that version keeps its catalog fields and
+    // imports the notes as empty.
     let node_columns = column_names(archive, "showcase_nodes")?;
     let carries_metadata = ["catalog_number", "denomination", "issue_date", "source"]
         .iter()
         .all(|column| node_columns.contains(*column));
     let metadata_select = if carries_metadata {
-        "catalog_number, denomination, issue_date, source"
+        if node_columns.contains("notes") {
+            "catalog_number, denomination, issue_date, source, notes"
+        } else {
+            "catalog_number, denomination, issue_date, source, NULL"
+        }
     } else {
-        "NULL, NULL, NULL, NULL"
+        "NULL, NULL, NULL, NULL, NULL"
     };
     let full_nodes: Vec<FullNodeRow> = {
         let mut stmt = archive
@@ -1371,6 +1378,7 @@ fn import_showcases(
                     denomination: row.get(5)?,
                     issue_date: row.get(6)?,
                     source: row.get(7)?,
+                    notes: row.get(8)?,
                 })
             })
             .map_err(db_failed)?;
@@ -1443,9 +1451,9 @@ fn import_showcases(
             "INSERT INTO showcase_nodes (
                showcase_id, parent_node_id, node_type, category_id, name,
                note_id, cover_note_id, catalog_number, denomination, issue_date,
-               source, position, created_at, updated_at
+               source, notes, position, created_at, updated_at
              ) VALUES (
-               ?1, NULL, ?2, NULL, ?3, NULL, NULL, ?5, ?6, ?7, ?8, ?4,
+               ?1, NULL, ?2, NULL, ?3, NULL, NULL, ?5, ?6, ?7, ?8, ?9, ?4,
                datetime('now'), datetime('now')
              )",
             params![
@@ -1457,6 +1465,7 @@ fn import_showcases(
                 full.denomination,
                 full.issue_date,
                 full.source,
+                full.notes,
             ],
         )
         .map_err(db_failed)?;

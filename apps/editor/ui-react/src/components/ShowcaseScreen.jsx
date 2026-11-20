@@ -87,8 +87,8 @@ import { useToastHost } from "./Toast.jsx";
 // One showcase, one always-editable canvas. Adds, renames, removals, and drag
 // reorders write immediately (with a toast when a write fails); there is no
 // draft, Save, Cancel, or separate edit route. A Catalog shell is a planned
-// card: it carries metadata only and becomes a real note in place when the
-// collector picks one.
+// card: it carries its catalog metadata and notes only and becomes a real note
+// in place when the collector picks one.
 
 // The drag handle's accessible name for a note node.
 function noteNodeLabel(node) {

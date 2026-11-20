@@ -980,6 +980,7 @@ fn catalog_entry_body(parent_id: i64) -> Value {
             "denomination": "20 lei",
             "issue_date": "1877",
             "source": "Pick catalog",
+            "notes": "Watch the overprint",
         },
     })
 }
@@ -1047,6 +1048,7 @@ async fn catalog_entry_is_a_placeholder() {
     assert_eq!(entry["entry"]["denomination"], json!("20 lei"));
     assert_eq!(entry["entry"]["issue_date"], json!("1877"));
     assert_eq!(entry["entry"]["source"], json!("Pick catalog"));
+    assert_eq!(entry["entry"]["notes"], json!("Watch the overprint"));
     assert_eq!(entry["children"], json!([]));
     // A Placeholder holds no note: the wire carries no specimen fields at all.
     assert!(entry.get("specimens").is_none());
@@ -1080,7 +1082,9 @@ async fn catalog_entry_is_a_placeholder() {
     let children = tree["nodes"][0]["children"].as_array().unwrap();
     assert_eq!(children.len(), 2);
     assert_eq!(children[0]["entry"]["catalog_number"], json!("22a"));
+    assert_eq!(children[0]["entry"]["notes"], json!("Watch the overprint"));
     assert_eq!(children[1]["entry"]["catalog_number"], json!("22b"));
+    assert_eq!(children[1]["entry"]["notes"], json!(""));
     assert!(children.iter().all(|node| node.get("specimens").is_none()));
 }
 
@@ -1105,6 +1109,7 @@ async fn catalog_entry_metadata_update_replaces_the_entry() {
                 "denomination": "50 lei",
                 "issue_date": "",
                 "source": "My collection",
+                "notes": "Check the watermark",
             },
         })),
     )
@@ -1116,6 +1121,7 @@ async fn catalog_entry_metadata_update_replaces_the_entry() {
     assert_eq!(body["node"]["entry"]["denomination"], json!("50 lei"));
     assert_eq!(body["node"]["entry"]["issue_date"], json!(""));
     assert_eq!(body["node"]["entry"]["source"], json!("My collection"));
+    assert_eq!(body["node"]["entry"]["notes"], json!("Check the watermark"));
 
     let invalid = call(
         app.clone(),
@@ -1367,7 +1373,7 @@ async fn showcase_counts_positions_by_ownership() {
 
 #[tokio::test]
 async fn catalog_entry_becomes_a_note_in_place() {
-    let (_dir, state) = fresh_state();
+    let (dir, state) = fresh_state();
     let app = create_app(state);
     let showcase = create_showcase(app.clone(), Some("Shell replacement")).await;
     let showcase_id = showcase["id"].as_i64().unwrap();
@@ -1398,6 +1404,17 @@ async fn catalog_entry_becomes_a_note_in_place() {
     assert_eq!(replaced["parent_node_id"], json!(category_id));
     assert_eq!(replaced["note"]["denomination"], second["denomination"]);
     assert!(replaced.get("entry").is_none());
+
+    // The placeholder's own reminder leaves with the shell.
+    let conn = rusqlite::Connection::open(dir.path().join("banknotes.db")).expect("db opens");
+    let leftover_notes: Option<String> = conn
+        .query_row(
+            "SELECT notes FROM showcase_nodes WHERE id = ?1",
+            rusqlite::params![entry_id],
+            |row| row.get(0),
+        )
+        .expect("notes read");
+    assert!(leftover_notes.is_none());
 
     let in_tree = tree_child(app, showcase_id, json!(entry_id)).await;
     assert_eq!(in_tree["node_type"], json!("note"));
@@ -1895,6 +1912,10 @@ async fn duplicate_category_copies_the_whole_subtree_and_appends_it() {
     assert_eq!(entry_copy["entry"]["denomination"], json!("20 lei"));
     assert_eq!(entry_copy["entry"]["issue_date"], json!("1877"));
     assert_eq!(entry_copy["entry"]["source"], json!("Pick catalog"));
+    assert_eq!(
+        entry_copy["entry"]["notes"],
+        json!("Watch the overprint")
+    );
     assert!(entry_copy.get("specimens").is_none());
     // The third level copies too, and its order is position, not id: the entry
     // was created after the nested grouping.

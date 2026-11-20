@@ -72,15 +72,16 @@ pub struct Category {
     pub showcase_count: i64,
 }
 
-/// The four catalog metadata fields a Catalog entry carries on its node.
+/// The five catalog metadata fields a Catalog entry carries on its node.
 /// They are meaningful only for `catalog_entry`; absent values serialize as
-/// empty strings so the wire shape stays four strings.
+/// empty strings so the wire shape stays five strings.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct CatalogEntry {
     pub catalog_number: String,
     pub denomination: String,
     pub issue_date: String,
     pub source: String,
+    pub notes: String,
 }
 
 /// A Catalog entry's payload: its own catalog metadata. Flattened into
@@ -122,6 +123,7 @@ struct NodeRow {
     denomination: Option<String>,
     issue_date: Option<String>,
     source: Option<String>,
+    notes: Option<String>,
 }
 
 fn map_node_row(row: &Row<'_>) -> rusqlite::Result<NodeRow> {
@@ -139,6 +141,7 @@ fn map_node_row(row: &Row<'_>) -> rusqlite::Result<NodeRow> {
         denomination: row.get(10)?,
         issue_date: row.get(11)?,
         source: row.get(12)?,
+        notes: row.get(13)?,
     })
 }
 
@@ -158,11 +161,12 @@ const NODE_SELECT: &str = "SELECT
         showcase_nodes.catalog_number,
         showcase_nodes.denomination,
         showcase_nodes.issue_date,
-        showcase_nodes.source
+        showcase_nodes.source,
+        showcase_nodes.notes
       FROM showcase_nodes
       LEFT JOIN categories ON categories.id = showcase_nodes.category_id";
 
-/// One node row, or every node of a Showcase, sharing the same 13 columns.
+/// One node row, or every node of a Showcase, sharing the same 14 columns.
 fn node_rows_sql(tail: &str) -> String {
     format!("{NODE_SELECT}\n      {tail}")
 }
@@ -712,6 +716,7 @@ fn node_from_row(row: NodeRow, notes: &HashMap<i64, Note>) -> ShowcaseNode {
                 denomination: row.denomination.unwrap_or_default(),
                 issue_date: row.issue_date.unwrap_or_default(),
                 source: row.source.unwrap_or_default(),
+                notes: row.notes.unwrap_or_default(),
             },
         }),
         children: Vec::new(),
@@ -968,9 +973,9 @@ fn insert_copied_node(
         "INSERT INTO showcase_nodes (
            showcase_id, parent_node_id, node_type, category_id, name,
            note_id, cover_note_id, catalog_number, denomination, issue_date,
-           source, position, created_at, updated_at
+           source, notes, position, created_at, updated_at
          )
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
                  datetime('now'), datetime('now'))",
         params![
             showcase_id,
@@ -984,6 +989,7 @@ fn insert_copied_node(
             row.denomination,
             row.issue_date,
             row.source,
+            row.notes,
             position,
         ],
     ) {
@@ -1251,9 +1257,10 @@ struct CatalogEntryValues {
     denomination: Option<String>,
     issue_date: Option<String>,
     source: Option<String>,
+    notes: Option<String>,
 }
 
-/// `{ entry: { catalog_number, denomination, issue_date, source } }` is
+/// `{ entry: { catalog_number, denomination, issue_date, source, notes } }` is
 /// required and replaced as a whole; a missing or non-object entry is a bad
 /// body.
 fn parse_catalog_entry(body: &Value) -> Result<CatalogEntryValues, DbError> {
@@ -1271,6 +1278,7 @@ fn parse_catalog_entry(body: &Value) -> Result<CatalogEntryValues, DbError> {
         denomination: field("denomination"),
         issue_date: field("issue_date"),
         source: field("source"),
+        notes: field("notes"),
     })
 }
 
@@ -1299,10 +1307,10 @@ fn add_catalog_entry(
         "INSERT INTO showcase_nodes (
            showcase_id, parent_node_id, node_type, category_id, name,
            note_id, cover_note_id, catalog_number, denomination, issue_date,
-           source, position, created_at, updated_at
+           source, notes, position, created_at, updated_at
          )
          VALUES (?1, ?2, 'catalog_entry', NULL, NULL, NULL, NULL,
-                 ?3, ?4, ?5, ?6, ?7, datetime('now'), datetime('now'))",
+                 ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'), datetime('now'))",
         params![
             showcase_id,
             parent_id,
@@ -1310,6 +1318,7 @@ fn add_catalog_entry(
             entry.denomination,
             entry.issue_date,
             entry.source,
+            entry.notes,
             position,
         ],
     )
@@ -1426,7 +1435,7 @@ fn update_showcase_node(
                 "UPDATE showcase_nodes
                  SET node_type = 'note', note_id = ?1, catalog_number = NULL,
                      denomination = NULL, issue_date = NULL, source = NULL,
-                     updated_at = datetime('now')
+                     notes = NULL, updated_at = datetime('now')
                  WHERE id = ?2",
                 params![note_id, id],
             )
@@ -1437,13 +1446,14 @@ fn update_showcase_node(
             conn.execute(
                 "UPDATE showcase_nodes
                  SET catalog_number = ?1, denomination = ?2, issue_date = ?3,
-                     source = ?4, updated_at = datetime('now')
-                 WHERE id = ?5",
+                     source = ?4, notes = ?5, updated_at = datetime('now')
+                 WHERE id = ?6",
                 params![
                     entry.catalog_number,
                     entry.denomination,
                     entry.issue_date,
                     entry.source,
+                    entry.notes,
                     id,
                 ],
             )

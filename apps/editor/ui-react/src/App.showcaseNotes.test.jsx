@@ -305,6 +305,7 @@ describe("the merged add dialog", () => {
           denomination: "",
           issue_date: "",
           source: "",
+          notes: "",
         },
         children: [],
       },
@@ -325,6 +326,7 @@ describe("the merged add dialog", () => {
           denomination: "",
           issue_date: "",
           source: "",
+          notes: "",
         },
       });
     });

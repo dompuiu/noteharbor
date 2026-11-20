@@ -586,6 +586,7 @@ fn showcase_nodes_definition(table: &str) -> String {
            denomination TEXT,
            issue_date TEXT,
            source TEXT,
+           notes TEXT,
            position INTEGER,
            created_at TEXT DEFAULT (datetime('now')),
            updated_at TEXT DEFAULT (datetime('now'))
@@ -643,7 +644,7 @@ fn ensure_showcase_nodes_table(conn: &mut Connection) -> Result<(), DbError> {
 
     // A database from an intermediate build may carry the new CHECK but miss a
     // metadata column; add it rather than rebuilding again.
-    for column in ["catalog_number", "denomination", "issue_date", "source"] {
+    for column in ["catalog_number", "denomination", "issue_date", "source", "notes"] {
         if !has_column(conn, "showcase_nodes", column)? {
             conn.execute_batch(&format!("ALTER TABLE showcase_nodes ADD COLUMN {column} TEXT"))
                 .map_err(classify)?;

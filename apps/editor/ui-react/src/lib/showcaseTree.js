@@ -499,8 +499,9 @@ function catalogEntryLabel(entry) {
   return [identity, ...details].join(", ");
 }
 
-// One entry's catalog metadata as the wire shape carries it: four trimmed
-// strings. A Note or a partial entry both feed it.
+// One entry's catalog metadata as the wire shape carries it: five trimmed
+// strings. A partial entry feeds it. Notes are the entry's own reminder, never
+// the linked Note's notes field.
 function normalizeCatalogEntry(entry) {
   const text = (value) => String(value ?? "").trim();
 
@@ -509,6 +510,7 @@ function normalizeCatalogEntry(entry) {
     denomination: text(entry?.denomination),
     issue_date: text(entry?.issue_date),
     source: text(entry?.source),
+    notes: text(entry?.notes),
   };
 }
 

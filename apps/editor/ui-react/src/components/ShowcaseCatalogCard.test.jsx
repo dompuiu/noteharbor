@@ -62,6 +62,7 @@ function entryNode(id = 21) {
       denomination: "1 leu",
       issue_date: "1917",
       source: "",
+      notes: "",
     },
   };
 }
@@ -292,6 +293,7 @@ describe("ShowcaseCatalogCard face flip", () => {
     });
 
     expect(card.querySelector(".showcase-card-notes")).toBeNull();
+    expect(card.querySelector(".showcase-catalog-notes")).toBeNull();
     expect(card.querySelector(".showcase-catalog-wellshot")).not.toBeNull();
     expect(card).not.toHaveAccessibleDescription(/Notes/);
   });
@@ -306,5 +308,56 @@ describe("ShowcaseCatalogCard face flip", () => {
 
     expect(rail).toHaveTextContent("No specimen recorded yet.");
     expect(rail.querySelector(".showcase-card-notes")).toBeNull();
+    expect(rail.querySelector(".showcase-catalog-notes")).toBeNull();
+  });
+});
+
+describe("ShowcaseCatalogCard placeholder notes", () => {
+  function unseenEntry(notes) {
+    const node = entryNode();
+
+    return { ...node, entry: { ...node.entry, notes } };
+  }
+
+  test("the library label reads the placeholder's notes under the date", () => {
+    render(<ShowcaseCatalogCard node={unseenEntry("Hunt the overprint.")} />);
+
+    const card = screen.getByRole("button", {
+      name: /is unseen\. Replace with note/,
+    });
+    const line = card.querySelector(".showcase-catalog-notes");
+
+    expect(line).toHaveTextContent("Hunt the overprint.");
+    expect(line).toHaveAttribute("title", "Hunt the overprint.");
+    expect(line.querySelector(".showcase-catalog-notes-label")).toHaveTextContent(
+      "Note",
+    );
+    expect(line.parentElement?.className).toBe(
+      "showcase-catalog-meta showcase-catalog-meta--placeholder",
+    );
+    expect(line.previousElementSibling?.className).toBe(
+      "showcase-catalog-line",
+    );
+  });
+
+  test("the auction rail reads the placeholder's notes under the date", () => {
+    render(
+      <ShowcaseCatalogCard
+        layout="rail"
+        node={unseenEntry("Hunt the overprint.")}
+      />,
+    );
+
+    const card = screen.getByRole("button", {
+      name: /is unseen\. Replace with note/,
+    });
+    const line = card.querySelector(
+      ".showcase-catalog-rail .showcase-catalog-notes",
+    );
+
+    expect(line).toHaveTextContent("Hunt the overprint.");
+    expect(line.previousElementSibling?.className).toBe(
+      "showcase-catalog-date",
+    );
   });
 });

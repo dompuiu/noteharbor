@@ -311,7 +311,7 @@ mod catalog_schema {
         names
     }
 
-    const SHOWCASE_NODE_COLUMNS: [&str; 15] = [
+    const SHOWCASE_NODE_COLUMNS: [&str; 16] = [
         "catalog_number",
         "category_id",
         "cover_note_id",
@@ -322,6 +322,7 @@ mod catalog_schema {
         "name",
         "node_type",
         "note_id",
+        "notes",
         "parent_node_id",
         "position",
         "showcase_id",

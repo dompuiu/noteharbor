@@ -2981,6 +2981,61 @@ input[type="radio"] {
   white-space: nowrap;
 }
 
+/* A placeholder's own reminder, unlabeled text under a small Note title. It is
+   not the specimen notes block: it exists only while the slot has no note, so
+   a seen card never shows it. Two lines, ellipsized, with the full text in the
+   title. */
+.showcase-catalog-notes {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.showcase-catalog-notes-label {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.showcase-catalog-notes-text {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* A placeholder's note shares the metadata row so it reads right after the
+   denomination and date. When the row has no room for a readable run it drops
+   to its own line and keeps the two-line clamp. */
+.showcase-catalog-meta--placeholder {
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  column-gap: 10px;
+  row-gap: 0;
+}
+
+.showcase-catalog-meta--placeholder .showcase-catalog-notes {
+  flex: 1 1 12ch;
+  min-width: 12ch;
+  margin: 0;
+}
+
+.showcase-catalog-rail .showcase-catalog-notes {
+  margin-top: 3px;
+}
+
 /* The catalog card's notes row sits under the metadata line, inset like the
    line above it. The Auction rail carries the shared red-rule treatment
    inside the identity column instead. */

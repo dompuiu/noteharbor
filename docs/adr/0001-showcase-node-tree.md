@@ -22,6 +22,10 @@ Supersedes the node type list above: `node_type` gains `catalog_entry`, a planne
 
 An older build let one entry hold zero-or-more specimens through the `showcase_catalog_notes` join, with one marked primary. That model is retired: the join table, its triggers, the `PUT /api/nodes/:id/notes` route, and the specimen fields on the wire are gone; `note_ids` on entry creation is no longer read. Schema initialization drops the table outright, so a database from that build keeps its entries but not their specimen links, and archive import no longer reads the join.
 
+## Extension: placeholder notes
+
+A catalog entry may carry its own free-text `notes`, a reminder for hunting the planned card. It is not a library Note and has no specimen semantics: once a note is picked the row becomes a note card, the field is cleared, and the card shows only that Note's notes.
+
 ## Extension: re-binding a Category Placement to another label
 
 Supersedes the clause above that renaming a label updates every Showcase. `PUT /api/nodes/:id` with a `name` now sets the label on that one Category Placement: a name already in the pool adopts that label, and a new name creates one. Other Showcases keep the label they place, so the edit is local to the Showcase being edited. When the Placement was the last user of the label it left behind, that label is pruned in the same transaction; a label still placed elsewhere stays in the pool. A label the Showcase already places is refused, since each Showcase places a label once. `PUT /api/categories/:id` remains the way to rename the shared label everywhere it is placed.

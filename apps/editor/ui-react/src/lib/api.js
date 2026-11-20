@@ -578,8 +578,9 @@ async function updateNode(id, payload) {
   return handleResponse(response);
 }
 
-// Create a catalog shell: its own catalog metadata, no notes. Picking a note
-// later converts this same node with `replaceCatalogEntryWithNote`.
+// Create a catalog shell: its own catalog metadata and free-text notes, never a
+// library note. Picking a note later converts this same node with
+// `replaceCatalogEntryWithNote`.
 async function createCatalogEntry(showcaseId, { parentId, entry } = {}) {
   return createShowcaseNode(showcaseId, {
     node_type: 'catalog_entry',

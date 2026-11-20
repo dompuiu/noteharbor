@@ -320,18 +320,20 @@ describe("nodeCatalogState", () => {
 });
 
 describe("normalizeCatalogEntry and sameCatalogEntry", () => {
-  test("normalizes the four metadata fields to trimmed strings", () => {
+  test("normalizes the five metadata fields to trimmed strings", () => {
     expect(
       normalizeCatalogEntry({
         catalog_number: " 22a ",
         denomination: " 20 lei",
         issue_date: "1877 ",
+        notes: " Watch the overprint. ",
       }),
     ).toEqual({
       catalog_number: "22a",
       denomination: "20 lei",
       issue_date: "1877",
       source: "",
+      notes: "Watch the overprint.",
     });
   });
 

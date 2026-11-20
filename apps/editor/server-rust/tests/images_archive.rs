@@ -876,8 +876,9 @@ async fn seed_catalog_entry(pool: &DbPool) -> i64 {
         conn.execute(
             "INSERT INTO showcase_nodes
                (showcase_id, parent_node_id, node_type, name, position,
-                catalog_number, denomination, issue_date, source)
-             VALUES (?1, ?2, 'catalog_entry', NULL, 1, '22a', '10 Lei', '2020', 'BNR')",
+                catalog_number, denomination, issue_date, source, notes)
+             VALUES (?1, ?2, 'catalog_entry', NULL, 1, '22a', '10 Lei', '2020', 'BNR',
+                     'Check the overprint')",
             [showcase, parent],
         )
         .expect("catalog entry");
@@ -1036,6 +1037,36 @@ async fn import_leaves_notes_unowned_when_the_archive_predates_the_column() {
 }
 
 #[tokio::test]
+async fn import_round_trip_keeps_placeholder_notes() {
+    let (_dir, state) = archive_state();
+    seed_catalog_entry(&state.pool).await;
+
+    let (status, _headers, zip_bytes) = export_zip(state.clone(), "").await;
+    assert_eq!(status, StatusCode::OK);
+    wipe_live(&state).await;
+
+    let (status, bytes) = import_bytes(state.clone(), &zip_bytes, "replace").await;
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&bytes));
+
+    let pool = state.pool.clone();
+    let (catalog_number, notes): (String, String) = tokio::task::spawn_blocking(move || {
+        let conn = pool.get().expect("conn");
+        conn.query_row(
+            "SELECT catalog_number, COALESCE(notes, '') FROM showcase_nodes
+             WHERE node_type = 'catalog_entry'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("entry metadata")
+    })
+    .await
+    .expect("join");
+
+    assert_eq!(catalog_number, "22a");
+    assert_eq!(notes, "Check the overprint");
+}
+
+#[tokio::test]
 async fn import_accepts_an_archive_without_node_metadata_columns() {
     let (_dir, state) = archive_state();
     seed_catalog_entry(&state.pool).await;
@@ -1043,7 +1074,7 @@ async fn import_accepts_an_archive_without_node_metadata_columns() {
     let (status, _headers, zip_bytes) = export_zip(state.clone(), "").await;
     assert_eq!(status, StatusCode::OK);
     let older_zip = zip_with_modified_db(&zip_bytes, |conn| {
-        for column in ["catalog_number", "denomination", "issue_date", "source"] {
+        for column in ["catalog_number", "denomination", "issue_date", "source", "notes"] {
             conn.execute(&format!("ALTER TABLE showcase_nodes DROP COLUMN {column}"), [])
                 .expect("column drops");
         }
@@ -1066,4 +1097,39 @@ async fn import_accepts_an_archive_without_node_metadata_columns() {
     .await
     .expect("join");
     assert_eq!(catalog_number, None);
+}
+
+#[tokio::test]
+async fn import_keeps_catalog_metadata_from_an_archive_without_notes() {
+    let (_dir, state) = archive_state();
+    seed_catalog_entry(&state.pool).await;
+
+    let (status, _headers, zip_bytes) = export_zip(state.clone(), "").await;
+    assert_eq!(status, StatusCode::OK);
+    let older_zip = zip_with_modified_db(&zip_bytes, |conn| {
+        conn.execute("ALTER TABLE showcase_nodes DROP COLUMN notes", [])
+            .expect("column drops");
+    });
+    wipe_live(&state).await;
+
+    let (status, bytes) = import_bytes(state.clone(), &older_zip, "replace").await;
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&bytes));
+
+    let pool = state.pool.clone();
+    let (catalog_number, notes): (String, Option<String>) =
+        tokio::task::spawn_blocking(move || {
+            let conn = pool.get().expect("conn");
+            conn.query_row(
+                "SELECT catalog_number, notes FROM showcase_nodes
+                 WHERE node_type = 'catalog_entry'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("entry metadata")
+        })
+        .await
+        .expect("join");
+
+    assert_eq!(catalog_number, "22a");
+    assert!(notes.is_none());
 }

@@ -269,18 +269,23 @@ A named presentation tree.
 
 ### `showcase_nodes`
 
-One self-referential ordered tree per Showcase (see [ADR 0001](docs/adr/0001-showcase-node-tree.md)). Each row is a Category Placement, a Grouping, or a note, distinguished by `node_type`; `position` orders the children of one parent.
+One self-referential ordered tree per Showcase (see [ADR 0001](docs/adr/0001-showcase-node-tree.md)). Each row is a Category Placement, a Grouping, a note, or a catalog entry (placeholder), distinguished by `node_type`; `position` orders the children of one parent.
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | INTEGER PK | Auto-increment |
 | `showcase_id` | INTEGER | FK to `showcases.id`, cascades on delete |
 | `parent_node_id` | INTEGER | FK to `showcase_nodes.id`, cascades on delete; null for a top-level Category Placement |
-| `node_type` | TEXT | `category`, `grouping`, or `note` |
+| `node_type` | TEXT | `category`, `grouping`, `note`, or `catalog_entry` |
 | `category_id` | INTEGER | FK to `categories.id` for a Category Placement; at most one per `(showcase_id, category_id)` |
 | `name` | TEXT | A Grouping's local name (a Category reads its label's name) |
 | `note_id` | INTEGER | FK to `banknotes.id` for a note node, cascades on delete |
 | `cover_note_id` | INTEGER | A Grouping's manual cover Note; FK to `banknotes.id`, set to null when the Note is deleted |
+| `catalog_number` | TEXT | A catalog entry's own Catalog value |
+| `denomination` | TEXT | A catalog entry's own denomination |
+| `issue_date` | TEXT | A catalog entry's own issue date |
+| `source` | TEXT | A catalog entry's own source |
+| `notes` | TEXT | A catalog entry's own free-text reminder, never a library Note's notes |
 | `position` | INTEGER | Order among the parent's children |
 | `created_at` | TEXT | SQLite datetime |
 | `updated_at` | TEXT | SQLite datetime |
@@ -667,7 +672,7 @@ One always-editable canvas. There is no draft or Save/Cancel: adds, renames, rem
 - Every card is draggable onto another to reorder its level. Each card also has a `⋯` menu: add a note, grouping, or placeholder after it; rename/remove a grouping; set or clear a cover; swap a note card for another library note, or fill a placeholder with one.
 - Categories render expanded at the root; Groupings still drill to show their direct children.
 - The `+ Add` tile opens one dialog with Notes, Placeholder, and Grouping tabs.
-- A Placeholder is a planned card: it carries catalog metadata only, never notes. Picking a note turns the same card into that note in place, preserving order.
+- A Placeholder is a planned card: it carries catalog metadata and its own free-text Notes, never a library Note. Picking a note turns the same card into that note in place, preserving order.
 - A view toolbar carries the ownership filters, the owned meter, the card layout (Library label / Auction rail), photo size (Small / Medium / Large), and Slideshow. The layout and size are remembered per browser, and the toolbar keeps its controls in the same slots on an empty Showcase.
 - The header shows the showcase total note count or the catalog owned/seen/unseen summary.
 
