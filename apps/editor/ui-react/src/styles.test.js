@@ -3027,6 +3027,56 @@ describe("showcase canvas", () => {
   });
 });
 
+// The Add dialog's Notes tab and the standalone finder both scroll their
+// picker body. The filter field's ring is painted outside its box, so the
+// scrollport's padding edge has to sit at least its reach (outline plus
+// offset) beyond the toolbar; a padding-only fix would shift the content.
+describe("showcase picker scroll bodies", () => {
+  test("both scrolling bodies reserve the filter field's ring reach", () => {
+    const ring = styles.match(
+      /^\.table-search--scoped:has\(\.table-search-input:focus-visible\)\s*\{([^}]*)\}/m,
+    );
+    expect(ring).not.toBeNull();
+
+    const outline = Number(ring[1].match(/outline:\s*(\d+)px/)?.[1]);
+    const offset = Number(ring[1].match(/outline-offset:\s*(\d+)px/)?.[1]);
+
+    // Read every side of a box shorthand, so a padding-only token cannot
+    // hide a broken inline edge.
+    function sides(block, property) {
+      const value = block.match(new RegExp(`${property}:\\s*([^;]+);`))?.[1];
+      expect(value, property).toBeDefined();
+
+      const [top, right = top, bottom = top, left = right] = value
+        .trim()
+        .split(/\s+/)
+        .map((part) => Number(part.match(/-?\d+(?:\.\d+)?/)?.[0]));
+
+      return [top, right, bottom, left];
+    }
+
+    for (const selector of [".showcase-picker-body", ".showcase-add-body"]) {
+      const body = styles.match(
+        new RegExp(`^${selector.replace(/\./g, "\\.")}\\s*\\{([^}]*)\\}`, "m"),
+      );
+      expect(body, selector).not.toBeNull();
+      expect(body[1], selector).toMatch(/overflow-y:\s*auto/);
+
+      const padding = sides(body[1], "padding");
+      const margin = sides(body[1], "margin");
+      for (const value of padding) {
+        expect(value, `${selector} padding`).toBeGreaterThanOrEqual(
+          outline + offset,
+        );
+      }
+      // The negative margin cancels the padding, so nothing moves.
+      expect(margin, `${selector} margin`).toEqual(
+        padding.map((value) => -value),
+      );
+    }
+  });
+});
+
 // One primary treatment for the whole app: the deep red at rest, one step
 // brighter on hover, one darker while pressed. Add note used to carry this
 // ramp in a bespoke class; folding it into `.button-primary` is what keeps

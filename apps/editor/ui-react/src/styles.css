@@ -3552,8 +3552,12 @@ input[type="radio"] {
   flex-direction: column;
   gap: 16px;
   min-height: 0;
-  margin-inline: -6px;
-  padding-inline: 6px;
+  /* The pane scrolls, so it clips at its padding edge. Reserve the filter
+     field's ring reach on every side so a focused row or field at the
+     scrollport's edge is not sliced; the equal negative margin pulls the box
+     back so the content does not move. */
+  margin: -6px;
+  padding: 6px;
   overflow-y: auto;
 }
 
@@ -11773,11 +11777,13 @@ td.table-col-collection {
 
 .showcase-add-body {
   min-height: 0;
-  /* The dialog's scrolling body clips at its padding edge. Keep a few pixels
-     of inline padding so the focus ring on the edge-most control is not cut,
-     and pull the box back so its contents stay aligned with the dialog. */
-  margin-inline: -6px;
-  padding-inline: 6px;
+  /* The dialog's scrolling body clips at its padding edge. Reserve the filter
+     field's ring reach on every side, not just inline: the toolbar's top edge
+     sits on the scrollport's top edge, and the last focused control can sit on
+     its bottom edge. The equal negative margin pulls the box back so its
+     contents stay aligned with the dialog. */
+  margin: -6px;
+  padding: 6px;
   overflow-y: auto;
 }
 
