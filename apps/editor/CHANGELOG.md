@@ -4,6 +4,16 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.23.1] - 2026-11-21
+
+### Changed
+
+- Showcase: the Siblings Compare tray is fully keyboard-navigable. Arrow keys (and `h`/`j`/`k`/`l`) move focus between the pinned note and its available siblings, with a whole-card focus ring; Home and End jump to the ends. Enter or Space selects the focused sibling and hands focus to **Replace note**, arrows from the footer return to the pick, and the tray opens on the first available sibling.
+
+### Fixed
+
+- Showcase: focus stays inside the Compare tray after a failed sibling load and **Try again**, and closing the pinned note's image preview returns focus to that note's photo.
+
 ## [2.23.0] - 2026-11-20
 
 ### Added
