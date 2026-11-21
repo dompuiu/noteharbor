@@ -336,6 +336,76 @@ describe("the merged add dialog", () => {
   });
 });
 
+describe("per-item add actions", () => {
+  const CASES = [
+    { action: "Add note after", tab: "Notes" },
+    { action: "Add placeholder after", tab: "Placeholder" },
+    { action: "Add grouping after", tab: "Grouping" },
+  ];
+
+  async function openItemMenu() {
+    const user = userEvent.setup();
+    getShowcaseTree.mockResolvedValue({
+      showcase_id: 1,
+      nodes: [
+        categoryNode([
+          {
+            id: 40,
+            node_type: "note",
+            note_id: 101,
+            note: NOTE_A,
+            children: [],
+          },
+        ]),
+      ],
+    });
+
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    await user.click(
+      await screen.findByRole("button", { name: /Actions for 1 leu/ }),
+    );
+    return user;
+  }
+
+  test("orders the add actions notes, placeholder, then grouping", async () => {
+    await openItemMenu();
+
+    const labels = within(await screen.findByRole("menu"))
+      .getAllByRole("menuitem")
+      .map((item) => item.textContent)
+      .filter((label) => label.startsWith("Add "));
+
+    expect(labels).toEqual([
+      "Add note after",
+      "Add placeholder after",
+      "Add grouping after",
+    ]);
+  });
+
+  test.each(CASES)(
+    "$action opens the dialog on the $tab tab",
+    async ({ action, tab }) => {
+      const user = await openItemMenu();
+
+      await user.click(
+        await screen.findByRole("menuitem", { name: action }),
+      );
+
+      const dialog = await screen.findByRole("dialog", {
+        name: "Add to “Summer”",
+      });
+      for (const name of ["Notes", "Placeholder", "Grouping"]) {
+        expect(
+          within(dialog).getByRole("tab", { name }),
+        ).toHaveAttribute("aria-selected", String(name === tab));
+      }
+      expect(
+        within(dialog).getByText(/after the chosen item/),
+      ).toBeInTheDocument();
+    },
+  );
+});
+
 describe("the add dialog's focus", () => {
   test("opening the dialog moves focus to the filter", async () => {
     const { dialog } = await openAddDialog();

@@ -93,20 +93,20 @@ function ShowcaseItemMenu({
           run: onAddNote,
         }
       : null,
-    onAddGrouping
-      ? {
-          key: "grouping",
-          label: "Add grouping after",
-          icon: "group-add",
-          run: onAddGrouping,
-        }
-      : null,
     onAddCatalogShell
       ? {
           key: "shell",
           label: "Add placeholder after",
           icon: "shell-add",
           run: onAddCatalogShell,
+        }
+      : null,
+    onAddGrouping
+      ? {
+          key: "grouping",
+          label: "Add grouping after",
+          icon: "group-add",
+          run: onAddGrouping,
         }
       : null,
     isGrouping && onOpen

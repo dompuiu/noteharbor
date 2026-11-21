@@ -785,23 +785,10 @@ function ShowcaseScreen() {
     });
   }
 
-  function openAddAfter(parent, node, mode) {
-    if (mode === "grouping") {
-      setNameDialog({
-        kind: "add-grouping",
-        parentId: parent?.id ?? null,
-        afterId: node?.id ?? null,
-        title: "Add grouping",
-        subtitle: `The grouping lands after “${node?.name ?? "this item"}”.`,
-        label: "Grouping name",
-        initialValue: "",
-        submitLabel: "Add grouping",
-      });
-      return;
-    }
-
+  // The item menu's three "add … after" actions share this: one dialog, each
+  // on its own tab, anchored after the item the menu was opened from.
+  const addAfter = (mode) => (parent, node) =>
     openAdd(parent, node?.id ?? null, mode);
-  }
 
   async function handleAddNotes(noteIds, allNotes) {
     if (!addTarget?.parent?.id) {
@@ -876,21 +863,6 @@ function ShowcaseScreen() {
 
     if (nameDialog.kind === "add-category") {
       await handleAddCategory(trimmed);
-      return;
-    }
-
-    if (nameDialog.kind === "add-grouping") {
-      if (nameDialog.parentId == null) {
-        throw new Error("A grouping needs a category or grouping.");
-      }
-
-      const { node } = await createShowcaseNode(showcaseId, {
-        type: "grouping",
-        parent_id: nameDialog.parentId,
-        name: trimmed,
-      });
-      await placeCreated(nameDialog.parentId, nameDialog.afterId, [node]);
-      setActionError("");
       return;
     }
 
@@ -1918,7 +1890,7 @@ function ShowcaseScreen() {
 
         if (node && parent) {
           event.preventDefault();
-          openAddAfter(parent, node, "notes");
+          openAdd(parent, node.id, "notes");
         }
 
         return;
@@ -2156,9 +2128,9 @@ function ShowcaseScreen() {
     canDuplicate: otherShowcases.length > 0,
     catalogLayout,
     onAdd: (parent) => openAdd(parent, null, "notes"),
-    onAddGroupingAfter: openAddAfter,
-    onAddNoteAfter: openAddAfter,
-    onAddShellAfter: openAddAfter,
+    onAddGroupingAfter: addAfter("grouping"),
+    onAddNoteAfter: addAfter("notes"),
+    onAddShellAfter: addAfter("catalog"),
     onClearCover: handleClearCover,
     onEditShell: (node) => setEditShellId(node.id),
     onEditNote: openNoteEditor,
