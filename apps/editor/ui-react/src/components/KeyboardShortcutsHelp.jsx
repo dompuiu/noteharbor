@@ -136,6 +136,16 @@ const shortcutGroups = [
         description: "Open the focused card (view-mode note cards stay put)",
       },
       {
+        keys: ["←", "↑", "→", "↓", "h", "j", "k", "l"],
+        description:
+          "In the Siblings tray, move focus between the pinned note and its available siblings",
+      },
+      {
+        keys: ["Enter", "Space"],
+        description:
+          "In the Siblings tray, select the focused sibling; the next Enter replaces",
+      },
+      {
         keys: ["Shift", "←", "→"],
         description: "Flip the focused note card between front and back",
       },

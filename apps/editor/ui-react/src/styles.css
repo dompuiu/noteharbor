@@ -3185,6 +3185,23 @@ input[type="radio"] {
   color: var(--text-faint);
 }
 
+/* Keyboard focus rings the whole card, following the canvas's table-view
+   focus language, so the note reads as one target. The ring sits inside the
+   card because the filmstrip's scrollport would clip an outer offset. Without
+   :has() the controls keep their own outline instead of losing focus. */
+@supports selector(:has(*)) {
+  .showcase-tray-card:has(.showcase-tray-photo:focus-visible),
+  .showcase-tray-card:has(.showcase-tray-select:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  .showcase-tray-card .showcase-tray-photo:focus-visible,
+  .showcase-tray-card .showcase-tray-select:focus-visible {
+    outline: none;
+  }
+}
+
 .showcase-tray-photo {
   position: relative;
   width: 100%;

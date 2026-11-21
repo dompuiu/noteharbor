@@ -18,6 +18,10 @@ import { ImagePopover } from "./Slideshow.jsx";
 // Showcase preview.
 const FOCUSABLE =
   'button:not(:disabled), input:not(:disabled), [href], select, textarea, [tabindex]:not([tabindex="-1"])';
+// The Compare tray's arrow walk: the pinned Note's photo and each selectable
+// sibling. Disabled cards (already in this Showcase) are not stops, so the
+// arrows never land on a dead control.
+const TRAY_STOP = '[data-showcase-tray-stop]:not(:disabled)';
 
 function noteLabel(note) {
   return showcaseNoteTitleParts(note).join(" · ") || "Untitled note";
@@ -124,7 +128,8 @@ function TrayNoteCard({
         aria-label={
           current ? "View images of the current note" : `View images of ${label}`
         }
-        className="showcase-tray-photo"
+        className={`showcase-tray-photo${current ? " showcase-tray-current-photo" : ""}`}
+        data-showcase-tray-stop={current ? "" : undefined}
         disabled={!image}
         onClick={(event) => onOpenPhoto?.(event.currentTarget, image)}
         type="button"
@@ -150,8 +155,9 @@ function TrayNoteCard({
           }
           aria-pressed={selected}
           className="showcase-tray-select"
+          data-showcase-tray-stop=""
           disabled={inShowcase}
-          onClick={() => onSelect?.(note)}
+          onClick={(event) => onSelect?.(note, event)}
           type="button"
         >
           {body}
@@ -174,6 +180,7 @@ function ShowcaseSiblingTray({
   const titleId = useId();
   const panelRef = useRef(null);
   const previewReturnRef = useRef(null);
+  const replaceButtonRef = useRef(null);
   const [siblings, setSiblings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -227,6 +234,41 @@ function ShowcaseSiblingTray({
     panelRef.current?.focus({ preventScroll: true });
   }, []);
 
+  // The tray opens with the first available sibling focused, so the arrows
+  // and a quick Enter work without a Tab. A reload (Try again) lands here too:
+  // its button unmounts, so focus would otherwise fall to the page behind the
+  // scrim. A user already moving inside the tray keeps their place. With no
+  // available sibling, or on an error, the panel takes focus and still owns
+  // Esc and the Tab trap.
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    const panel = panelRef.current;
+
+    if (!panel) {
+      return;
+    }
+
+    const active = document.activeElement;
+    const userInsideTray =
+      active instanceof Node && panel !== active && panel.contains(active);
+
+    if (userInsideTray) {
+      return;
+    }
+
+    const first = panel.querySelector(`.showcase-tray-list ${TRAY_STOP}`);
+
+    if (first) {
+      focusTrayStop(first);
+      return;
+    }
+
+    panel.focus({ preventScroll: true });
+  }, [loading, siblings]);
+
   useEffect(() => {
     function handleKeyDown(event) {
       if (previewIndex != null || previewOpen) {
@@ -239,6 +281,37 @@ function ShowcaseSiblingTray({
         event.stopPropagation();
         onClose?.();
         return;
+      }
+
+      if (!event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+        const next = event.key === "ArrowRight" || event.key === "l";
+        const previous = event.key === "ArrowLeft" || event.key === "h";
+        const down = event.key === "ArrowDown" || event.key === "j";
+        const up = event.key === "ArrowUp" || event.key === "k";
+
+        if (next || down) {
+          event.preventDefault();
+          moveTrayFocus(1);
+          return;
+        }
+
+        if (previous || up) {
+          event.preventDefault();
+          moveTrayFocus(-1);
+          return;
+        }
+
+        if (event.key === "Home") {
+          event.preventDefault();
+          focusTrayStopAt(0);
+          return;
+        }
+
+        if (event.key === "End") {
+          event.preventDefault();
+          focusTrayStopAt(trayStops().length - 1);
+          return;
+        }
       }
 
       if (event.key !== "Tab" || !panelRef.current) {
@@ -271,6 +344,79 @@ function ShowcaseSiblingTray({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose, previewIndex, previewOpen]);
+
+  function trayStops() {
+    if (!panelRef.current) {
+      return [];
+    }
+
+    return Array.from(panelRef.current.querySelectorAll(TRAY_STOP));
+  }
+
+  function focusTrayStop(stop) {
+    if (!stop) {
+      return;
+    }
+
+    stop.focus({ preventScroll: true });
+    stop
+      .closest(".showcase-tray-card")
+      ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }
+
+  function focusTrayStopAt(index) {
+    const stops = trayStops();
+
+    if (!stops.length) {
+      return;
+    }
+
+    const clamped = Math.min(Math.max(index, 0), stops.length - 1);
+    focusTrayStop(stops[clamped]);
+  }
+
+  // Clamped, not wrapped, matching the Showcase canvas walk. Arrows pressed
+  // in the footer jump back to the filmstrip, so the selected sibling stays
+  // one key away after focus moves to Replace note.
+  function moveTrayFocus(offset) {
+    const stops = trayStops();
+
+    if (!stops.length) {
+      return;
+    }
+
+    const currentIndex = stops.indexOf(document.activeElement);
+
+    if (currentIndex < 0) {
+      // Enter hands focus to Replace note; an arrow brings it back to the
+      // pick instead of restarting the filmstrip. With no pick yet, the
+      // walking direction still decides which end to enter from.
+      const selectedStop = panelRef.current?.querySelector(
+        `.showcase-tray-card.is-selected ${TRAY_STOP}`,
+      );
+
+      if (selectedStop) {
+        focusTrayStop(selectedStop);
+        return;
+      }
+
+      focusTrayStopAt(offset > 0 ? 0 : stops.length - 1);
+      return;
+    }
+
+    focusTrayStopAt(currentIndex + offset);
+  }
+
+  function selectSibling(sibling, event) {
+    setSelectedId(sibling.id);
+
+    // A keyboard or screen-reader activation (detail 0) hands focus to the
+    // now-enabled Replace note, so the two-step swap needs no Tab walk. A
+    // pointer click keeps focus where the pointer left it.
+    if (event?.detail === 0) {
+      requestAnimationFrame(() => replaceButtonRef.current?.focus());
+    }
+  }
 
   if (!note) {
     return null;
@@ -433,7 +579,7 @@ function ShowcaseSiblingTray({
                           trigger,
                         )
                       }
-                      onSelect={() => setSelectedId(sibling.id)}
+                      onSelect={selectSibling}
                       selected={sibling.id === selectedId}
                     />
                   );
@@ -458,6 +604,7 @@ function ShowcaseSiblingTray({
               className="button button-primary"
               disabled={!selected || replacing}
               onClick={commitReplace}
+              ref={replaceButtonRef}
               type="button"
             >
               {replacing ? "Replacing…" : "Replace note"}

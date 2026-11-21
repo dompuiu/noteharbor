@@ -215,6 +215,16 @@ async function openTray() {
   };
 }
 
+function firstAvailableSibling(tray) {
+  return within(tray).getByRole("button", {
+    name: "Select Pick 23b · 1919 · 2 lei",
+  });
+}
+
+async function waitForFirstSiblingFocus(tray) {
+  await waitFor(() => expect(firstAvailableSibling(tray)).toHaveFocus());
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   window.localStorage.clear();
@@ -329,6 +339,114 @@ describe("the compare tray", () => {
     expect(here).toHaveTextContent("In this showcase");
   });
 
+  test("opens with focus on the first available sibling", async () => {
+    const { tray } = await openTray();
+
+    await waitForFirstSiblingFocus(tray);
+  });
+
+  test("arrows walk the available siblings, skip in-showcase cards, and reach the pinned note", async () => {
+    const { tray, user } = await openTray();
+    const owned = within(tray).getByRole("button", {
+      name: "Select Pick 23b · 1919 · 2 lei",
+    });
+    const seen = within(tray).getByRole("button", {
+      name: "Select Pick 25d · 1921 · 10 lei",
+    });
+    const currentPhoto = within(tray).getByRole("button", {
+      name: "View images of the current note",
+    });
+
+    await waitFor(() => expect(owned).toHaveFocus());
+
+    // The in-showcase sibling sits between these two and is not a stop.
+    await user.keyboard("{ArrowRight}");
+    expect(seen).toHaveFocus();
+    await user.keyboard("{j}");
+    expect(seen).toHaveFocus();
+    await user.keyboard("{ArrowLeft}");
+    expect(owned).toHaveFocus();
+
+    // Left from the first sibling reaches the pinned Note for comparison.
+    await user.keyboard("{k}");
+    expect(currentPhoto).toHaveFocus();
+
+    await user.keyboard("{End}");
+    expect(seen).toHaveFocus();
+    await user.keyboard("{Home}");
+    expect(currentPhoto).toHaveFocus();
+  });
+
+  test("arrows enter the filmstrip from the footer at the walking end", async () => {
+    const { tray, user } = await openTray();
+    const cancel = within(tray).getByRole("button", { name: "Cancel" });
+    const currentPhoto = within(tray).getByRole("button", {
+      name: "View images of the current note",
+    });
+    const last = within(tray).getByRole("button", {
+      name: "Select Pick 25d · 1921 · 10 lei",
+    });
+
+    await waitForFirstSiblingFocus(tray);
+
+    act(() => cancel.focus());
+    await user.keyboard("{ArrowLeft}");
+    expect(last).toHaveFocus();
+
+    act(() => cancel.focus());
+    await user.keyboard("{ArrowDown}");
+    expect(currentPhoto).toHaveFocus();
+  });
+
+  test("Enter selects the focused sibling, then Replace note commits it", async () => {
+    const { tray, user } = await openTray();
+    const replace = within(tray).getByRole("button", { name: "Replace note" });
+
+    await waitForFirstSiblingFocus(tray);
+    expect(replace).toBeDisabled();
+
+    await user.keyboard("{Enter}");
+    expect(replace).toBeEnabled();
+    await waitFor(() => expect(replace).toHaveFocus());
+
+    // Arrows from the footer return to the selected card without losing the
+    // pick, then keep walking from there.
+    await user.keyboard("{ArrowRight}");
+    const picked = within(tray).getByRole("button", {
+      name: "Pick 23b · 1919 · 2 lei selected",
+    });
+    expect(picked).toHaveFocus();
+
+    await user.keyboard("{ArrowRight}");
+    expect(
+      within(tray).getByRole("button", {
+        name: "Select Pick 25d · 1921 · 10 lei",
+      }),
+    ).toHaveFocus();
+
+    await user.keyboard("{ArrowLeft}");
+    expect(picked).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(replace).toBeEnabled();
+    await waitFor(() => expect(replace).toHaveFocus());
+    await user.keyboard("{Enter}");
+
+    await waitFor(() =>
+      expect(updateNode).toHaveBeenCalledWith(30, { note_id: 201 }),
+    );
+  });
+
+  test("Space selects the focused sibling too", async () => {
+    const { tray, user } = await openTray();
+    const replace = within(tray).getByRole("button", { name: "Replace note" });
+
+    await waitForFirstSiblingFocus(tray);
+
+    await user.keyboard(" ");
+    expect(replace).toBeEnabled();
+    await waitFor(() => expect(replace).toHaveFocus());
+  });
+
   test("replaces in place with the selected sibling and undoes it", async () => {
     const { tray, user } = await openTray();
 
@@ -414,12 +532,43 @@ describe("the compare tray", () => {
 
     await user.click(within(tray).getByRole("button", { name: "Try again" }));
 
-    expect(
-      await within(tray).findByRole("button", {
-        name: "Select Pick 23b · 1919 · 2 lei",
-      }),
-    ).toBeInTheDocument();
+    await waitForFirstSiblingFocus(tray);
     expect(getNoteSiblings).toHaveBeenCalledTimes(2);
+  });
+
+  test("all siblings already in the showcase leaves focus on the tray", async () => {
+    getNoteSiblings.mockResolvedValue([IN_SHOWCASE_SIBLING]);
+
+    const { tray } = await openTray();
+
+    await waitFor(() =>
+      expect(
+        within(tray).getByRole("button", {
+          name: "Pick 24c · 1920 · 5 lei is in this showcase",
+        }),
+      ).toBeDisabled(),
+    );
+    expect(tray).toHaveFocus();
+  });
+
+  test("Enter on the pinned note opens its preview and returns focus to it", async () => {
+    const { tray, user } = await openTray();
+    const currentPhoto = within(tray).getByRole("button", {
+      name: "View images of the current note",
+    });
+
+    await waitForFirstSiblingFocus(tray);
+    await user.keyboard("{ArrowLeft}");
+    expect(currentPhoto).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(
+      await screen.findByRole("group", { name: "Image side" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Close preview" }));
+
+    await waitFor(() => expect(currentPhoto).toHaveFocus());
   });
 
   test("a sibling photo opens the image popover and returns focus on close", async () => {
