@@ -37,7 +37,7 @@ use crate::{
     AppState,
     db::{self, DbError, classify},
     js_number,
-    notes::{NOTE_FIELDS, Note, Tag, map_note, node_string},
+    notes::{NOTE_FIELDS, Note, Tag, map_note, node_string, sibling_counts},
     routes::{bad_request, created, not_found, ok},
 };
 
@@ -103,6 +103,10 @@ pub struct ShowcaseNode {
     pub position: Option<i64>,
     pub note: Option<Note>,
     pub cover_note: Option<Note>,
+    /// The Note's sibling count. Present only on a Note node; a Catalog entry
+    /// never carries it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sibling_count: Option<usize>,
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
     pub catalog: Option<CatalogEntryPayload>,
     pub children: Vec<ShowcaseNode>,
@@ -695,10 +699,15 @@ fn note_exists(conn: &Connection, id: i64) -> Result<bool, DbError> {
 // Node tree
 // ---------------------------------------------------------------------------
 
-fn node_from_row(row: NodeRow, notes: &HashMap<i64, Note>) -> ShowcaseNode {
+fn node_from_row(
+    row: NodeRow,
+    notes: &HashMap<i64, Note>,
+    counts: &HashMap<i64, usize>,
+) -> ShowcaseNode {
     // Only a catalog_entry carries the catalog payload; every other node kind
     // omits it from the wire.
     let is_entry = row.node_type == "catalog_entry";
+    let is_note = row.node_type == "note";
     ShowcaseNode {
         id: row.id,
         node_type: row.node_type,
@@ -710,6 +719,11 @@ fn node_from_row(row: NodeRow, notes: &HashMap<i64, Note>) -> ShowcaseNode {
         position: row.position,
         note: row.note_id.and_then(|id| notes.get(&id).cloned()),
         cover_note: row.cover_note_id.and_then(|id| notes.get(&id).cloned()),
+        sibling_count: is_note.then(|| {
+            row.note_id
+                .and_then(|id| counts.get(&id).copied())
+                .unwrap_or(0)
+        }),
         catalog: is_entry.then(|| CatalogEntryPayload {
             entry: CatalogEntry {
                 catalog_number: row.catalog_number.unwrap_or_default(),
@@ -723,7 +737,11 @@ fn node_from_row(row: NodeRow, notes: &HashMap<i64, Note>) -> ShowcaseNode {
     }
 }
 
-fn build_tree(rows: Vec<NodeRow>, notes: &HashMap<i64, Note>) -> Vec<ShowcaseNode> {
+fn build_tree(
+    rows: Vec<NodeRow>,
+    notes: &HashMap<i64, Note>,
+    counts: &HashMap<i64, usize>,
+) -> Vec<ShowcaseNode> {
     let mut by_id: HashMap<i64, ShowcaseNode> = HashMap::new();
     let mut parents: HashMap<i64, Option<i64>> = HashMap::new();
     let mut order: Vec<i64> = Vec::new();
@@ -731,7 +749,7 @@ fn build_tree(rows: Vec<NodeRow>, notes: &HashMap<i64, Note>) -> Vec<ShowcaseNod
         let id = row.id;
         order.push(id);
         parents.insert(id, row.parent_node_id);
-        by_id.insert(id, node_from_row(row, notes));
+        by_id.insert(id, node_from_row(row, notes, counts));
     }
     // Rows arrive ordered `position, id`; appending in that order keeps every
     // sibling group ordered without a second sort.
@@ -782,7 +800,8 @@ fn get_tree(conn: &Connection, showcase_id: i64) -> Result<Vec<ShowcaseNode>, Db
         .flatten()
         .collect();
     let notes = fetch_notes(conn, &wanted)?;
-    Ok(build_tree(rows, &notes))
+    let counts = sibling_counts(conn)?;
+    Ok(build_tree(rows, &notes, &counts))
 }
 
 fn get_node(conn: &Connection, id: i64) -> Result<Option<ShowcaseNode>, DbError> {
@@ -799,7 +818,12 @@ fn get_node(conn: &Connection, id: i64) -> Result<Option<ShowcaseNode>, DbError>
         .flatten()
         .collect();
     let notes = fetch_notes(conn, &wanted)?;
-    Ok(Some(node_from_row(row, &notes)))
+    let counts = if row.node_type == "note" {
+        sibling_counts(conn)?
+    } else {
+        HashMap::new()
+    };
+    Ok(Some(node_from_row(row, &notes, &counts)))
 }
 
 fn next_position(

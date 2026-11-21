@@ -8,7 +8,7 @@ import { MenuIcon } from "./MenuIcon.jsx";
 // - every item: add a note, a grouping, or a catalog shell after it, remove it
 // - note: mark it owned or not
 // - note: edit the note
-// - note: replace it with another library note in place
+// - note: open its sibling Compare tray, replace it with another library note
 // - grouping: open, rename, set/clear its cover, duplicate to another showcase
 // - category: duplicate to another showcase
 // - note inside a grouping: make it the grouping's cover
@@ -29,6 +29,8 @@ function ShowcaseItemMenu({
   onClearCover,
   onReplaceShell,
   onReplaceNote,
+  onOpenSiblings,
+  siblingCount = 0,
   onEditDetails,
   onEditNote,
   onDuplicate,
@@ -65,6 +67,14 @@ function ShowcaseItemMenu({
           label: "Edit note…",
           icon: "edit",
           run: onEditNote,
+        }
+      : null,
+    siblingCount > 0 && onOpenSiblings
+      ? {
+          key: "siblings",
+          label: `Siblings (${siblingCount})…`,
+          icon: "siblings",
+          run: onOpenSiblings,
         }
       : null,
     isNote && onReplaceNote
@@ -224,6 +234,32 @@ function ShowcaseItemMenu({
           {...triggerProps}
           aria-label={`Actions for ${label}`}
           className="showcase-item-menu-trigger"
+          onKeyDown={(event) => {
+            triggerProps.onKeyDown?.(event);
+
+            if (event.defaultPrevented) {
+              return;
+            }
+
+            // Forward Tab moves into the photo's Show back control before the
+            // ownership footer, so Item actions always leads the card.
+            if (
+              event.key === "Tab" &&
+              !event.shiftKey &&
+              !event.ctrlKey &&
+              !event.altKey &&
+              !event.metaKey
+            ) {
+              const flip = event.currentTarget
+                .closest(".showcase-catalog-cell")
+                ?.querySelector(".showcase-card-flip");
+
+              if (flip) {
+                event.preventDefault();
+                flip.focus();
+              }
+            }
+          }}
           title="Item actions"
           type="button"
         >

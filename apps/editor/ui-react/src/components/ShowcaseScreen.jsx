@@ -39,6 +39,7 @@ import {
   catalogCounts,
   catalogEntryIdentity,
   catalogPresentationNotes,
+  collectShowcaseNoteIds,
   filterCatalogTree,
   findNodeById,
   findNodeIdForNote,
@@ -75,6 +76,7 @@ import { ShowcaseDuplicateDialog } from "./ShowcaseDuplicateDialog.jsx";
 import { ShowcaseItemsGrid } from "./ShowcaseItemsGrid.jsx";
 import { ShowcaseNameDialog } from "./ShowcaseNameDialog.jsx";
 import { ShowcaseNotePicker } from "./ShowcaseNotePicker.jsx";
+import { ShowcaseSiblingTray } from "./ShowcaseSiblingTray.jsx";
 import { ShowcaseMoveDialog } from "./ShowcaseMoveDialog.jsx";
 import { ShowcaseLayoutControl } from "./ShowcaseLayoutControl.jsx";
 import { ShowcasePhotoSizeControl } from "./ShowcasePhotoSizeControl.jsx";
@@ -198,6 +200,9 @@ function ShowcaseScreen() {
   // A catalog shell or note card waiting for the one library note that
   // replaces it in place.
   const [replaceNodeId, setReplaceNodeId] = useState(null);
+  // The Note card whose Compare tray is open.
+  const [siblingTrayNodeId, setSiblingTrayNodeId] = useState(null);
+  const siblingTrayReturnNodeIdRef = useRef(null);
   // The name dialog: adding a grouping after an item, or renaming a node.
   const [nameDialog, setNameDialog] = useState(null);
   // The catalog shell whose metadata is being edited.
@@ -1070,6 +1075,38 @@ function ShowcaseScreen() {
     }
   }
 
+  // A shell converts to a note; a note card swaps the note it presents. Both
+  // keep the node's id, parent, and position. A write that answers 200 without
+  // converting the node is not a success: adopt the server's tree so the canvas
+  // shows what the server actually holds before the mismatch is reported.
+  async function swapNodeNote(nodeId, noteId, { fromShell = false } = {}) {
+    const { node } = fromShell
+      ? await replaceCatalogEntryWithNote(nodeId, noteId)
+      : await updateNode(nodeId, { note_id: noteId });
+    let replaced =
+      node?.node_type === "note" && node.note_id === noteId ? node : null;
+
+    if (!replaced) {
+      const tree = await getShowcaseTree(showcaseId).catch(() => null);
+
+      if (tree) {
+        setNodes(tree.nodes ?? []);
+        replaced = findNodeById(tree.nodes ?? [], nodeId);
+      }
+    }
+
+    if (!replaced || replaced.node_type !== "note" || replaced.note_id !== noteId) {
+      throw new Error(
+        fromShell
+          ? "The placeholder was not replaced."
+          : "The note was not replaced.",
+      );
+    }
+
+    replaceServerNode(replaced);
+    return replaced;
+  }
+
   async function handleReplaceNode(noteIds) {
     const target =
       replaceNodeId == null ? null : findNodeById(nodesRef.current, replaceNodeId);
@@ -1082,35 +1119,7 @@ function ShowcaseScreen() {
     const wasShell = isCatalogEntry(target);
 
     try {
-      // A shell converts to a note; a note card swaps the note it presents.
-      // Both keep the node's id, parent, and position.
-      const { node } = wasShell
-        ? await replaceCatalogEntryWithNote(target.id, noteId)
-        : await updateNode(target.id, { note_id: noteId });
-      let replaced =
-        node?.node_type === "note" && node.note_id === noteId ? node : null;
-
-      if (!replaced) {
-        // A write that answers 200 without converting the node is not a
-        // success. Adopt the server's tree so the canvas shows what the server
-        // actually holds before the mismatch is reported.
-        const tree = await getShowcaseTree(showcaseId).catch(() => null);
-
-        if (tree) {
-          setNodes(tree.nodes ?? []);
-          replaced = findNodeById(tree.nodes ?? [], target.id);
-        }
-      }
-
-      if (!replaced || replaced.node_type !== "note" || replaced.note_id !== noteId) {
-        throw new Error(
-          wasShell
-            ? "The placeholder was not replaced."
-            : "The note was not replaced.",
-        );
-      }
-
-      replaceServerNode(replaced);
+      await swapNodeNote(target.id, noteId, { fromShell: wasShell });
       setReplaceNodeId(null);
       setActionError("");
       refreshShowcases?.().catch(() => {});
@@ -1586,7 +1595,15 @@ function ShowcaseScreen() {
       const nodeId = restorePreviewFocusNodeIdRef.current;
       restorePreviewFocusNodeIdRef.current = null;
 
-      if (nodeId != null) {
+      if (nodeId != null && siblingTrayNodeId != null) {
+        // The current Note's photo in the tray opened this preview, so the
+        // popover returns focus there, not to the card behind the tray.
+        requestAnimationFrame(() => {
+          sectionRef.current
+            ?.querySelector(".showcase-tray-current-photo")
+            ?.focus?.();
+        });
+      } else if (nodeId != null) {
         focusShowcaseControl(
           sectionRef,
           `.showcase-card[data-showcase-node-id="${nodeId}"]`,
@@ -1595,7 +1612,7 @@ function ShowcaseScreen() {
     }
 
     wasPreviewOpenRef.current = previewOpen;
-  }, [previewOpen]);
+  }, [previewOpen, siblingTrayNodeId]);
 
   // A `?node=` that no longer resolves falls back to the root.
   useEffect(() => {
@@ -1819,6 +1836,7 @@ function ShowcaseScreen() {
         nameDialog != null ||
         editShellId != null ||
         editingNote != null ||
+        siblingTrayNodeId != null ||
         confirmOpen ||
         presentIndex != null
       ) {
@@ -1942,6 +1960,7 @@ function ShowcaseScreen() {
     previewOpen,
     replaceNodeId,
     showShortcutsHelp,
+    siblingTrayNodeId,
   ]);
 
   const drillKey = urlDrillIds.join("/");
@@ -1991,8 +2010,41 @@ function ShowcaseScreen() {
     (trigger ?? card)?.focus();
   }, [duplicateSourceId]);
 
+  // Closing the tray returns focus to the chip that opened it. After a
+  // replacement the chip is still there (the old Note became a sibling), but a
+  // count that dropped to zero falls back to the card itself. Browse all notes
+  // clears the return id so the picker keeps focus.
+  useEffect(() => {
+    if (siblingTrayNodeId != null) {
+      return;
+    }
+
+    const nodeId = siblingTrayReturnNodeIdRef.current;
+
+    if (nodeId == null) {
+      return;
+    }
+
+    siblingTrayReturnNodeIdRef.current = null;
+    requestAnimationFrame(() => {
+      const cell = sectionRef.current?.querySelector(
+        `.showcase-catalog-cell[data-showcase-node-id="${nodeId}"]`,
+      );
+      (
+        cell?.querySelector('[data-showcase-focus="siblings"]') ??
+        cell?.querySelector(".showcase-card")
+      )?.focus?.();
+    });
+  }, [siblingTrayNodeId]);
+
   const replaceNode =
     replaceNodeId == null ? null : findNodeById(nodes, replaceNodeId);
+  const siblingTrayNode =
+    siblingTrayNodeId == null ? null : findNodeById(nodes, siblingTrayNodeId);
+  const showcaseNoteIds = useMemo(
+    () => collectShowcaseNoteIds(nodes),
+    [nodes],
+  );
   const editShellNode =
     editShellId == null ? null : findNodeById(nodes, editShellId);
   const moveTargetNode =
@@ -2040,6 +2092,66 @@ function ShowcaseScreen() {
     setReplaceNodeId(node.id);
   }
 
+  const closeSiblingTray = useCallback(() => {
+    setSiblingTrayNodeId(null);
+  }, []);
+
+  function openSiblingTray(node) {
+    if (!isNoteNode(node) || !node.note) {
+      return;
+    }
+
+    siblingTrayReturnNodeIdRef.current = node.id;
+    setSiblingTrayNodeId(node.id);
+  }
+
+  function browseAllSiblings(node) {
+    // The picker takes focus, so the tray must not pull it back to the chip.
+    siblingTrayReturnNodeIdRef.current = null;
+    setSiblingTrayNodeId(null);
+    setReplaceNodeId(node.id);
+  }
+
+  async function handleSiblingReplace(sibling) {
+    const target = findNodeById(nodesRef.current, siblingTrayNodeId);
+    const previousNoteId = target?.note_id;
+
+    if (!target || previousNoteId == null || sibling?.id == null) {
+      return;
+    }
+
+    const oldLabel =
+      showcaseNoteTitleParts(target.note ?? {}).join(" · ") || "Note";
+    const newLabel =
+      showcaseNoteTitleParts(sibling).join(" · ") || "the sibling";
+
+    try {
+      await swapNodeNote(target.id, sibling.id);
+      setSiblingTrayNodeId(null);
+      setActionError("");
+      refreshShowcases?.().catch(() => {});
+      toastHost?.current?.show(
+        `Replaced ${oldLabel} with ${newLabel}.`,
+        "success",
+        {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              await swapNodeNote(target.id, previousNoteId);
+            } catch (error) {
+              toastHost?.current?.show(
+                error.message || "Could not undo the replacement.",
+                "danger",
+              );
+            }
+          },
+        },
+      );
+    } catch (error) {
+      reportActionError(error, "Could not replace the note.");
+    }
+  }
+
   const gridProps = {
     canDuplicate: otherShowcases.length > 0,
     catalogLayout,
@@ -2053,6 +2165,7 @@ function ShowcaseScreen() {
     onOpenGrouping: openNode,
     onOpenNote: openShowcasePreview,
     onOpenShell: openReplaceFinder,
+    onOpenSiblings: openSiblingTray,
     onReplaceNote: openReplaceFinder,
     onOwnershipToggle: handleOwnershipToggle,
     onPresent: (node) => openPresentation(node.id),
@@ -2524,6 +2637,19 @@ function ShowcaseScreen() {
 
       {showShortcutsHelp ? (
         <KeyboardShortcutsHelp onClose={() => setShowShortcutsHelp(false)} />
+      ) : null}
+
+      {siblingTrayNode?.node_type === "note" && siblingTrayNode.note ? (
+        <ShowcaseSiblingTray
+          collections={collections}
+          inShowcaseNoteIds={showcaseNoteIds}
+          node={siblingTrayNode}
+          onBrowseAll={browseAllSiblings}
+          onClose={closeSiblingTray}
+          onOpenCurrentImage={(node) => openShowcasePreview(node, "front")}
+          onReplace={handleSiblingReplace}
+          previewOpen={previewOpen}
+        />
       ) : null}
 
       {previewOpen && activePreviewItem ? (

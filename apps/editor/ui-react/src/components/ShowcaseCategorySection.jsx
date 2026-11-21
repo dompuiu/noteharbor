@@ -40,6 +40,7 @@ function ShowcaseCategorySection({
   onReplaceNote,
   onOpenGrouping,
   onOpenNote,
+  onOpenSiblings,
   onOpenShell,
   onOwnershipToggle,
   onPresent,
@@ -95,6 +96,7 @@ function ShowcaseCategorySection({
         onReplaceNote={onReplaceNote}
         onOpenGrouping={onOpenGrouping}
         onOpenNote={onOpenNote}
+        onOpenSiblings={onOpenSiblings}
         onOpenShell={onOpenShell}
         onOwnershipToggle={onOwnershipToggle}
         onPresent={onPresent}

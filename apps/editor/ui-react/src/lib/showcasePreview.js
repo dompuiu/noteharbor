@@ -53,39 +53,58 @@ function getShowcasePreviewItems(nodes) {
   const items = [];
 
   for (const { nodeId, note } of collectShowcasePreviewNotes(nodes)) {
-    const frontSrc = fullSrc(note, "front");
-    const backSrc = fullSrc(note, "back");
-    const frontThumb = thumbSrc(note, "front");
-    const backThumb = thumbSrc(note, "back");
-    const noteLabel = showcasePreviewLabel(note);
+    items.push(...previewItemsForNote(nodeId, note));
+  }
 
-    if (frontSrc) {
-      items.push({
-        alt: `${noteLabel}, Front`,
-        kind: "front",
-        label: "Front",
-        nodeId,
-        note,
-        noteId: note.id,
-        noteLabel,
-        src: frontSrc,
-        thumb: frontThumb,
-      });
-    }
+  return items;
+}
 
-    if (backSrc) {
-      items.push({
-        alt: `${noteLabel}, Back`,
-        kind: "back",
-        label: "Back",
-        nodeId,
-        note,
-        noteId: note.id,
-        noteLabel,
-        src: backSrc,
-        thumb: backThumb,
-      });
-    }
+// The tray's sibling filmstrip: the same front/back queue over a plain Note
+// list, because siblings need not be Showcase nodes and never enter the URL.
+function getSiblingPreviewItems(notes) {
+  const items = [];
+
+  for (const note of notes ?? []) {
+    items.push(...previewItemsForNote(note.id, note));
+  }
+
+  return items;
+}
+
+function previewItemsForNote(nodeId, note) {
+  const items = [];
+  const frontSrc = fullSrc(note, "front");
+  const backSrc = fullSrc(note, "back");
+  const frontThumb = thumbSrc(note, "front");
+  const backThumb = thumbSrc(note, "back");
+  const noteLabel = showcasePreviewLabel(note);
+
+  if (frontSrc) {
+    items.push({
+      alt: `${noteLabel}, Front`,
+      kind: "front",
+      label: "Front",
+      nodeId,
+      note,
+      noteId: note.id,
+      noteLabel,
+      src: frontSrc,
+      thumb: frontThumb,
+    });
+  }
+
+  if (backSrc) {
+    items.push({
+      alt: `${noteLabel}, Back`,
+      kind: "back",
+      label: "Back",
+      nodeId,
+      note,
+      noteId: note.id,
+      noteLabel,
+      src: backSrc,
+      thumb: backThumb,
+    });
   }
 
   return items;
@@ -188,6 +207,7 @@ export {
   formatShowcasePreviewParam,
   getShowcasePreviewContainingLevelId,
   getShowcasePreviewItems,
+  getSiblingPreviewItems,
   parseShowcasePreviewParam,
   showcasePreviewLabel,
 };

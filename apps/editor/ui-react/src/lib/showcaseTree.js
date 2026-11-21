@@ -301,6 +301,24 @@ function appendPositionFor(children, nodeId) {
 
 // The number of note nodes anywhere in the tree. The presentation header's
 // "N notes" total reads this (falls back to the showcase row before load).
+// Every Note id presented by a Note leaf. Grouping covers do not count: the
+// tray's "in this showcase" rule is about cards, not decorations.
+function collectShowcaseNoteIds(nodes) {
+  const ids = [];
+
+  for (const node of nodes ?? []) {
+    if (node.node_type === "note" && node.note_id != null) {
+      ids.push(node.note_id);
+    }
+
+    if (node.children?.length) {
+      ids.push(...collectShowcaseNoteIds(node.children));
+    }
+  }
+
+  return ids;
+}
+
 function countNoteNodes(nodes) {
   let total = 0;
 
@@ -613,6 +631,7 @@ export {
   catalogEntryLabel,
   catalogEntryState,
   catalogPresentationNotes,
+  collectShowcaseNoteIds,
   containerNodes,
   countNoteNodes,
   filterCatalogTree,

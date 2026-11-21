@@ -103,6 +103,10 @@ _Avoid_: All notes screen (that is the Editor's), library
 One physical banknote (or banknote group) in the collection: its denomination, issue date, catalog number, grading, associated images, and whether it is owned.
 _Avoid_: Banknote, note_record, banknote row
 
+**Sibling**:
+A Note whose Catalog value, Denomination, and Issue date equal another Note's after normalization. A library relation, not a Showcase relation: siblings span Collections, and a sibling may already be presented by another Note card.
+_Avoid_: Match, duplicate, copy, variant
+
 **Catalog family**:
 The set of notes whose catalog number shares a base number, each optionally followed by a single trailing letter: `22`, `22a`, `22b`, and `22s` are one family, while `220` and `221` are not. A base made only of letters is a prefix instead: `M` is the family of `M`, `M1`, `M2`, `M10`, `M1a`, and `MA`.
 _Avoid_: Variation set

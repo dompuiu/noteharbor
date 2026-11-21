@@ -25,8 +25,8 @@ import { ShowcaseFlipControl } from "./ShowcaseFlipControl.jsx";
 // note leaf keeps the visible face, so the image preview opens at the back when
 // the back is showing.
 // The actions menu sits after the card body in the DOM and before the ownership
-// footer, so Tab walks card → dots → ownership; the menu never nests inside a
-// button.
+// footer, so Tab walks card → dots → Show back → sibling chip → ownership; the
+// menu never nests inside a button.
 //
 // Two layouts share one state language:
 //
@@ -90,6 +90,56 @@ function CheckIcon() {
         strokeWidth="3.2"
       />
     </svg>
+  );
+}
+
+// A quiet stack mark for the sibling chip: three offset notes, not an action
+// glyph. It reads as "more of this" without competing with the card's photo.
+function StackIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="showcase-card-siblings-icon"
+      focusable="false"
+      height="11"
+      viewBox="0 0 24 24"
+      width="11"
+    >
+      <path
+        d="M7 4h10a2 2 0 0 1 2 2v9M4 8h10a2 2 0 0 1 2 2v10H6a2 2 0 0 1-2-2V8Z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+// The sibling chip lives in the footer row, ahead of the ownership toggle, so
+// it adds no card height. It renders only for a Note with siblings; a zero
+// count leaves the footer exactly as it was.
+function SiblingChip({ count, node, onOpen }) {
+  const value = Number(count) || 0;
+
+  if (value <= 0) {
+    return null;
+  }
+
+  return (
+    <button
+      aria-label={`Show ${value} sibling ${value === 1 ? "note" : "notes"} with the same catalog number, denomination, and date`}
+      className="showcase-card-siblings"
+      data-showcase-focus="siblings"
+      onClick={() => onOpen?.(node)}
+      title={`${value} ${value === 1 ? "sibling" : "siblings"}`}
+      type="button"
+    >
+      <StackIcon />
+      <span>
+        {value} {value === 1 ? "sibling" : "siblings"}
+      </span>
+    </button>
   );
 }
 
@@ -213,6 +263,7 @@ function ShowcaseCatalogCard({
   menu = null,
   onOpenFinder,
   onOpenNote,
+  onOpenSiblings,
   onPresent,
   onToggleOwned,
 }) {
@@ -303,6 +354,30 @@ function ShowcaseCatalogCard({
   // screen-level handler does not also move card focus. Plain arrows keep
   // moving focus as before.
   function handleKeyDown(event) {
+    if (event.defaultPrevented) {
+      return;
+    }
+
+    // A focused card hands Tab to its actions menu first; the menu then hands
+    // it to Show back, so the photo control never precedes Item actions.
+    if (
+      event.key === "Tab" &&
+      !event.shiftKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.metaKey
+    ) {
+      const menu = event.currentTarget.parentElement?.querySelector(
+        ".showcase-item-menu-trigger",
+      );
+
+      if (menu) {
+        event.preventDefault();
+        menu.focus();
+        return;
+      }
+    }
+
     const chord =
       (event.key === "ArrowLeft" || event.key === "ArrowRight") &&
       (event.shiftKey || event.ctrlKey) &&
@@ -459,13 +534,20 @@ function ShowcaseCatalogCard({
           </span>
         </CatalogCardFrame>
         {menu}
-        <StateLabel
-          label={label}
-          node={node}
-          note={note}
-          onToggleOwned={onToggleOwned}
-          state={state}
-        />
+        <div className="showcase-card-footer">
+          <SiblingChip
+            count={node.sibling_count}
+            node={node}
+            onOpen={onOpenSiblings}
+          />
+          <StateLabel
+            label={label}
+            node={node}
+            note={note}
+            onToggleOwned={onToggleOwned}
+            state={state}
+          />
+        </div>
       </div>
     );
   }
@@ -513,13 +595,20 @@ function ShowcaseCatalogCard({
         />
       </CatalogCardFrame>
       {menu}
-      <StateLabel
-        label={label}
-        node={node}
-        note={note}
-        onToggleOwned={onToggleOwned}
-        state={state}
-      />
+      <div className="showcase-card-footer">
+        <SiblingChip
+          count={node.sibling_count}
+          node={node}
+          onOpen={onOpenSiblings}
+        />
+        <StateLabel
+          label={label}
+          node={node}
+          note={note}
+          onToggleOwned={onToggleOwned}
+          state={state}
+        />
+      </div>
     </div>
   );
 }

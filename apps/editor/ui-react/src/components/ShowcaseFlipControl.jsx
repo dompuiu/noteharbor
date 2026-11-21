@@ -7,6 +7,36 @@
 // lands.
 function ShowcaseFlipControl({ onToggle, swapped }) {
   function handleKeyDown(event) {
+    if (event.key === "Tab") {
+      const cell = event.currentTarget.closest(".showcase-catalog-cell");
+
+      if (event.shiftKey) {
+        const menu = cell?.querySelector(".showcase-item-menu-trigger");
+
+        if (menu) {
+          event.preventDefault();
+          menu.focus();
+        }
+
+        return;
+      }
+
+      // Forward Tab leaves the photo for the sibling chip, or the ownership
+      // toggle when the card has no chip.
+      const next =
+        cell?.querySelector('[data-showcase-focus="siblings"]') ??
+        cell?.querySelector(
+          '[data-showcase-focus="ownership"], [data-showcase-focus="check"]',
+        );
+
+      if (next) {
+        event.preventDefault();
+        next.focus();
+      }
+
+      return;
+    }
+
     if (event.key !== "Enter" && event.key !== " ") {
       return;
     }

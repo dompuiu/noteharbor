@@ -275,6 +275,15 @@ const MENU_ICONS = {
       />
     </>
   ),
+  siblings: (
+    <path
+      d="M7 4h10a2 2 0 0 1 2 2v9M4 8h10a2 2 0 0 1 2 2v10H6a2 2 0 0 1-2-2V8Z"
+      fill="none"
+      stroke="currentColor"
+      strokeLinejoin="round"
+      strokeWidth="2"
+    />
+  ),
   details: (
     <>
       <path

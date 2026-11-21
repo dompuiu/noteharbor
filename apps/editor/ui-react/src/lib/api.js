@@ -302,6 +302,14 @@ async function getNote(id, collectionId) {
   return handleResponse(response);
 }
 
+// The Compare tray's fresh sibling list. The server owns the key; the client
+// never re-derives sibling identity.
+async function getNoteSiblings(id) {
+  const response = await request(`/api/notes/${id}/siblings`);
+  const data = await handleResponse(response);
+  return data.siblings ?? [];
+}
+
 async function createNote(payload, collectionId) {
   const response = await request(notesBasePath(collectionId), buildNoteRequestOptions('POST', payload));
 
@@ -731,6 +739,7 @@ export {
   getHealth,
   getAllNotes,
   getNote,
+  getNoteSiblings,
   getNotes,
   getOperationStatus,
   getShowcaseTree,

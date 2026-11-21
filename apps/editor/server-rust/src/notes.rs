@@ -762,6 +762,142 @@ pub fn normalize_issue_date(value: &str) -> String {
         .join("/")
 }
 
+// ---------------------------------------------------------------------------
+// Siblings
+// ---------------------------------------------------------------------------
+
+/// The one server-owned identity for Siblings: trimmed and case-folded Catalog
+/// value, write-normalized Denomination, write-normalized Issue date. All three
+/// parts must be non-empty; an untyped Note has no key and no siblings.
+fn sibling_key(
+    catalog_number: Option<&str>,
+    denomination: Option<&str>,
+    issue_date: Option<&str>,
+) -> Option<String> {
+    let catalog = catalog_number
+        .unwrap_or("")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase();
+    let denomination = normalize_denomination(denomination.unwrap_or(""));
+    let issue_date = normalize_issue_date(issue_date.unwrap_or(""));
+
+    if catalog.is_empty() || denomination.is_empty() || issue_date.is_empty() {
+        return None;
+    }
+
+    Some(format!("{catalog}\u{1f}{denomination}\u{1f}{issue_date}"))
+}
+
+/// One identity scan row: the Note id and its sibling key, if it has one.
+fn sibling_key_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<(i64, Option<String>)> {
+    let id: i64 = row.get(0)?;
+    let catalog: Option<String> = row.get(1)?;
+    let denomination: Option<String> = row.get(2)?;
+    let issue_date: Option<String> = row.get(3)?;
+    Ok((
+        id,
+        sibling_key(
+            catalog.as_deref(),
+            denomination.as_deref(),
+            issue_date.as_deref(),
+        ),
+    ))
+}
+
+/// Every Note's sibling count, in one scan of the identity columns. The count
+/// is the size of the Note's sibling group minus the Note itself, so two Notes
+/// with the same key both see the other one.
+pub(crate) fn sibling_counts(conn: &Connection) -> Result<HashMap<i64, usize>, DbError> {
+    let mut stmt = conn
+        .prepare("SELECT id, catalog_number, denomination, issue_date FROM banknotes")
+        .map_err(classify)?;
+    let notes: Vec<(i64, Option<String>)> = stmt
+        .query_map([], sibling_key_row)
+        .map_err(classify)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(classify)?;
+
+    let mut groups: HashMap<String, usize> = HashMap::new();
+    for (_, key) in &notes {
+        if let Some(key) = key {
+            *groups.entry(key.clone()).or_insert(0) += 1;
+        }
+    }
+
+    Ok(notes
+        .into_iter()
+        .map(|(id, key)| {
+            let count = key
+                .and_then(|key| groups.get(&key).copied())
+                .unwrap_or(0)
+                .saturating_sub(1);
+            (id, count)
+        })
+        .collect())
+}
+
+/// Notes by id, in the caller's order, with their tags. The sibling endpoint
+/// uses this after it has ranked the ids in one scan.
+fn notes_by_ids(conn: &Connection, ids: &[i64]) -> Result<Vec<Note>, DbError> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let sql = format!("SELECT {NOTE_FIELDS} FROM banknotes WHERE id IN ({placeholders})");
+    let mut stmt = conn.prepare(&sql).map_err(classify)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(ids.iter()), map_note)
+        .map_err(classify)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(classify)?;
+    let tags = tag_map(conn, None)?;
+    let mut by_id: HashMap<i64, Note> = attach_tags(rows, &tags)
+        .into_iter()
+        .map(|note| (note.id, note))
+        .collect();
+
+    Ok(ids.iter().filter_map(|id| by_id.remove(id)).collect())
+}
+
+/// A Note's siblings, ordered Owned before Seen, then Collection name
+/// (case-insensitive), serial, and id. One scan ranks the ids; a second read
+/// loads the full Notes.
+fn sibling_notes(conn: &Connection, note: &Note) -> Result<Vec<Note>, DbError> {
+    let Some(key) = sibling_key(
+        note.catalog_number.as_deref(),
+        note.denomination.as_deref(),
+        note.issue_date.as_deref(),
+    ) else {
+        return Ok(Vec::new());
+    };
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT banknotes.id, banknotes.catalog_number, banknotes.denomination,
+                    banknotes.issue_date
+             FROM banknotes
+             INNER JOIN collections ON collections.id = banknotes.collection_id
+             ORDER BY banknotes.owned DESC,
+                      collections.name COLLATE NOCASE ASC,
+                      COALESCE(banknotes.serial, '') ASC,
+                      banknotes.id ASC",
+        )
+        .map_err(classify)?;
+    let ids: Vec<i64> = stmt
+        .query_map([], sibling_key_row)
+        .map_err(classify)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(classify)?
+        .into_iter()
+        .filter(|(id, candidate)| *id != note.id && candidate.as_deref() == Some(key.as_str()))
+        .map(|(id, _)| id)
+        .collect();
+
+    notes_by_ids(conn, &ids)
+}
+
 /// `normalizeTags`: an array passes through, a single string becomes one tag,
 /// anything else is no tags.
 pub fn normalize_tags(value: Option<&Value>) -> Vec<String> {
@@ -1644,6 +1780,29 @@ async fn get_note_handler(
     }
 }
 
+/// `GET /api/notes/{id}/siblings`: the Note's siblings as full Notes, without
+/// the Note itself. The client marks the ones already in the Showcase. A
+/// non-positive or unparsable id answers 400, an unknown one 404.
+async fn list_note_siblings_handler(
+    State(state): State<AppState>,
+    Path(raw_id): Path<String>,
+) -> Result<Response, crate::AppError> {
+    let Some(note_id) = js_number(&Value::String(raw_id)).filter(|id| *id > 0) else {
+        return Ok(bad_request("A valid note ID is required."));
+    };
+    let siblings = db::with_conn(&state.pool, move |conn| {
+        let Some(note) = get_note(conn, note_id)? else {
+            return Ok(None);
+        };
+        Ok(Some(sibling_notes(conn, &note)?))
+    })
+    .await?;
+    match siblings {
+        Some(siblings) => Ok(ok(json!({ "siblings": siblings }))),
+        None => Ok(not_found("Note not found.")),
+    }
+}
+
 async fn create_note_handler(
     State(state): State<AppState>,
     collection: Option<Path<Vec<String>>>,
@@ -2123,6 +2282,7 @@ pub fn notes_router() -> Router<AppState> {
             "/api/notes/{id}",
             get(get_note_handler).put(update_note_handler).delete(delete_note_handler),
         )
+        .route("/api/notes/{id}/siblings", get(list_note_siblings_handler))
         .route("/api/notes/{id}/move", post(move_note_handler))
 }
 

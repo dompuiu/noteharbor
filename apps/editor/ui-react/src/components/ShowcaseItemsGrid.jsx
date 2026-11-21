@@ -43,6 +43,7 @@ function ShowcaseItemsGrid({
   onReplaceNote,
   onOpenGrouping,
   onOpenNote,
+  onOpenSiblings,
   onOpenShell,
   onOwnershipToggle,
   onPresent,
@@ -98,7 +99,8 @@ function ShowcaseItemsGrid({
   function menuFor(node, { isGrouping = false, isShell = false } = {}) {
     const index = items.findIndex((entry) => entry.id === node.id);
     const label = showcaseNodeLabel(node);
-    const ownershipNote = node.node_type === "note" ? node.note : null;
+    const isNote = isNoteNode(node);
+    const ownershipNote = isNote ? node.note : null;
     const catalogState =
       ownershipNote != null ? nodeCatalogState(node) : null;
 
@@ -108,7 +110,7 @@ function ShowcaseItemsGrid({
         canDuplicate={canDuplicate}
         canSetCover={isGroupingParent}
         isGrouping={isGrouping}
-        isNote={isNoteNode(node)}
+        isNote={isNote}
         isShell={isShell}
         label={label || "item"}
         onAddCatalogShell={() => onAddShellAfter(parent, node)}
@@ -143,6 +145,10 @@ function ShowcaseItemsGrid({
         onReplaceNote={
           onReplaceNote ? () => onReplaceNote(node) : undefined
         }
+        onOpenSiblings={
+          isNote && onOpenSiblings ? () => onOpenSiblings(node) : undefined
+        }
+        siblingCount={node.sibling_count ?? 0}
         onSetCover={() => onSetCover(node)}
         onToggleOwned={
           catalogState
@@ -239,6 +245,7 @@ function ShowcaseItemsGrid({
                   menu={menu}
                   node={node}
                   onOpenNote={onOpenNote}
+                  onOpenSiblings={onOpenSiblings}
                   onPresent={onPresent}
                   onToggleOwned={onOwnershipToggle}
                 />
