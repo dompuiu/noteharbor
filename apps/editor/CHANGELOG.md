@@ -4,6 +4,16 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.23.2] - 2026-11-21
+
+### Changed
+
+- Showcase: the item menu now lists **Add placeholder after** before **Add grouping after**.
+
+### Fixed
+
+- Showcase: **Add note after**, **Add placeholder after**, and **Add grouping after** each open the Add dialog on their own tab instead of always starting on Notes.
+
 ## [2.23.1] - 2026-11-21
 
 ### Changed
