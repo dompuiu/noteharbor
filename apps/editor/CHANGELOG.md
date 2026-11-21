@@ -4,6 +4,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.23.0] - 2026-11-20
+
 ### Added
 
 - Showcase: a Note card whose Note has Siblings shows a quiet **3 siblings** chip in its ownership footer. The chip opens a Compare tray that pins the current Note, lists its siblings owned-first with collection, serial, grade, tags, and state, marks the ones already in this Showcase as unavailable, and replaces the card in place with Undo. Siblings match the exact Catalog value, Denomination, and Issue date after write normalization; the old **Replace with a note…** picker is unchanged.
