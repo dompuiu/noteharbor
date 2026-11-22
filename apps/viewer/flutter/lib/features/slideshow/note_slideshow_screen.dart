@@ -69,6 +69,10 @@ const double _kSlidePadding = 20;
 /// Gap between the title block and the plate pair.
 const double _kSlideGap = 12;
 
+/// Height of the card's edge masks. Deep enough that a plate or a details row
+/// cut by the card edge dissolves into the card before the hard clip.
+const double _kEdgeFadeHeight = 104;
+
 /// Floor for the plate pair so both faces stay visible before the slide
 /// scrolls instead of shrinking further.
 const double _kMinPlatePairHeight = 88;
@@ -687,6 +691,11 @@ class _NoteSlide extends StatefulWidget {
 
 class _NoteSlideState extends State<_NoteSlide> {
   final _scrollController = ScrollController();
+
+  /// The slide opens at its start with the rest of the note still below the
+  /// fold, so the top mask stays out of the way until the reader scrolls and
+  /// the bottom mask is already on.
+  bool _atTop = true;
   bool _atBottom = false;
 
   @override
@@ -719,24 +728,36 @@ class _NoteSlideState extends State<_NoteSlide> {
   bool _atBottomOf(double pixels, double maxScrollExtent) =>
       pixels >= maxScrollExtent - 1;
 
+  /// Records which card edges the content still runs past. Each mask is only
+  /// on while something sits beyond that edge.
+  void _syncEdges(double pixels, double maxScrollExtent) {
+    final atTop = pixels <= 1;
+    final atBottom = _atBottomOf(pixels, maxScrollExtent);
+    if (atTop == _atTop && atBottom == _atBottom) return;
+    setState(() {
+      _atTop = atTop;
+      _atBottom = atBottom;
+    });
+  }
+
   void _onScroll() {
     final position = _scrollController.position;
-    final atBottom = _atBottomOf(position.pixels, position.maxScrollExtent);
-    if (atBottom != _atBottom) setState(() => _atBottom = atBottom);
+    _syncEdges(position.pixels, position.maxScrollExtent);
   }
 
   /// Tracks a viewport whose content now fits (or no longer fits) without the
-  /// user having scrolled, so the bottom fade leaves a slide that has nothing
-  /// below the fold.
-  bool _onScrollMetrics(ScrollMetricsNotification notification) {
-    final metrics = notification.metrics;
-    final atBottom = _atBottomOf(metrics.pixels, metrics.maxScrollExtent);
-    if (atBottom == _atBottom) return false;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && atBottom != _atBottom) {
-        setState(() => _atBottom = atBottom);
-      }
-    });
+  /// user having scrolled, so an edge mask leaves a slide that has nothing
+  /// beyond that edge and returns when a resize brings the content back.
+  bool _onScrollMetrics(ScrollMetricsNotification _) {
+    if (!mounted || !_scrollController.hasClients) return false;
+    final position = _scrollController.position;
+    // A viewport that has only just been measured can report a zero extent
+    // before its content is laid out; that is not a note that fits, so the
+    // masks keep their opening state until the real extents arrive.
+    if (!position.hasContentDimensions) return false;
+    // The notification is dispatched from a microtask after the frame, so the
+    // rebuild it causes is safe here.
+    _syncEdges(position.pixels, position.maxScrollExtent);
     return false;
   }
 
@@ -761,7 +782,7 @@ class _NoteSlideState extends State<_NoteSlide> {
     return ScrollConfiguration(
       // Reset to the platform default so the mouse drag that pages the
       // slideshow does not also drag-scroll the card, while keeping the
-      // scrollbar hidden (the bottom fade already signals that the card
+      // scrollbar hidden (the edge masks already signal that the card
       // content scrolls).
       behavior: const MaterialScrollBehavior().copyWith(scrollbars: false),
       child: LayoutBuilder(
@@ -890,6 +911,46 @@ class _NoteSlideState extends State<_NoteSlide> {
     );
   }
 
+  /// A soft edge in the card colour laid over the scroll body, so a plate or a
+  /// details row cut by the card edge dissolves into the card instead of
+  /// reading as cropped. The top mask waits until the content has scrolled
+  /// away from its start; the bottom mask is on from the moment the slide
+  /// opens and leaves only once the content reaches its end.
+  Widget _buildEdgeFade({required bool top}) {
+    final visible = top ? !_atTop : !_atBottom;
+    return Positioned(
+      left: 0,
+      right: 0,
+      top: top ? 0 : null,
+      bottom: top ? null : 0,
+      child: IgnorePointer(
+        child: AnimatedOpacity(
+          key: ValueKey<String>(top ? 'slideTopFade' : 'slideBottomFade'),
+          opacity: visible ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 250),
+          child: Container(
+            height: _kEdgeFadeHeight,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                // The ramp always starts clear where the content leaves the
+                // card and ends opaque against the card's own edge.
+                begin: top ? Alignment.bottomCenter : Alignment.topCenter,
+                end: top ? Alignment.topCenter : Alignment.bottomCenter,
+                colors: [
+                  _kCardBg.withValues(alpha: 0),
+                  _kCardBg.withValues(alpha: 0.82),
+                  _kCardBg,
+                  _kCardBg,
+                ],
+                stops: const [0.0, 0.45, 0.75, 1.0],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tier = _tierFor(MediaQuery.sizeOf(context).width);
@@ -915,33 +976,8 @@ class _NoteSlideState extends State<_NoteSlide> {
                   child: Stack(
                     children: [
                       Positioned.fill(child: _buildScrollBody(tier)),
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: AnimatedOpacity(
-                          opacity: _atBottom ? 0.0 : 1.0,
-                          duration: const Duration(milliseconds: 250),
-                          child: IgnorePointer(
-                            child: Container(
-                              height: 104,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    _kCardBg.withValues(alpha: 0),
-                                    _kCardBg.withValues(alpha: 0.82),
-                                    _kCardBg,
-                                    _kCardBg,
-                                  ],
-                                  stops: const [0.0, 0.45, 0.75, 1.0],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                      _buildEdgeFade(top: true),
+                      _buildEdgeFade(top: false),
                     ],
                   ),
                 ),

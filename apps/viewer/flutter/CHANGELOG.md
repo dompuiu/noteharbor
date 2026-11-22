@@ -4,6 +4,10 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ## [Unreleased]
 
+### Fixed
+
+- Note slideshow: the slide card's bottom mask is on from the moment the note opens, and a matching top mask arrives once the content scrolls away from its start, so a plate or a details row cut by either card edge dissolves into the card instead of reading as cropped.
+
 ## [1.16.0] - 2026-11-16
 
 ### Changed
