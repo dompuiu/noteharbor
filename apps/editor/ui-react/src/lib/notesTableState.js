@@ -7,7 +7,11 @@ import {
   defaultVisibleColumnKeysFor,
   keepsADataColumnIn,
   normalizeVisibleColumnKeysFor,
+  readDesktopTableStates,
   readStoredTableState,
+  removeDesktopTableState,
+  clearDesktopCollectionTableStates,
+  writeDesktopTableState,
   writeStoredTableState,
 } from "./tableViewState.js";
 
@@ -25,35 +29,6 @@ export function tableStateStorageKey(collectionId) {
   return `${tableStateStorageKeyPrefix}.${collectionId}`;
 }
 
-// The desktop shell serves the UI from an embedded server on a random port,
-// so every launch is a fresh localStorage origin. These bridge calls mirror
-// the per-collection structures into the file-backed preferences and refill
-// localStorage before the app mounts; the web build has no bridge and keeps
-// using localStorage alone.
-function getDesktopTableStateBridge() {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const bridge = window.noteHarborDesktop;
-
-  if (
-    !bridge ||
-    typeof bridge.getTableStates !== "function" ||
-    typeof bridge.setTableState !== "function" ||
-    typeof bridge.removeTableState !== "function" ||
-    typeof bridge.clearTableStates !== "function"
-  ) {
-    return null;
-  }
-
-  return bridge;
-}
-
-function isStoredTableState(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
 // Runs once before the app mounts. A localStorage key already present wins,
 // because it belongs to the current session and is at least as new as the
 // file.
@@ -62,21 +37,9 @@ export async function hydrateDesktopTableStates() {
     return;
   }
 
-  const bridge = getDesktopTableStateBridge();
+  const storedStates = await readDesktopTableStates();
 
-  if (!bridge) {
-    return;
-  }
-
-  let storedStates;
-
-  try {
-    storedStates = await bridge.getTableStates();
-  } catch {
-    return;
-  }
-
-  if (!isStoredTableState(storedStates)) {
+  if (!storedStates) {
     return;
   }
 
@@ -86,7 +49,9 @@ export async function hydrateDesktopTableStates() {
     if (
       String(collectionId) !== rawCollectionId ||
       !isPersistableCollectionId(collectionId) ||
-      !isStoredTableState(tableState)
+      !tableState ||
+      typeof tableState !== "object" ||
+      Array.isArray(tableState)
     ) {
       continue;
     }
@@ -168,9 +133,7 @@ export function saveTableState(collectionId, tableState) {
   };
 
   writeStoredTableState(tableStateStorageKey(collectionId), storedState);
-  getDesktopTableStateBridge()
-    ?.setTableState(collectionId, storedState)
-    ?.catch(() => {});
+  writeDesktopTableState(String(collectionId), storedState);
 }
 
 function storedTableStateKeys() {
@@ -196,7 +159,6 @@ export function pruneTableStates(collectionIds) {
   }
 
   const liveKeys = new Set(collectionIds.map(tableStateStorageKey));
-  const bridge = getDesktopTableStateBridge();
 
   for (const key of storedTableStateKeys()) {
     if (liveKeys.has(key)) {
@@ -211,14 +173,16 @@ export function pruneTableStates(collectionIds) {
     );
 
     if (isPersistableCollectionId(collectionId)) {
-      bridge?.removeTableState(collectionId)?.catch(() => {});
+      removeDesktopTableState(String(collectionId));
     }
   }
 }
 
 // An import renumbers collections (and the archive itself renumbers them on
 // export), so an id-keyed payload would attach to whatever collection lands on
-// that id next. The table structure starts fresh after a successful import.
+// that id next. Every collection's table structure starts fresh after a
+// successful import; the All notes screen's own entry is not id-keyed and is
+// left alone.
 export function clearAllTableStates() {
   if (typeof window === "undefined") {
     return;
@@ -228,7 +192,7 @@ export function clearAllTableStates() {
     window.localStorage.removeItem(key);
   }
 
-  getDesktopTableStateBridge()?.clearTableStates()?.catch(() => {});
+  clearDesktopCollectionTableStates();
   clearLegacyTableState();
 }
 

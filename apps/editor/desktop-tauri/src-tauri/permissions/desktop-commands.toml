@@ -45,7 +45,7 @@ commands.allow = ["get_table_states"]
 
 [[permission]]
 identifier = "allow-set-table-state"
-description = "Enables the set_table_state command: lets the UI persist one collection's table sort and columns."
+description = "Enables the set_table_state command: lets the UI persist one table's sort and columns."
 commands.allow = ["set_table_state"]
 
 [[permission]]
@@ -54,9 +54,9 @@ description = "Enables the remove_table_state command: lets the UI drop a delete
 commands.allow = ["remove_table_state"]
 
 [[permission]]
-identifier = "allow-clear-table-states"
-description = "Enables the clear_table_states command: lets the UI forget saved table structures after an archive import."
-commands.allow = ["clear_table_states"]
+identifier = "allow-clear-collection-table-states"
+description = "Enables the clear_collection_table_states command: lets the UI forget saved collection table structures after an archive import."
+commands.allow = ["clear_collection_table_states"]
 
 [[permission]]
 identifier = "allow-export-archive"

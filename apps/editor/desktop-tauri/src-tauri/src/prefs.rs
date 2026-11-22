@@ -13,6 +13,9 @@ pub const LAST_VISITED_ROUTE_KEY: &str = "lastVisitedRoute";
 /// Upper bound for a persisted route (pathname + search + hash).
 pub const MAX_LAST_VISITED_ROUTE_LEN: usize = 2000;
 pub const TABLE_STATES_KEY: &str = "tableStates";
+/// The All notes screen shares the table-state map under this non-collection
+/// key; every other key is a collection id.
+pub const ALL_NOTES_TABLE_STATE_KEY: &str = "allNotes";
 /// The saved table structures are small (sort + visible columns per
 /// collection); this only keeps a malformed payload from turning the
 /// preferences file into an arbitrary blob.
@@ -94,6 +97,11 @@ fn is_positive_integer_id(id: &str) -> bool {
     !id.is_empty()
         && id.bytes().all(|b| b.is_ascii_digit())
         && !id.starts_with('0')
+}
+
+/// Table states are keyed by collection id, plus the one All notes entry.
+fn is_table_state_key(key: &str) -> bool {
+    key == ALL_NOTES_TABLE_STATE_KEY || is_positive_integer_id(key)
 }
 
 /// Collapses a pathname to its first-level screen: a collection lands on its
@@ -222,21 +230,22 @@ pub fn read_table_states(path: &Path) -> serde_json::Map<String, serde_json::Val
     {
         Some(states) => states
             .iter()
-            .filter(|(id, state)| is_positive_integer_id(id) && state.is_object())
-            .map(|(id, state)| (id.clone(), state.clone()))
+            .filter(|(key, state)| is_table_state_key(key) && state.is_object())
+            .map(|(key, state)| (key.clone(), state.clone()))
             .collect(),
         None => serde_json::Map::new(),
     }
 }
 
-/// Saves one collection's table structure, leaving every other collection's
-/// entry alone. Returns the stored value so the bridge can echo it back.
+/// Saves one table structure (a collection's, or the All notes screen's),
+/// leaving every other entry alone. Returns the stored value so the bridge can
+/// echo it back.
 pub fn write_table_state(
     path: &Path,
-    collection_id: &str,
+    key: &str,
     state: &serde_json::Value,
 ) -> std::io::Result<Option<serde_json::Value>> {
-    if !is_positive_integer_id(collection_id) || !state.is_object() {
+    if !is_table_state_key(key) || !state.is_object() {
         return Ok(None);
     }
 
@@ -248,7 +257,7 @@ pub fn write_table_state(
         Some(states) => states.clone(),
         None => serde_json::Map::new(),
     };
-    states.insert(collection_id.to_owned(), state.clone());
+    states.insert(key.to_owned(), state.clone());
 
     if serde_json::to_string(&states).unwrap().len() > MAX_TABLE_STATES_JSON_LEN {
         return Ok(None);
@@ -262,14 +271,14 @@ pub fn write_table_state(
     Ok(Some(state.clone()))
 }
 
-/// Drops one collection's structure. Deleting a collection prunes its entry,
-/// so a later collection that reuses the id cannot inherit it.
-pub fn remove_table_state(path: &Path, collection_id: &str) -> std::io::Result<()> {
+/// Drops one saved structure. Deleting a collection prunes its entry, so a
+/// later collection that reuses the id cannot inherit it.
+pub fn remove_table_state(path: &Path, key: &str) -> std::io::Result<()> {
     let mut prefs = load_preferences(path);
     let removed = prefs
         .get_mut(TABLE_STATES_KEY)
         .and_then(|value| value.as_object_mut())
-        .is_some_and(|states| states.remove(collection_id).is_some());
+        .is_some_and(|states| states.remove(key).is_some());
 
     if removed {
         write_preferences(path, &prefs)?;
@@ -278,14 +287,37 @@ pub fn remove_table_state(path: &Path, collection_id: &str) -> std::io::Result<(
     Ok(())
 }
 
-/// An archive import renumbers collections, so every saved structure is
-/// dropped instead of attaching to whatever collection lands on that id.
-pub fn clear_table_states(path: &Path) -> std::io::Result<()> {
+/// An archive import renumbers collections, so every collection's saved
+/// structure is dropped instead of attaching to whatever collection lands on
+/// that id. The All notes screen is not tied to an id and keeps its entry.
+pub fn clear_collection_table_states(path: &Path) -> std::io::Result<()> {
     let mut prefs = load_preferences(path);
-    if prefs.remove(TABLE_STATES_KEY).is_some() {
-        write_preferences(path, &prefs)?;
+    let Some(states) = prefs
+        .get_mut(TABLE_STATES_KEY)
+        .and_then(|value| value.as_object_mut())
+    else {
+        return Ok(());
+    };
+
+    let collection_keys: Vec<String> = states
+        .keys()
+        .filter(|key| is_positive_integer_id(key))
+        .cloned()
+        .collect();
+
+    if collection_keys.is_empty() {
+        return Ok(());
     }
-    Ok(())
+
+    for key in collection_keys {
+        states.remove(&key);
+    }
+
+    if states.is_empty() {
+        prefs.remove(TABLE_STATES_KEY);
+    }
+
+    write_preferences(path, &prefs)
 }
 
 fn write_preferences(
@@ -614,7 +646,13 @@ mod tests {
             write_table_state(&path, "3", &serde_json::json!("nope")).unwrap(),
             None
         );
-        assert!(read_table_states(&path).is_empty());
+        // The All notes screen's non-collection key is the one exception.
+        assert!(write_table_state(&path, ALL_NOTES_TABLE_STATE_KEY, &state)
+            .unwrap()
+            .is_some());
+        let states = read_table_states(&path);
+        assert_eq!(states.len(), 1);
+        assert!(states.contains_key(ALL_NOTES_TABLE_STATE_KEY));
     }
 
     #[test]
@@ -623,13 +661,17 @@ mod tests {
         let path = temp_path(&dir);
         fs::write(
             &path,
-            r#"{"tableStates":{"1":{"sortKey":"id"},"0":{},"x":{},"2":"nope"}}"#,
+            r#"{"tableStates":{"1":{"sortKey":"id"},"0":{},"x":{},"2":"nope","allNotes":{"sortKey":"issue_date"}}}"#,
         )
         .unwrap();
 
         let states = read_table_states(&path);
-        assert_eq!(states.len(), 1);
+        assert_eq!(states.len(), 2);
         assert_eq!(states["1"], serde_json::json!({ "sortKey": "id" }));
+        assert_eq!(
+            states[ALL_NOTES_TABLE_STATE_KEY],
+            serde_json::json!({ "sortKey": "issue_date" })
+        );
     }
 
     #[test]
@@ -639,14 +681,23 @@ mod tests {
         write_showcase_catalog_layout(&path, "rail").unwrap();
         write_table_state(&path, "1", &serde_json::json!({ "sortKey": "id" })).unwrap();
         write_table_state(&path, "2", &serde_json::json!({ "sortKey": "grade" })).unwrap();
+        write_table_state(
+            &path,
+            ALL_NOTES_TABLE_STATE_KEY,
+            &serde_json::json!({ "sortKey": "issue_date" }),
+        )
+        .unwrap();
 
         remove_table_state(&path, "1").unwrap();
         let states = read_table_states(&path);
-        assert_eq!(states.len(), 1);
+        assert_eq!(states.len(), 2);
         assert!(states.contains_key("2"));
+        assert!(states.contains_key(ALL_NOTES_TABLE_STATE_KEY));
 
-        clear_table_states(&path).unwrap();
-        assert!(read_table_states(&path).is_empty());
+        clear_collection_table_states(&path).unwrap();
+        let states = read_table_states(&path);
+        assert_eq!(states.len(), 1);
+        assert!(states.contains_key(ALL_NOTES_TABLE_STATE_KEY));
         assert_eq!(read_showcase_catalog_layout(&path), "rail");
     }
 

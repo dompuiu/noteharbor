@@ -202,7 +202,7 @@ describe("desktop-backed table states", () => {
       getTableStates: vi.fn().mockResolvedValue({}),
       setTableState: vi.fn().mockResolvedValue(null),
       removeTableState: vi.fn().mockResolvedValue(undefined),
-      clearTableStates: vi.fn().mockResolvedValue(undefined),
+      clearCollectionTableStates: vi.fn().mockResolvedValue(undefined),
       ...overrides,
     };
 
@@ -266,7 +266,7 @@ describe("desktop-backed table states", () => {
     saveTableState(collectionId, defaultTableState());
 
     expect(bridge.setTableState).toHaveBeenCalledWith(
-      collectionId,
+      String(collectionId),
       JSON.parse(window.localStorage.getItem(storageKey)),
     );
   });
@@ -279,8 +279,8 @@ describe("desktop-backed table states", () => {
 
     pruneTableStates([1]);
 
-    expect(bridge.removeTableState).toHaveBeenCalledWith(2);
-    expect(bridge.removeTableState).not.toHaveBeenCalledWith(1);
+    expect(bridge.removeTableState).toHaveBeenCalledWith("2");
+    expect(bridge.removeTableState).not.toHaveBeenCalledWith("1");
   });
 
   test("clears the desktop copy after an import", () => {
@@ -288,6 +288,6 @@ describe("desktop-backed table states", () => {
 
     clearAllTableStates();
 
-    expect(bridge.clearTableStates).toHaveBeenCalled();
+    expect(bridge.clearCollectionTableStates).toHaveBeenCalled();
   });
 });

@@ -286,6 +286,24 @@ describe("All notes screen", () => {
     expect(catalogLinks()).toEqual(["Fr. 2300", "Fr. 500", "P-22a"]);
   });
 
+  test("remembers the last sorted column across remounts", async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderAllNotes();
+    await screen.findByText("Fr. 2300");
+
+    await user.click(screen.getByRole("button", { name: "Date" }));
+    expect(catalogLinks()).toEqual(["Fr. 2300", "P-22a", "Fr. 500"]);
+
+    unmount();
+    renderAllNotes();
+    await screen.findByText("Fr. 2300");
+
+    expect(
+      screen.getByRole("button", { name: "Date" }).closest("th"),
+    ).toHaveAttribute("aria-sort", "ascending");
+    expect(catalogLinks()).toEqual(["Fr. 2300", "P-22a", "Fr. 500"]);
+  });
+
   test("the catalog cell opens the note in the All notes slideshow", async () => {
     const user = userEvent.setup();
     renderAllNotes();

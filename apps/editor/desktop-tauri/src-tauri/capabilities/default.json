@@ -23,7 +23,7 @@
     "allow-get-table-states",
     "allow-set-table-state",
     "allow-remove-table-state",
-    "allow-clear-table-states",
+    "allow-clear-collection-table-states",
     "allow-export-archive"
   ]
 }

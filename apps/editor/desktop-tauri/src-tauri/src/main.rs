@@ -57,9 +57,9 @@ if (window.__TAURI__ && !window.noteHarborDesktop) {
     getLastVisitedRoute: () => invoke('get_last_visited_route'),
     setLastVisitedRoute: (route) => invoke('set_last_visited_route', { value: route }),
     getTableStates: () => invoke('get_table_states'),
-    setTableState: (collectionId, state) => invoke('set_table_state', { collectionId, state }),
-    removeTableState: (collectionId) => invoke('remove_table_state', { collectionId }),
-    clearTableStates: () => invoke('clear_table_states'),
+    setTableState: (key, state) => invoke('set_table_state', { key, state }),
+    removeTableState: (key) => invoke('remove_table_state', { key }),
+    clearCollectionTableStates: () => invoke('clear_collection_table_states'),
     exportArchive: (collectionIds, showcaseIds) => invoke('export_archive', { collectionIds, showcaseIds }),
   };
 }
@@ -448,40 +448,32 @@ fn get_table_states(app: tauri::AppHandle) -> serde_json::Value {
 #[tauri::command]
 fn set_table_state(
     app: tauri::AppHandle,
-    collection_id: i64,
+    key: String,
     state: serde_json::Value,
 ) -> Option<serde_json::Value> {
-    if collection_id <= 0 {
-        return None;
-    }
     let path = desktop_preferences_path(&app);
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    prefs::write_table_state(&path, &collection_id.to_string(), &state)
-        .ok()
-        .flatten()
+    prefs::write_table_state(&path, &key, &state).ok().flatten()
 }
 
 #[tauri::command]
-fn remove_table_state(app: tauri::AppHandle, collection_id: i64) {
-    if collection_id <= 0 {
-        return;
-    }
+fn remove_table_state(app: tauri::AppHandle, key: String) {
     let path = desktop_preferences_path(&app);
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let _ = prefs::remove_table_state(&path, &collection_id.to_string());
+    let _ = prefs::remove_table_state(&path, &key);
 }
 
 #[tauri::command]
-fn clear_table_states(app: tauri::AppHandle) {
+fn clear_collection_table_states(app: tauri::AppHandle) {
     let path = desktop_preferences_path(&app);
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let _ = prefs::clear_table_states(&path);
+    let _ = prefs::clear_collection_table_states(&path);
 }
 
 /// Saves an archive through a native OS save dialog. The shell owns the file
@@ -556,7 +548,7 @@ pub fn run() {
             get_table_states,
             set_table_state,
             remove_table_state,
-            clear_table_states,
+            clear_collection_table_states,
             export_archive
         ])
         .setup(|app| {

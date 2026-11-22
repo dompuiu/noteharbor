@@ -7,8 +7,8 @@ import {
   hideableAllNotesColumns,
   hideableAllNotesColumnKeys,
   lastVisibleAllNotesDataColumnKey,
-  loadAllNotesVisibleColumnKeys,
-  saveAllNotesVisibleColumnKeys,
+  loadAllNotesTableState,
+  saveAllNotesTableState,
 } from "../lib/allNotesColumns.js";
 import { useCollections } from "../lib/collections.jsx";
 import { reportConnectionFailure } from "../lib/connection.js";
@@ -80,15 +80,23 @@ export function AllNotesScreen() {
   const [loadError, setLoadError] = useState("");
   const [reloadToken, setReloadToken] = useState(0);
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(
-    loadAllNotesVisibleColumnKeys,
+    () => loadAllNotesTableState().visibleColumnKeys,
   );
+  // The sort a plain visit opens with. A URL that carries `sort` overrides it
+  // for that render only; user sort changes write it back here.
+  const [savedSort, setSavedSort] = useState(() => {
+    const tableState = loadAllNotesTableState();
+    return {
+      sortKey: tableState.sortKey,
+      sortDirection: tableState.sortDirection,
+    };
+  });
   // The All notes list projects away the scraped details and the note text,
   // so the slideshow reads them from a full note fetched when it opens.
   const [noteDetails, setNoteDetails] = useState(() => new Map());
   const detailRequestsRef = useRef(new Set());
   const noteDetailsRef = useRef(noteDetails);
   const detailMountedRef = useRef(true);
-  const savedVisibleColumnKeysRef = useRef(visibleColumnKeys);
 
   useEffect(() => {
     noteDetailsRef.current = noteDetails;
@@ -106,18 +114,22 @@ export function AllNotesScreen() {
   const selectedCollection =
     collections.find((collection) => collection.id === rawCollection) ?? null;
   const selectedCollectionId = selectedCollection?.id ?? null;
-  const sortKey = normalizeSortKey(searchParams.get("sort"));
-  const sortDirection =
-    sortKey && searchParams.get("dir") === "desc" ? "desc" : "asc";
+  const routeSortKey = normalizeSortKey(searchParams.get("sort"));
+  const hasRouteSort = searchParams.has("sort");
+  const sortKey = hasRouteSort ? routeSortKey : savedSort.sortKey;
+  const sortDirection = hasRouteSort
+    ? routeSortKey && searchParams.get("dir") === "desc"
+      ? "desc"
+      : "asc"
+    : savedSort.sortDirection;
 
   useEffect(() => {
-    if (savedVisibleColumnKeysRef.current === visibleColumnKeys) {
-      return;
-    }
-
-    savedVisibleColumnKeysRef.current = visibleColumnKeys;
-    saveAllNotesVisibleColumnKeys(visibleColumnKeys);
-  }, [visibleColumnKeys]);
+    saveAllNotesTableState({
+      sortKey: savedSort.sortKey,
+      sortDirection: savedSort.sortDirection,
+      visibleColumnKeys,
+    });
+  }, [savedSort, visibleColumnKeys]);
 
   useEffect(() => {
     let cancelled = false;
@@ -420,21 +432,28 @@ export function AllNotesScreen() {
   }
 
   function handleSort(key) {
+    let nextSortKey = key;
+    let nextSortDirection = "asc";
+
+    if (sortKey === key) {
+      if (sortDirection === "asc") {
+        nextSortDirection = "desc";
+      } else {
+        nextSortKey = null;
+      }
+    }
+
+    setSavedSort({ sortKey: nextSortKey, sortDirection: nextSortDirection });
     setSearchParams(
       (current) => {
         const next = new URLSearchParams(current);
-        const currentKey = normalizeSortKey(current.get("sort"));
-        const currentDirection =
-          current.get("dir") === "desc" ? "desc" : "asc";
 
-        if (!currentKey || currentKey !== key) {
-          next.set("sort", key);
-          next.set("dir", "asc");
-        } else if (currentDirection === "asc") {
-          next.set("dir", "desc");
-        } else {
+        if (nextSortKey === null) {
           next.delete("sort");
           next.delete("dir");
+        } else {
+          next.set("sort", nextSortKey);
+          next.set("dir", nextSortDirection);
         }
 
         return next;
@@ -456,6 +475,7 @@ export function AllNotesScreen() {
   }
 
   function handleResetView() {
+    setSavedSort({ sortKey: null, sortDirection: "asc" });
     setSearchParams(
       (current) => {
         const next = new URLSearchParams(current);
@@ -514,6 +534,7 @@ export function AllNotesScreen() {
     // The sorted column is about to disappear: fall back to the screen's
     // default collection order so the active sort always names a header.
     if (sortKey === key) {
+      setSavedSort({ sortKey: null, sortDirection: "asc" });
       setSearchParams(
         (current) => {
           const next = new URLSearchParams(current);

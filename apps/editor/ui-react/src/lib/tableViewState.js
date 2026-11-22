@@ -78,3 +78,64 @@ export function writeStoredTableState(storageKey, value) {
 
   window.localStorage.setItem(storageKey, JSON.stringify(value));
 }
+
+// The desktop shell serves the UI from an embedded server on a random port,
+// so every launch is a fresh localStorage origin. These bridge calls mirror
+// table structures into the file-backed preferences (keyed by collection id,
+// plus `allNotes`), and the hydraters refill localStorage before the app
+// mounts. The web build has no bridge and keeps using localStorage alone.
+function getDesktopTableStateBridge() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const bridge = window.noteHarborDesktop;
+
+  if (
+    !bridge ||
+    typeof bridge.getTableStates !== "function" ||
+    typeof bridge.setTableState !== "function" ||
+    typeof bridge.removeTableState !== "function" ||
+    typeof bridge.clearCollectionTableStates !== "function"
+  ) {
+    return null;
+  }
+
+  return bridge;
+}
+
+export async function readDesktopTableStates() {
+  const bridge = getDesktopTableStateBridge();
+
+  if (!bridge) {
+    return null;
+  }
+
+  try {
+    const states = await bridge.getTableStates();
+
+    if (!states || typeof states !== "object" || Array.isArray(states)) {
+      return null;
+    }
+
+    return states;
+  } catch {
+    return null;
+  }
+}
+
+export function writeDesktopTableState(key, value) {
+  getDesktopTableStateBridge()
+    ?.setTableState(key, value)
+    ?.catch(() => {});
+}
+
+export function removeDesktopTableState(key) {
+  getDesktopTableStateBridge()
+    ?.removeTableState(key)
+    ?.catch(() => {});
+}
+
+export function clearDesktopCollectionTableStates() {
+  getDesktopTableStateBridge()?.clearCollectionTableStates()?.catch(() => {});
+}
