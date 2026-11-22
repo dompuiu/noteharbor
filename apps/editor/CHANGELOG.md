@@ -4,12 +4,17 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.24.1] - 2026-11-21
+
+### Fixed
+
+- All notes screen: the last sorted column and direction now survive a restart, on the web and in the desktop app. A visit whose URL names its own sort — a bookmark or a slideshow link — still wins for that visit.
+
 ## [2.24.0] - 2026-11-21
 
 ### Fixed
 
 - Table screen: each collection's sort column, direction, and column choice now survive a desktop app restart. The desktop shell saves them beside its other preferences, because every launch serves the UI from a new local origin and would otherwise start from the defaults.
-- All notes screen: the last sorted column and direction now survive a restart too, on the web and in the desktop app. A visit whose URL names its own sort — a bookmark or a slideshow link — still wins for that visit.
 - Showcase: the card layout preference now has the desktop command permissions it needs, so Library label / Auction rail is remembered across desktop restarts too.
 
 ## [2.23.4] - 2026-11-21
