@@ -1385,12 +1385,43 @@ pub fn normalize_scraped_url(raw: &str) -> Result<url::Url, String> {
     Ok(normalized)
 }
 
+/// Decode + re-encode one ingested image on a blocking thread. Decoding and
+/// WebP encoding a multi-megapixel photo take hundreds of milliseconds, so the
+/// work must never occupy an async worker.
+#[allow(clippy::too_many_arguments)]
+async fn ingest_image(
+    images_dir: std::path::PathBuf,
+    note_id: i64,
+    image_type: &'static str,
+    variant: &'static str,
+    bytes: Vec<u8>,
+    fallback_extension: String,
+    origin: &'static str,
+    source_url: Option<String>,
+) -> Result<ImageRecord, String> {
+    tokio::task::spawn_blocking(move || {
+        images::store_ingest_buffer(
+            &images_dir,
+            note_id,
+            image_type,
+            variant,
+            &bytes,
+            &fallback_extension,
+            origin,
+            source_url,
+        )
+    })
+    .await
+    .map_err(|error| format!("Image processing failed: {error}"))?
+    .map_err(|error| error.to_string())
+}
+
 async fn download_image_url(
     client: &reqwest::Client,
     images_dir: &std::path::Path,
     note_id: i64,
-    image_type: &str,
-    variant: &str,
+    image_type: &'static str,
+    variant: &'static str,
     image_url: &str,
 ) -> Result<ImageRecord, String> {
     let normalized = normalize_scraped_url(image_url)?;
@@ -1417,16 +1448,17 @@ async fn download_image_url(
         return Err(format!("Downloaded image exceeds maximum allowed size ({MAX_IMAGE_MB_LABEL})."));
     }
     let extension = get_extension_for_mime_type(&content_type, normalized.path());
-    images::store_ingest_buffer(
-        images_dir,
+    ingest_image(
+        images_dir.to_path_buf(),
         note_id,
         image_type,
         variant,
-        &bytes,
-        &extension,
+        bytes.to_vec(),
+        extension,
         "scraped",
         Some(normalized.to_string()),
     )
+    .await
     .map_err(|error| error.to_string())
 }
 
@@ -1472,17 +1504,17 @@ async fn build_next_images(
             images::remove_file_if_managed(images_dir, Some(&stale.local_path));
         }
         let extension = get_extension_for_mime_type(&file.mime, &file.filename);
-        let record = images::store_ingest_buffer(
-            images_dir,
+        let record = ingest_image(
+            images_dir.to_path_buf(),
             note_id,
             slot.image_type,
             slot.variant,
-            &file.bytes,
-            &extension,
+            file.bytes.clone(),
+            extension,
             "uploaded",
             None,
         )
-        .map_err(|error| error.to_string())?;
+        .await?;
         by_slot.insert(key, record);
     }
 
@@ -1517,35 +1549,54 @@ async fn build_next_images(
         {
             continue;
         }
-        let source: Option<(Vec<u8>, String, String)> =
-            match files.get(field_name_for_slot(image_type, "full").as_str()) {
-                Some(full) => {
-                    Some((full.bytes.clone(), full.mime.clone(), full.filename.clone()))
-                }
-                None => by_slot.get(&image_slot_key(image_type, "full")).and_then(|full| {
-                    images::resolve_local_path(images_dir, &full.local_path)
-                        .and_then(|path| std::fs::read(path).ok())
-                        .map(|bytes| (bytes, String::new(), full.local_path.clone()))
-                }),
-            };
-        let Some((source_bytes, mime, name)) = source else { continue };
-        let generated = images::generate_thumbnail_buffer(&source_bytes)?;
+        let upload = files
+            .get(field_name_for_slot(image_type, "full").as_str())
+            .map(|full| (full.bytes.clone(), full.mime.clone(), full.filename.clone()));
+        let existing_full = by_slot
+            .get(&image_slot_key(image_type, "full"))
+            .map(|full| full.local_path.clone());
+        if upload.is_none() && existing_full.is_none() {
+            continue;
+        }
+        // Reading the source, decoding it and encoding the thumbnail are all
+        // blocking, so the whole step runs on a blocking thread.
+        let job_dir = images_dir.to_path_buf();
+        let generated =
+            tokio::task::spawn_blocking(move || -> Result<Option<ImageRecord>, String> {
+                let (source_bytes, mime, name) = match upload {
+                    Some(source) => source,
+                    None => {
+                        let Some(local_path) = existing_full else { return Ok(None) };
+                        let Some(path) = images::resolve_local_path(&job_dir, &local_path)
+                        else {
+                            return Ok(None);
+                        };
+                        let Ok(bytes) = std::fs::read(path) else { return Ok(None) };
+                        (bytes, String::new(), local_path)
+                    }
+                };
+                let generated = images::generate_thumbnail_buffer(&source_bytes)?;
+                let extension = get_extension_for_mime_type(&mime, &name);
+                images::store_ingest_buffer(
+                    &job_dir,
+                    note_id,
+                    image_type,
+                    "thumbnail",
+                    &generated,
+                    &extension,
+                    "generated",
+                    None,
+                )
+                .map(Some)
+                .map_err(|error| error.to_string())
+            })
+            .await
+            .map_err(|error| format!("Thumbnail generation failed: {error}"))??;
+        let Some(record) = generated else { continue };
         let key = image_slot_key(image_type, "thumbnail");
         if let Some(stale) = by_slot.remove(&key) {
             images::remove_file_if_managed(images_dir, Some(&stale.local_path));
         }
-        let extension = get_extension_for_mime_type(&mime, &name);
-        let record = images::store_ingest_buffer(
-            images_dir,
-            note_id,
-            image_type,
-            "thumbnail",
-            &generated,
-            &extension,
-            "generated",
-            None,
-        )
-        .map_err(|error| error.to_string())?;
         by_slot.insert(key, record);
     }
 
@@ -1660,6 +1711,18 @@ fn db_failure(error: crate::AppError) -> Response {
     match error {
         crate::AppError::DatabaseUnavailable => bad_request("Database unavailable."),
         crate::AppError::Http { message, .. } => bad_request(&message),
+    }
+}
+
+/// A hand-gated note write's failure. The write gate's `409` keeps its status
+/// and message; everything else answers the route family's 400 like
+/// `db_failure`, so no other status changes.
+fn write_failure(error: crate::AppError) -> Response {
+    match &error {
+        crate::AppError::Http { status, .. } if *status == StatusCode::CONFLICT => {
+            app_error_response(error)
+        }
+        _ => db_failure(error),
     }
 }
 
@@ -1825,13 +1888,12 @@ async fn create_note_handler(
         return bad_request("Denomination is required.");
     }
     let create_payload = payload.clone();
-    let inserted = db::with_conn(&state.pool, move |conn| {
-        create_note_row(conn, collection_id, &create_payload, "[]")
-    })
-    .await;
+    let inserted = state
+        .with_write_conn(move |conn| create_note_row(conn, collection_id, &create_payload, "[]"))
+        .await;
     let note = match inserted {
         Ok(note) => note,
-        Err(error) => return db_failure(error),
+        Err(error) => return write_failure(error),
     };
     let client = reqwest::Client::new();
     let images_dir = state.data_dir.join("images");
@@ -1845,13 +1907,14 @@ async fn create_note_handler(
         return created(json!({ "note": note }));
     }
     let stored = images_json(&images);
-    match db::with_conn(&state.pool, move |conn| {
-        update_note_row(conn, &images_dir, note.id, collection_id, &payload, &stored)
-    })
-    .await
+    match state
+        .with_write_conn(move |conn| {
+            update_note_row(conn, &images_dir, note.id, collection_id, &payload, &stored)
+        })
+        .await
     {
         Ok(note) => created(json!({ "note": note })),
-        Err(error) => db_failure(error),
+        Err(error) => write_failure(error),
     }
 }
 
@@ -1901,13 +1964,14 @@ async fn update_note_handler(
         Err(message) => return bad_request(&message),
     };
     let stored = images_json(&images);
-    match db::with_conn(&state.pool, move |conn| {
-        update_note_row(conn, &images_dir, existing.id, collection_id, &payload, &stored)
-    })
-    .await
+    match state
+        .with_write_conn(move |conn| {
+            update_note_row(conn, &images_dir, existing.id, collection_id, &payload, &stored)
+        })
+        .await
     {
         Ok(note) => ok(json!({ "note": note })),
-        Err(error) => db_failure(error),
+        Err(error) => write_failure(error),
     }
 }
 

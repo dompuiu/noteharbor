@@ -26,7 +26,7 @@ use std::{
 
 use axum::{
     Json, Router,
-    extract::{DefaultBodyLimit, State},
+    extract::{DefaultBodyLimit, MatchedPath, State},
     http::{Method, StatusCode},
     middleware::Next,
     response::IntoResponse,
@@ -181,6 +181,39 @@ impl AppState {
     pub fn is_db_available(&self) -> bool {
         self.db_available.load(Ordering::SeqCst)
     }
+
+    /// Takes the cross-process write slot, or the same `409` the write-gate
+    /// layer answers when another instance holds it for the whole timeout.
+    pub async fn acquire_write_gate(&self) -> Result<write_gate::WriteGuard, AppError> {
+        self.write_gate
+            .acquire(self.write_gate_timeout)
+            .await
+            .map_err(|error| {
+                eprintln!("write gate: {error}");
+                AppError::Http {
+                    status: StatusCode::CONFLICT,
+                    message: "Another Note Harbor instance is writing to this data directory. Retry when it finishes."
+                        .to_owned(),
+                }
+            })
+    }
+
+    /// Runs one database write while holding the cross-process write gate.
+    /// Only the transaction is gated: routes whose slow work is image
+    /// download/transcode take the gate per write instead of for the whole
+    /// request, so a large photo never blocks another instance's saves.
+    pub async fn with_write_conn<T, F>(&self, op: F) -> Result<T, AppError>
+    where
+        F: FnOnce(
+                &mut r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>,
+            ) -> Result<T, db::DbError>
+            + Send
+            + 'static,
+        T: Send + 'static,
+    {
+        let _guard = self.acquire_write_gate().await?;
+        db::with_conn(&self.pool, op).await
+    }
 }
 
 /// `Number(value)` for path/body ids: null → 0, booleans → 1/0, integral
@@ -320,6 +353,27 @@ pub const NOTES_BODY_LIMIT: usize = crate::notes::MAX_IMAGE_BYTES * 4 + 2 * 1024
 /// minutes, so it must not hold the write gate.
 const UNGATED_POST_ROUTES: &[&str] = &["/api/scrape/preview"];
 
+/// Note writes that do slow work outside their transactions: downloading and
+/// re-encoding photos can take seconds. These routes take the write gate
+/// themselves (`AppState::with_write_conn`), around the database write only,
+/// instead of holding it for the whole request. Matched paths, so a route
+/// added later does not silently inherit the exemption.
+const HAND_GATED_ROUTES: &[(&str, &str)] = &[
+    ("POST", "/api/notes"),
+    ("POST", "/api/collections/{collectionId}/notes"),
+    ("PUT", "/api/notes/{id}"),
+    ("PUT", "/api/collections/{collectionId}/notes/{id}"),
+];
+
+fn is_hand_gated(request: &axum::extract::Request) -> bool {
+    let Some(matched) = request.extensions().get::<MatchedPath>() else {
+        return false;
+    };
+    HAND_GATED_ROUTES
+        .iter()
+        .any(|(method, path)| *method == request.method().as_str() && *path == matched.as_str())
+}
+
 pub fn create_app(state: AppState) -> Router {
     // Limits are per-router: the import streams multi-gigabyte uploads to
     // disk and notes accept up to four 15 MB images, while everything else
@@ -359,6 +413,8 @@ pub fn create_app(state: AppState) -> Router {
 }
 
 /// Mutating requests take the cross-process write gate; reads never wait.
+/// Note create/update are hand-gated: their handlers take the gate around the
+/// database write so image work is not serialized behind it.
 async fn write_gate_layer(
     State(state): State<AppState>,
     request: axum::extract::Request,
@@ -367,23 +423,18 @@ async fn write_gate_layer(
     let gated = matches!(
         *request.method(),
         Method::POST | Method::PUT | Method::PATCH | Method::DELETE
-    ) && !UNGATED_POST_ROUTES.contains(&request.uri().path());
+    ) && !UNGATED_POST_ROUTES.contains(&request.uri().path())
+        && !is_hand_gated(&request);
     if !gated {
         return next.run(request).await;
     }
-    match state.write_gate.acquire(state.write_gate_timeout).await {
+    match state.acquire_write_gate().await {
         Ok(guard) => {
             let response = next.run(request).await;
             drop(guard);
             response
         }
-        Err(error) => {
-            eprintln!("write gate: {error}");
-            json_error(
-                StatusCode::CONFLICT,
-                "Another Note Harbor instance is writing to this data directory. Retry when it finishes.",
-            )
-        }
+        Err(error) => error.into_response(),
     }
 }
 

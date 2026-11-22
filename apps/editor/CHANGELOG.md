@@ -4,6 +4,14 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+### Changed
+
+- Notes: saving a note with photos is much faster. Decoding and WebP encoding now run on dedicated worker threads, and the development build compiles the image pipeline optimized instead of unoptimized.
+
+### Fixed
+
+- Notes: a save no longer holds the cross-instance write lock while it downloads and re-encodes photos, so a large save cannot block another Editor instance sharing the same data directory.
+
 ## [2.23.3] - 2026-11-21
 
 ### Changed

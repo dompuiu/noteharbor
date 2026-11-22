@@ -386,3 +386,50 @@ async fn mutating_requests_wait_for_another_instances_write() {
     .await;
     assert_eq!(status, StatusCode::CREATED);
 }
+
+#[tokio::test]
+async fn hand_gated_note_writes_still_wait_for_another_instances_write() {
+    use std::time::Duration;
+
+    use editor_server_rust::write_gate::WriteGate;
+
+    let (dir, mut state) = fresh_state();
+    state.write_gate_timeout = Duration::from_millis(50);
+
+    let (status, body) = call(
+        create_app(state.clone()),
+        "POST",
+        "/api/collections",
+        Some(json!({ "name": "notes" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+
+    // Note create/update take the gate themselves instead of through the
+    // layer, so they must still answer the shared 409 while another instance
+    // is writing.
+    let other = WriteGate::new(dir.path());
+    let held = other
+        .acquire(Duration::from_millis(50))
+        .await
+        .expect("other instance takes the gate");
+
+    let (status, body) = call(
+        create_app(state.clone()),
+        "POST",
+        "/api/notes",
+        Some(json!({ "denomination": "blocked" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+
+    drop(held);
+    let (status, body) = call(
+        create_app(state),
+        "POST",
+        "/api/notes",
+        Some(json!({ "denomination": "allowed" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+}

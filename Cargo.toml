@@ -1,3 +1,15 @@
 [workspace]
 resolver = "2"
 members = ["apps/editor/server-rust", "apps/editor/desktop-tauri/src-tauri"]
+
+# Note saves decode and re-encode each photo, and the unoptimized dev profile
+# makes that take seconds per photo. Optimizing only the dependency graph keeps
+# saves usable in `cargo run` while this workspace's own crates still build
+# fast and unoptimized.
+[profile.dev.package."*"]
+opt-level = 3
+
+# libwebp is C compiled by a build script, and `cc` reads the optimization
+# level from the build-script profile, so the override has to reach it too.
+[profile.dev.build-override]
+opt-level = 3
