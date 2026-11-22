@@ -4,6 +4,10 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+### Changed
+
+- Table screen: Replace mode now clears every existing filter chip before committing the new value, instead of replacing only the same field's chips. Add still keeps the other fields and ORs the same field.
+
 ## [2.23.2] - 2026-11-21
 
 ### Changed

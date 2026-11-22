@@ -99,18 +99,15 @@ export function appendConditions(conditions, incoming) {
 }
 
 // Commit is the one path for typed values and tag picks. Replace (the default)
-// gives way to the incoming values for the committed field only: every other
-// field keeps its chips and its insertion order, and a field with no prior
-// chip is simply appended. Add widens the same-field OR.
-export function commitConditions(conditions, field, incoming, mode) {
+// clears every committed chip and commits only the incoming values, so a new
+// search never stacks on the old one. Add widens the same-field OR and keeps
+// every other field.
+export function commitConditions(conditions, incoming, mode) {
   if (mode === "add") {
     return appendConditions(conditions, incoming);
   }
 
-  return appendConditions(
-    conditions.filter((condition) => condition.field !== field),
-    incoming,
-  );
+  return appendConditions([], incoming);
 }
 
 // One committed input may carry several values (`22, 19`), a range (`M1-M8`)

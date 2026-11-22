@@ -105,7 +105,7 @@ describe("commit modes", () => {
     return conditions.map(conditionIdentity);
   }
 
-  test("Replace swaps only the committed field's chips", () => {
+  test("Replace clears every field's chips", () => {
     const current = [
       chip("grading_company", "PMG"),
       chip("catalog_number", "22"),
@@ -114,21 +114,13 @@ describe("commit modes", () => {
     const incoming = parseFilterInput("catalog_number", "23").conditions;
 
     expect(
-      identities(commitConditions(current, "catalog_number", incoming, "replace")),
-    ).toEqual(["grading_company:pmg", "tags:2 digits", "catalog_number:23"]);
+      identities(commitConditions(current, incoming, "replace")),
+    ).toEqual(["catalog_number:23"]);
   });
 
-  test("Replace with no prior chip for the field behaves like Add", () => {
-    const current = [chip("grading_company", "PMG")];
-    const incoming = parseFilterInput("catalog_number", "23").conditions;
-
-    expect(
-      identities(commitConditions(current, "catalog_number", incoming, "replace")),
-    ).toEqual(["grading_company:pmg", "catalog_number:23"]);
-  });
-
-  test("Replace drops the whole field, including a negated chip", () => {
+  test("Replace drops every field, including a negated chip", () => {
     const current = [
+      chip("catalog_number", "22"),
       chip("grading_company", "PMG"),
       chip("grading_company", "PCGS", true),
     ];
@@ -136,7 +128,7 @@ describe("commit modes", () => {
 
     expect(
       identities(
-        commitConditions(current, "grading_company", incoming, "replace"),
+        commitConditions(current, incoming, "replace"),
       ),
     ).toEqual(["grading_company:!pcgs"]);
   });
@@ -146,7 +138,7 @@ describe("commit modes", () => {
     const incoming = parseFilterInput("catalog_number", "23").conditions;
 
     expect(
-      identities(commitConditions(current, "catalog_number", incoming, "add")),
+      identities(commitConditions(current, incoming, "add")),
     ).toEqual(["catalog_number:22", "catalog_number:23"]);
   });
 });

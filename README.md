@@ -613,7 +613,7 @@ After the navigation settles (or immediately for a reused tab) the server polls 
 
 Primary editor screen with:
 
-- filterable and sortable table view: a field picker plus a value field where Enter commits a chip and replaces that field's earlier chips; `Shift+Enter` or the field's mode control latches Add instead (same field then ORs, different fields AND), a range such as `22-25` or `M1-M8` expands into one chip per value, tag suggestions in the Tags field, matched text marked in the row, and a "+N" overflow popover for rows with many tags
+- filterable and sortable table view: a field picker plus a value field where Enter commits a chip and clears every earlier chip; `Shift+Enter` or the field's mode control latches Add instead (same field then ORs, different fields AND), a range such as `22-25` or `M1-M8` expands into one chip per value, tag suggestions in the Tags field, matched text marked in the row, and a "+N" overflow popover for rows with many tags
 - transient find bar (`Ctrl/Cmd+F` or the rail's Find button) that walks matches in the current filtered and sorted view with Enter / Shift+Enter or F3 / Shift+F3, without changing filters, sort, selection or the URL; when filters hide every match it offers to search all notes
 - thumbnail previews
 - bulk selection, delete, and move to another collection (selection bar or a row's actions menu)

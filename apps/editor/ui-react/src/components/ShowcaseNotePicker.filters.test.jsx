@@ -105,7 +105,7 @@ beforeEach(() => {
 });
 
 describe("ShowcaseNotePicker filter bar", () => {
-  test("commits chips with Replace and keeps another field's chips", async () => {
+  test("commits chips with Replace and clears another field's chips", async () => {
     const user = userEvent.setup();
 
     renderPicker();
@@ -118,17 +118,20 @@ describe("ShowcaseNotePicker filter bar", () => {
       "2 lei · 1950 22a Kingdom",
     ]);
 
-    // Replace is the default: the new field's chip joins the catalog chip
-    // instead of clearing the whole filter.
+    // Replace is the default: the new field's chip clears the catalog chip
+    // instead of joining it.
     await commitChip(user, "Denomination", "1 leu");
 
-    expect(dialog.querySelector(".table-filter-chips")).toHaveTextContent(
+    expect(dialog.querySelector(".table-filter-chips")).not.toHaveTextContent(
       "Catalog22",
     );
     expect(dialog.querySelector(".table-filter-chips")).toHaveTextContent(
       "Denomination1 leu",
     );
-    expect(rowLabels(dialog)).toEqual(["1 leu · 1917 22 Kingdom"]);
+    expect(rowLabels(dialog)).toEqual([
+      "1 leu · 1917 22 Kingdom",
+      "1 leu · 1920 220 Inflation",
+    ]);
   });
 
   test("Add mode widens the same field's OR run", async () => {
@@ -138,9 +141,10 @@ describe("ShowcaseNotePicker filter bar", () => {
     const dialog = await screen.findByRole("dialog", { name: "Add notes" });
 
     await commitChip(user, "Catalog", "22");
-    await commitChip(user, "Denomination", "1 leu");
-
+    // Replace clears the rail, so keep the first chip with Add before the
+    // second field joins it.
     await user.click(filterModeButton("Add"));
+    await commitChip(user, "Denomination", "1 leu");
     await commitChip(user, "Catalog", "220");
 
     expect(rowLabels(dialog)).toEqual([
@@ -162,7 +166,11 @@ describe("ShowcaseNotePicker filter bar", () => {
     ]);
 
     await commitChip(user, "Denomination", "!2 lei");
-    expect(rowLabels(dialog)).toEqual(["1 leu · 1917 22 Kingdom"]);
+    expect(rowLabels(dialog)).toEqual([
+      "1 leu · 1917 22 Kingdom",
+      "1 leu · 1920 220 Inflation",
+      "5 lei · 1943 M1 Inflation",
+    ]);
   });
 
   test("sorts from the header and reverses the direction", async () => {
@@ -207,6 +215,9 @@ describe("ShowcaseNotePicker filter bar", () => {
       "2 lei · 1950 22a Kingdom",
     ]);
 
+    // Replace clears the rail, so the tag narrows the collection only after
+    // the Add latch.
+    await user.click(filterModeButton("Add"));
     await commitChip(user, "Tags", "Rare");
     expect(rowLabels(dialog)).toEqual(["2 lei · 1950 22a Kingdom"]);
   });

@@ -1,7 +1,8 @@
-// The filter field commits in one of two modes. Replace, the default, swaps
-// the committed field's chips; Add widens the same-field OR. The mode is one
-// app-wide preference, so it lives under its own key: the table's structural
-// payload is deliberately filter-free and must stay that way.
+// The filter field commits in one of two modes. Replace, the default, clears
+// every existing chip and commits only the new values; Add widens the
+// same-field OR and keeps the other fields. The mode is one app-wide
+// preference, so it lives under its own key: the table's structural payload is
+// deliberately filter-free and must stay that way.
 export const filterCommitModeStorageKey = "noteharbor.filterCommitMode";
 
 export const defaultFilterCommitMode = "replace";

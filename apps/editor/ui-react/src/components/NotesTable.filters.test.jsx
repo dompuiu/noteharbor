@@ -108,6 +108,12 @@ async function commitChip(user, label, value) {
   await user.type(filterInput(label), `${value}{Enter}`);
 }
 
+// Replace clears the rail, so any commit that must keep the earlier chips
+// latches Add first.
+async function latchAdd(user) {
+  await user.keyboard("{Shift>}{Enter}{/Shift}");
+}
+
 // The mode control's name gains a `Flip:` prefix while the field has a draft,
 // so both states are found by the part that names the target mode.
 function filterModeButton(target) {
@@ -155,7 +161,7 @@ describe("NotesTable filter chips", () => {
     // No chips yet, so the idle hint states the commit model in their slot.
     expect(document.querySelector(".table-filter-chips")).toBeNull();
     expect(document.querySelector(".table-filter-hint")).toHaveTextContent(
-      "New values replace that field; other fields stay",
+      "New values replace every filter",
     );
   });
 
@@ -272,8 +278,7 @@ describe("NotesTable filter chips", () => {
 
     await screen.findByText("AAAA");
     await commitChip(user, "Company", "PMG");
-    // Replace is the default; Shift+Enter latches Add without committing.
-    await user.keyboard("{Shift>}{Enter}{/Shift}");
+    await latchAdd(user);
     await commitChip(user, "Company", "PCGS");
 
     expect(screen.getByText("or")).toBeInTheDocument();
@@ -288,6 +293,8 @@ describe("NotesTable filter chips", () => {
 
     await screen.findByText("AAAA");
     await commitChip(user, "Company", "PMG");
+    // Replace clears the rail, so combining fields needs the Add latch.
+    await latchAdd(user);
     await commitChip(user, "Serial", "SER-3");
 
     expect(screen.getByText("and")).toBeInTheDocument();
@@ -310,7 +317,7 @@ describe("NotesTable filter chips", () => {
     await screen.findByText("AAAA");
     await commitChip(user, "Company", "PMG");
     // Two values on one field need Add: Replace would swap the first chip.
-    await user.keyboard("{Shift>}{Enter}{/Shift}");
+    await latchAdd(user);
     await commitChip(user, "Company", "PCGS");
     await commitChip(user, "Serial", "SER-3");
 
@@ -429,6 +436,47 @@ describe("NotesTable filter chips", () => {
     expect(
       screen.queryByRole("listbox", { name: "Tag suggestions" }),
     ).toBeNull();
+  });
+
+  test("a tag pick follows Replace and clears every chip", async () => {
+    getNotes.mockResolvedValue({
+      notes: [
+        note(1, {
+          denomination: "AAAA",
+          grading_company: "PMG",
+          tags: [{ name: "Rare" }],
+        }),
+        note(2, {
+          denomination: "BBBB",
+          grading_company: "PCGS",
+          tags: [{ name: "Rare" }],
+        }),
+      ],
+    });
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Company", "PMG");
+    await waitFor(() => {
+      expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
+    });
+
+    await chooseField(user, "Tags");
+    await user.keyboard("{ArrowDown}");
+    const list = await screen.findByRole("listbox", {
+      name: "Tag suggestions",
+    });
+    await user.click(within(list).getByRole("option", { name: "Rare" }));
+
+    // The tag pick commits through Replace, so the Company chip goes too.
+    expect(
+      screen.queryByRole("button", { name: "Edit Company filter PMG" }),
+    ).toBeNull();
+    expect(
+      await screen.findByRole("button", { name: "Edit Tags filter Rare" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("BBBB")).toBeInTheDocument();
   });
 
   test("an unknown tag has no create row but still commits on Enter", async () => {
@@ -629,7 +677,7 @@ describe("NotesTable filter chips", () => {
     await commitChip(user, "Company", "PMG");
     // Duplicate suppression is an Add-mode concern: Replace would swap the
     // chip out and back in even if dedupe were broken.
-    await user.keyboard("{Shift>}{Enter}{/Shift}");
+    await latchAdd(user);
     await commitChip(user, "Company", "PMG");
 
     expect(
@@ -663,6 +711,7 @@ describe("NotesTable filter chips", () => {
 
     await screen.findByText("AAAA");
     await commitChip(user, "Company", "PMG");
+    await latchAdd(user);
     await commitChip(user, "Serial", "SER-3");
 
     await user.click(screen.getByRole("button", { name: "Clear all" }));
@@ -900,9 +949,9 @@ describe("NotesTable filter chips", () => {
   });
 });
 
-// Replace is the default commit mode: a value for a field swaps that field's
-// chips and leaves every other field alone. Shift+Enter or a click on the
-// field's mode control latches Add without committing.
+// Replace is the default commit mode: a value clears every existing chip and
+// commits only the new one. Shift+Enter or a click on the field's mode control
+// latches Add without committing.
 describe("NotesTable filter commit mode", () => {
   const numberedNotes = [
     note(1, {
@@ -922,7 +971,7 @@ describe("NotesTable filter commit mode", () => {
     }),
   ];
 
-  test("Replace swaps only the committed field's chips", async () => {
+  test("Replace swaps the field's earlier chip", async () => {
     getNotes.mockResolvedValue({ notes: numberedNotes });
     renderTable();
     const user = userEvent.setup();
@@ -947,7 +996,7 @@ describe("NotesTable filter commit mode", () => {
     expect(screen.getByText("BBBB")).toBeInTheDocument();
   });
 
-  test("Replace leaves another field's chips in place", async () => {
+  test("Replace clears another field's chips too", async () => {
     getNotes.mockResolvedValue({ notes: numberedNotes });
     renderTable();
     const user = userEvent.setup();
@@ -958,15 +1007,15 @@ describe("NotesTable filter commit mode", () => {
     await commitChip(user, "Catalog", "23");
 
     expect(
-      screen.getByRole("button", { name: "Edit Company filter PMG" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Edit Company filter PMG" }),
+    ).toBeNull();
     expect(
       screen.queryByRole("button", { name: "Edit Catalog filter 22" }),
     ).toBeNull();
     expect(
       screen.getByRole("button", { name: "Edit Catalog filter 23" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("and")).toBeInTheDocument();
+    expect(screen.queryByText("and")).toBeNull();
   });
 
   test("one Replace commit may still carry an OR run", async () => {
@@ -1010,7 +1059,7 @@ describe("NotesTable filter commit mode", () => {
     ).toBeNull();
   });
 
-  test("a negated value replaces the same field's chips", async () => {
+  test("a negated value replaces the earlier chip", async () => {
     getNotes.mockResolvedValue({ notes: numberedNotes });
     renderTable();
     const user = userEvent.setup();
@@ -1177,7 +1226,7 @@ describe("NotesTable filter commit mode", () => {
 
     await screen.findByText("AAAA");
     await commitChip(user, "Catalog", "22");
-    await user.keyboard("{Shift>}{Enter}{/Shift}");
+    await latchAdd(user);
     await user.type(filterInput("Catalog"), "1-500{Enter}");
 
     expect(filterInput("Catalog")).toHaveValue("1-500");
@@ -1206,7 +1255,7 @@ describe("NotesTable filter commit mode", () => {
 
     await screen.findByText("AAAA");
     await user.click(filterInput("Catalog"));
-    await user.keyboard("{Shift>}{Enter}{/Shift}");
+    await latchAdd(user);
     await commitChip(user, "Company", "PMG");
 
     await user.click(screen.getByRole("button", { name: /Columns/ }));
@@ -1303,7 +1352,7 @@ describe("NotesTable filter commit mode", () => {
 
 
 describe("NotesTable filter hint", () => {
-  const replaceHint = "New values replace that field; other fields stay";
+  const replaceHint = "New values replace every filter";
   const addHint =
     "Pick a field, type, press ⏎. Same field ORs, different fields AND.";
 
@@ -1430,6 +1479,7 @@ describe("NotesTable filter rail", () => {
 
     await screen.findByText("AAAA");
     await commitChip(user, "Company", "PMG");
+    await latchAdd(user);
     await commitChip(user, "Serial", "SER-1");
     await commitChip(user, "Denomination", "100");
 
@@ -1529,6 +1579,7 @@ describe("NotesTable filter rail", () => {
 
     await screen.findByText("AAAA");
     await commitChip(user, "Catalog", "Fr. 2300");
+    await latchAdd(user);
     await commitChip(user, "Serial", "SER-1");
 
     expect(rail()).toHaveClass("table-rail--chips-own-line");
@@ -1573,6 +1624,7 @@ describe("NotesTable filter rail", () => {
 
     await screen.findByText("AAAA");
     await commitChip(user, "Catalog", "Fr. 2300");
+    await latchAdd(user);
     await commitChip(user, "Serial", "SER-1");
     await commitChip(user, "Company", "PMG");
     await commitChip(user, "Denomination", "100");
@@ -1627,6 +1679,7 @@ describe("NotesTable filter bar tab order", () => {
 
     await screen.findByText("AAAA");
     await commitChip(user, "Company", "PMG");
+    await latchAdd(user);
     await commitChip(user, "Serial", "SER-3");
 
     const firstValue = screen.getByRole("button", {
@@ -1646,7 +1699,8 @@ describe("NotesTable filter bar tab order", () => {
 
     await user.click(filterInput("Serial"));
     await user.tab();
-    expect(filterModeButton("Add")).toHaveFocus();
+    // The setup latched Add, so the next flip targets Replace.
+    expect(filterModeButton("Replace")).toHaveFocus();
 
     await user.tab();
     expect(firstValue).toHaveFocus();

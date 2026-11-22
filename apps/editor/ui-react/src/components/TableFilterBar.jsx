@@ -185,10 +185,10 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
   }, [defaultField, filterField, visibleFieldKeys]);
 
   // Commit is explicit: Enter turns the field text into chips through the
-  // latched mode. Replace (the default) swaps the committed field's chips and
-  // keeps every other field; Add widens the same-field OR. A range wider than
-  // the cap refuses the commit and keeps the draft, so the reader can shorten
-  // it instead of losing it.
+  // latched mode. Replace (the default) clears every existing chip and commits
+  // only the new values; Add widens the same-field OR and keeps the other
+  // fields. A range wider than the cap refuses the commit and keeps the draft,
+  // so the reader can shorten it instead of losing it.
   function commitFilterDraft(raw = filterDraft) {
     const { conditions: parsed, tooWide } = parseFilterInput(filterField, raw);
 
@@ -204,7 +204,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
     }
 
     onConditionsChange((current) =>
-      commitConditions(current, filterField, parsed, commitMode),
+      commitConditions(current, parsed, commitMode),
     );
     setFilterDraft("");
     closeTagSuggestions();
@@ -662,8 +662,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
         : null}
       {chipUnits.length ? null : (
         // The idle rail teaches the commit model in the slot the chips will
-        // take: Replace swaps that field's values, Add ORs them. The full
-        // rule lives in the `?` dialog; this line is the one-glance version.
+        // take: Replace clears every chip, Add ORs the same field.
         <p className="table-filter-hint">
           {commitMode === "add" ? (
             <span>
@@ -671,7 +670,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
               fields AND.
             </span>
           ) : (
-            <span>New values replace that field; other fields stay</span>
+            <span>New values replace every filter</span>
           )}
         </p>
       )}

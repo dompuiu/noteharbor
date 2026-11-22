@@ -7335,10 +7335,11 @@ th[aria-sort="descending"] .sort-chevron {
 }
 
 /* One filter bar: the field button lives inside the field, the value input
-   next to it, and Enter commits the text as chips. The default Replace swaps
-   the committed field's chips, so changing Catalog 22 to 23 leaves 23 only;
-   Add latches from the field's own mode control or Shift+Enter and restores
-   the same-field OR. The field leads the rail at the column header's weight
+   next to it, and Enter commits the text as chips. The default Replace clears
+   every existing chip, so changing Catalog 22 to 23 leaves 23 only and a new
+   field never narrows the old filter; Add latches from the field's own mode
+   control or Shift+Enter and restores the same-field OR while keeping the
+   other fields. The field leads the rail at the column header's weight
    (36px) and holds a fixed 400px: it is the rail's primary control, so the
    hint sentence's length must not decide its width. Below the narrow query
    the hint leaves the first line instead, which is what keeps the field 400px
