@@ -4,6 +4,11 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+### Fixed
+
+- Table screen: each collection's sort column, direction, and column choice now survive a desktop app restart. The desktop shell saves them beside its other preferences, because every launch serves the UI from a new local origin and would otherwise start from the defaults.
+- Showcase: the card layout preference now has the desktop command permissions it needs, so Library label / Auction rail is remembered across desktop restarts too.
+
 ## [2.23.4] - 2026-11-21
 
 ### Changed

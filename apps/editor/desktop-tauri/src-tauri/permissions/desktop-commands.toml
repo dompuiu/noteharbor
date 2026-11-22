@@ -19,6 +19,16 @@ description = "Enables the set_showcase_photo_size command: lets the UI persist 
 commands.allow = ["set_showcase_photo_size"]
 
 [[permission]]
+identifier = "allow-get-showcase-catalog-layout"
+description = "Enables the get_showcase_catalog_layout command: lets the UI read the persisted showcase card layout."
+commands.allow = ["get_showcase_catalog_layout"]
+
+[[permission]]
+identifier = "allow-set-showcase-catalog-layout"
+description = "Enables the set_showcase_catalog_layout command: lets the UI persist the showcase card layout."
+commands.allow = ["set_showcase_catalog_layout"]
+
+[[permission]]
 identifier = "allow-get-last-visited-route"
 description = "Enables the get_last_visited_route command: lets the UI read the persisted last visited page."
 commands.allow = ["get_last_visited_route"]
@@ -27,6 +37,26 @@ commands.allow = ["get_last_visited_route"]
 identifier = "allow-set-last-visited-route"
 description = "Enables the set_last_visited_route command: lets the UI persist the last visited page."
 commands.allow = ["set_last_visited_route"]
+
+[[permission]]
+identifier = "allow-get-table-states"
+description = "Enables the get_table_states command: lets the UI read every collection's saved table sort and columns."
+commands.allow = ["get_table_states"]
+
+[[permission]]
+identifier = "allow-set-table-state"
+description = "Enables the set_table_state command: lets the UI persist one collection's table sort and columns."
+commands.allow = ["set_table_state"]
+
+[[permission]]
+identifier = "allow-remove-table-state"
+description = "Enables the remove_table_state command: lets the UI drop a deleted collection's saved table structure."
+commands.allow = ["remove_table_state"]
+
+[[permission]]
+identifier = "allow-clear-table-states"
+description = "Enables the clear_table_states command: lets the UI forget saved table structures after an archive import."
+commands.allow = ["clear_table_states"]
 
 [[permission]]
 identifier = "allow-export-archive"

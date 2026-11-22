@@ -27,8 +27,8 @@ use tauri_plugin_opener::OpenerExt;
 
 /// JS bridge injected before any page script runs. Defines the
 /// `window.noteHarborDesktop` surface the UI reads (`appMode.js`,
-/// `photoSize.js`, `catalogLayout.js`, `NoteEditForm.jsx`), backed by Tauri
-/// `invoke`.
+/// `photoSize.js`, `catalogLayout.js`, `lastVisitedRoute.js`,
+/// `notesTableState.js`, `NoteEditForm.jsx`), backed by Tauri `invoke`.
 /// `showNoteEditorTextMenu` is intentionally absent: without it
 /// the UI keeps the WebView's native context menu (see ticket resolution).
 /// A solitary Alt press is cancelled because the shell has no menu bar: on
@@ -56,6 +56,10 @@ if (window.__TAURI__ && !window.noteHarborDesktop) {
     setShowcaseCatalogLayout: (catalogLayout) => invoke('set_showcase_catalog_layout', { value: catalogLayout }),
     getLastVisitedRoute: () => invoke('get_last_visited_route'),
     setLastVisitedRoute: (route) => invoke('set_last_visited_route', { value: route }),
+    getTableStates: () => invoke('get_table_states'),
+    setTableState: (collectionId, state) => invoke('set_table_state', { collectionId, state }),
+    removeTableState: (collectionId) => invoke('remove_table_state', { collectionId }),
+    clearTableStates: () => invoke('clear_table_states'),
     exportArchive: (collectionIds, showcaseIds) => invoke('export_archive', { collectionIds, showcaseIds }),
   };
 }
@@ -436,6 +440,50 @@ fn set_last_visited_route(app: tauri::AppHandle, value: String) -> Option<String
         .flatten()
 }
 
+#[tauri::command]
+fn get_table_states(app: tauri::AppHandle) -> serde_json::Value {
+    serde_json::Value::Object(prefs::read_table_states(&desktop_preferences_path(&app)))
+}
+
+#[tauri::command]
+fn set_table_state(
+    app: tauri::AppHandle,
+    collection_id: i64,
+    state: serde_json::Value,
+) -> Option<serde_json::Value> {
+    if collection_id <= 0 {
+        return None;
+    }
+    let path = desktop_preferences_path(&app);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    prefs::write_table_state(&path, &collection_id.to_string(), &state)
+        .ok()
+        .flatten()
+}
+
+#[tauri::command]
+fn remove_table_state(app: tauri::AppHandle, collection_id: i64) {
+    if collection_id <= 0 {
+        return;
+    }
+    let path = desktop_preferences_path(&app);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = prefs::remove_table_state(&path, &collection_id.to_string());
+}
+
+#[tauri::command]
+fn clear_table_states(app: tauri::AppHandle) {
+    let path = desktop_preferences_path(&app);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = prefs::clear_table_states(&path);
+}
+
 /// Saves an archive through a native OS save dialog. The shell owns the file
 /// system, so the export never becomes a silent webview download: the picker
 /// suggests `noteharbor-archive-YYYY-MM-DD.zip`, the user names and places it,
@@ -505,6 +553,10 @@ pub fn run() {
             set_showcase_catalog_layout,
             get_last_visited_route,
             set_last_visited_route,
+            get_table_states,
+            set_table_state,
+            remove_table_state,
+            clear_table_states,
             export_archive
         ])
         .setup(|app| {

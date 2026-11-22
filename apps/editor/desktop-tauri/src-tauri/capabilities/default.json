@@ -16,8 +16,14 @@
     "allow-open-scrape-browser",
     "allow-get-showcase-photo-size",
     "allow-set-showcase-photo-size",
+    "allow-get-showcase-catalog-layout",
+    "allow-set-showcase-catalog-layout",
     "allow-get-last-visited-route",
     "allow-set-last-visited-route",
+    "allow-get-table-states",
+    "allow-set-table-state",
+    "allow-remove-table-state",
+    "allow-clear-table-states",
     "allow-export-archive"
   ]
 }

@@ -25,6 +25,82 @@ export function tableStateStorageKey(collectionId) {
   return `${tableStateStorageKeyPrefix}.${collectionId}`;
 }
 
+// The desktop shell serves the UI from an embedded server on a random port,
+// so every launch is a fresh localStorage origin. These bridge calls mirror
+// the per-collection structures into the file-backed preferences and refill
+// localStorage before the app mounts; the web build has no bridge and keeps
+// using localStorage alone.
+function getDesktopTableStateBridge() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const bridge = window.noteHarborDesktop;
+
+  if (
+    !bridge ||
+    typeof bridge.getTableStates !== "function" ||
+    typeof bridge.setTableState !== "function" ||
+    typeof bridge.removeTableState !== "function" ||
+    typeof bridge.clearTableStates !== "function"
+  ) {
+    return null;
+  }
+
+  return bridge;
+}
+
+function isStoredTableState(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+// Runs once before the app mounts. A localStorage key already present wins,
+// because it belongs to the current session and is at least as new as the
+// file.
+export async function hydrateDesktopTableStates() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const bridge = getDesktopTableStateBridge();
+
+  if (!bridge) {
+    return;
+  }
+
+  let storedStates;
+
+  try {
+    storedStates = await bridge.getTableStates();
+  } catch {
+    return;
+  }
+
+  if (!isStoredTableState(storedStates)) {
+    return;
+  }
+
+  for (const [rawCollectionId, tableState] of Object.entries(storedStates)) {
+    const collectionId = Number.parseInt(rawCollectionId, 10);
+
+    if (
+      String(collectionId) !== rawCollectionId ||
+      !isPersistableCollectionId(collectionId) ||
+      !isStoredTableState(tableState)
+    ) {
+      continue;
+    }
+
+    const storageKey = tableStateStorageKey(collectionId);
+
+    if (window.localStorage.getItem(storageKey) !== null) {
+      continue;
+    }
+
+    window.localStorage.setItem(storageKey, JSON.stringify(tableState));
+  }
+}
+
 export function defaultVisibleColumnKeys() {
   return defaultVisibleColumnKeysFor(tableColumns);
 }
@@ -85,11 +161,16 @@ export function saveTableState(collectionId, tableState) {
     return;
   }
 
-  writeStoredTableState(tableStateStorageKey(collectionId), {
+  const storedState = {
     sortKey: tableState.sortKey,
     sortDirection: tableState.sortDirection,
     visibleColumnKeys: tableState.visibleColumnKeys,
-  });
+  };
+
+  writeStoredTableState(tableStateStorageKey(collectionId), storedState);
+  getDesktopTableStateBridge()
+    ?.setTableState(collectionId, storedState)
+    ?.catch(() => {});
 }
 
 function storedTableStateKeys() {
@@ -115,10 +196,22 @@ export function pruneTableStates(collectionIds) {
   }
 
   const liveKeys = new Set(collectionIds.map(tableStateStorageKey));
+  const bridge = getDesktopTableStateBridge();
 
   for (const key of storedTableStateKeys()) {
-    if (!liveKeys.has(key)) {
-      window.localStorage.removeItem(key);
+    if (liveKeys.has(key)) {
+      continue;
+    }
+
+    window.localStorage.removeItem(key);
+
+    const collectionId = Number.parseInt(
+      key.slice(`${tableStateStorageKeyPrefix}.`.length),
+      10,
+    );
+
+    if (isPersistableCollectionId(collectionId)) {
+      bridge?.removeTableState(collectionId)?.catch(() => {});
     }
   }
 }
@@ -135,6 +228,7 @@ export function clearAllTableStates() {
     window.localStorage.removeItem(key);
   }
 
+  getDesktopTableStateBridge()?.clearTableStates()?.catch(() => {});
   clearLegacyTableState();
 }
 

@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
   clearAllTableStates,
   clearLegacyTableState,
   defaultTableState,
   defaultVisibleColumnKeys,
+  hydrateDesktopTableStates,
   loadTableState,
   pruneTableStates,
   saveTableState,
@@ -25,6 +26,7 @@ function savedState(overrides = {}) {
 
 beforeEach(() => {
   window.localStorage.clear();
+  delete window.noteHarborDesktop;
 });
 
 describe("notes table state storage", () => {
@@ -191,5 +193,101 @@ describe("notes table state storage", () => {
       window.localStorage.getItem("noteharbor.notesTableColumns.1"),
     ).toBeNull();
     expect(window.localStorage.getItem(storageKey)).toBe(savedState());
+  });
+});
+
+describe("desktop-backed table states", () => {
+  function installBridge(overrides = {}) {
+    window.noteHarborDesktop = {
+      getTableStates: vi.fn().mockResolvedValue({}),
+      setTableState: vi.fn().mockResolvedValue(null),
+      removeTableState: vi.fn().mockResolvedValue(undefined),
+      clearTableStates: vi.fn().mockResolvedValue(undefined),
+      ...overrides,
+    };
+
+    return window.noteHarborDesktop;
+  }
+
+  test("restores every collection's saved structure before the first read", async () => {
+    installBridge({
+      getTableStates: vi.fn().mockResolvedValue({
+        1: {
+          sortKey: "denomination",
+          sortDirection: "desc",
+          visibleColumnKeys: ["id", "denomination"],
+        },
+        2: {
+          sortKey: "grade",
+          sortDirection: "asc",
+          visibleColumnKeys: ["id", "grade"],
+        },
+        "0": { sortKey: "id" },
+        x: { sortKey: "id" },
+        3: "not an object",
+      }),
+    });
+
+    await hydrateDesktopTableStates();
+
+    expect(loadTableState(1)).toEqual({
+      sortKey: "denomination",
+      sortDirection: "desc",
+      visibleColumnKeys: ["id", "denomination"],
+    });
+    expect(loadTableState(2).sortKey).toBe("grade");
+    expect(window.localStorage.getItem(tableStateStorageKey(0))).toBeNull();
+    expect(window.localStorage.getItem(tableStateStorageKey(3))).toBeNull();
+  });
+
+  test("a structure already in localStorage wins over the file", async () => {
+    window.localStorage.setItem(
+      storageKey,
+      savedState({ sortKey: "grade", sortDirection: "asc" }),
+    );
+    installBridge({
+      getTableStates: vi.fn().mockResolvedValue({
+        [collectionId]: {
+          sortKey: "denomination",
+          sortDirection: "desc",
+          visibleColumnKeys: ["id", "denomination"],
+        },
+      }),
+    });
+
+    await hydrateDesktopTableStates();
+
+    expect(loadTableState(collectionId).sortKey).toBe("grade");
+  });
+
+  test("writes every saved change through the desktop bridge", () => {
+    const bridge = installBridge();
+
+    saveTableState(collectionId, defaultTableState());
+
+    expect(bridge.setTableState).toHaveBeenCalledWith(
+      collectionId,
+      JSON.parse(window.localStorage.getItem(storageKey)),
+    );
+  });
+
+  test("prunes the desktop copy of a deleted collection", () => {
+    const bridge = installBridge();
+    saveTableState(1, defaultTableState());
+    saveTableState(2, defaultTableState());
+    bridge.removeTableState.mockClear();
+
+    pruneTableStates([1]);
+
+    expect(bridge.removeTableState).toHaveBeenCalledWith(2);
+    expect(bridge.removeTableState).not.toHaveBeenCalledWith(1);
+  });
+
+  test("clears the desktop copy after an import", () => {
+    const bridge = installBridge();
+
+    clearAllTableStates();
+
+    expect(bridge.clearTableStates).toHaveBeenCalled();
   });
 });

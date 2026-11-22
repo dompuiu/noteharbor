@@ -12,6 +12,11 @@ pub const DEFAULT_SHOWCASE_CATALOG_LAYOUT: &str = "labels";
 pub const LAST_VISITED_ROUTE_KEY: &str = "lastVisitedRoute";
 /// Upper bound for a persisted route (pathname + search + hash).
 pub const MAX_LAST_VISITED_ROUTE_LEN: usize = 2000;
+pub const TABLE_STATES_KEY: &str = "tableStates";
+/// The saved table structures are small (sort + visible columns per
+/// collection); this only keeps a malformed payload from turning the
+/// preferences file into an arbitrary blob.
+pub const MAX_TABLE_STATES_JSON_LEN: usize = 64 * 1024;
 
 pub fn normalize_showcase_photo_size(value: Option<&str>) -> String {
     match value {
@@ -203,6 +208,94 @@ pub fn write_last_visited_route(path: &Path, value: &str) -> std::io::Result<Opt
     fs::write(&tmp, serde_json::to_string(&prefs).unwrap())?;
     fs::rename(&tmp, path)?;
     Ok(normalized)
+}
+
+/// The per-collection table structure (sort key + direction and visible
+/// columns). Keyed by collection id, the same shape the UI keeps under its
+/// `noteharbor.notesTableState.<id>` localStorage keys. Only well-formed
+/// entries are handed back: a positive integer id and an object value.
+pub fn read_table_states(path: &Path) -> serde_json::Map<String, serde_json::Value> {
+    let prefs = load_preferences(path);
+    match prefs
+        .get(TABLE_STATES_KEY)
+        .and_then(|value| value.as_object())
+    {
+        Some(states) => states
+            .iter()
+            .filter(|(id, state)| is_positive_integer_id(id) && state.is_object())
+            .map(|(id, state)| (id.clone(), state.clone()))
+            .collect(),
+        None => serde_json::Map::new(),
+    }
+}
+
+/// Saves one collection's table structure, leaving every other collection's
+/// entry alone. Returns the stored value so the bridge can echo it back.
+pub fn write_table_state(
+    path: &Path,
+    collection_id: &str,
+    state: &serde_json::Value,
+) -> std::io::Result<Option<serde_json::Value>> {
+    if !is_positive_integer_id(collection_id) || !state.is_object() {
+        return Ok(None);
+    }
+
+    let mut prefs = load_preferences(path);
+    let mut states = match prefs
+        .get(TABLE_STATES_KEY)
+        .and_then(|value| value.as_object())
+    {
+        Some(states) => states.clone(),
+        None => serde_json::Map::new(),
+    };
+    states.insert(collection_id.to_owned(), state.clone());
+
+    if serde_json::to_string(&states).unwrap().len() > MAX_TABLE_STATES_JSON_LEN {
+        return Ok(None);
+    }
+
+    prefs.insert(
+        TABLE_STATES_KEY.to_owned(),
+        serde_json::Value::Object(states),
+    );
+    write_preferences(path, &prefs)?;
+    Ok(Some(state.clone()))
+}
+
+/// Drops one collection's structure. Deleting a collection prunes its entry,
+/// so a later collection that reuses the id cannot inherit it.
+pub fn remove_table_state(path: &Path, collection_id: &str) -> std::io::Result<()> {
+    let mut prefs = load_preferences(path);
+    let removed = prefs
+        .get_mut(TABLE_STATES_KEY)
+        .and_then(|value| value.as_object_mut())
+        .is_some_and(|states| states.remove(collection_id).is_some());
+
+    if removed {
+        write_preferences(path, &prefs)?;
+    }
+
+    Ok(())
+}
+
+/// An archive import renumbers collections, so every saved structure is
+/// dropped instead of attaching to whatever collection lands on that id.
+pub fn clear_table_states(path: &Path) -> std::io::Result<()> {
+    let mut prefs = load_preferences(path);
+    if prefs.remove(TABLE_STATES_KEY).is_some() {
+        write_preferences(path, &prefs)?;
+    }
+    Ok(())
+}
+
+fn write_preferences(
+    path: &Path,
+    prefs: &HashMap<String, serde_json::Value>,
+) -> std::io::Result<()> {
+    let tmp = path.with_extension("json.tmp");
+    fs::write(&tmp, serde_json::to_string(prefs).unwrap())?;
+    fs::rename(&tmp, path)?;
+    Ok(())
 }
 
 /// Joins the embedded-server base URL with a saved route, mirroring how the
@@ -476,5 +569,97 @@ mod tests {
             initial_app_url(base, Some("/catalog/notes/7/edit")),
             base
         );
+    }
+
+    #[test]
+    fn table_states_round_trip_per_collection_and_preserve_other_prefs() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = temp_path(&dir);
+        write_showcase_photo_size(&path, "medium").unwrap();
+
+        let first = serde_json::json!({
+            "sortKey": "denomination",
+            "sortDirection": "desc",
+            "visibleColumnKeys": ["id", "denomination"],
+        });
+        let second = serde_json::json!({
+            "sortKey": "id",
+            "sortDirection": "asc",
+            "visibleColumnKeys": ["id", "grade"],
+        });
+
+        assert_eq!(
+            write_table_state(&path, "2", &second).unwrap(),
+            Some(second.clone())
+        );
+        write_table_state(&path, "1", &first).unwrap();
+
+        let states = read_table_states(&path);
+        assert_eq!(states.len(), 2);
+        assert_eq!(states["1"], first);
+        assert_eq!(states["2"], second);
+        assert_eq!(read_showcase_photo_size(&path), "medium");
+        assert!(!path.with_extension("json.tmp").exists());
+    }
+
+    #[test]
+    fn table_states_reject_bad_ids_and_non_object_values() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = temp_path(&dir);
+        let state = serde_json::json!({ "sortKey": "id" });
+
+        assert_eq!(write_table_state(&path, "0", &state).unwrap(), None);
+        assert_eq!(write_table_state(&path, "abc", &state).unwrap(), None);
+        assert_eq!(
+            write_table_state(&path, "3", &serde_json::json!("nope")).unwrap(),
+            None
+        );
+        assert!(read_table_states(&path).is_empty());
+    }
+
+    #[test]
+    fn table_states_drop_unreadable_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = temp_path(&dir);
+        fs::write(
+            &path,
+            r#"{"tableStates":{"1":{"sortKey":"id"},"0":{},"x":{},"2":"nope"}}"#,
+        )
+        .unwrap();
+
+        let states = read_table_states(&path);
+        assert_eq!(states.len(), 1);
+        assert_eq!(states["1"], serde_json::json!({ "sortKey": "id" }));
+    }
+
+    #[test]
+    fn removing_and_clearing_table_states_leave_unrelated_prefs() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = temp_path(&dir);
+        write_showcase_catalog_layout(&path, "rail").unwrap();
+        write_table_state(&path, "1", &serde_json::json!({ "sortKey": "id" })).unwrap();
+        write_table_state(&path, "2", &serde_json::json!({ "sortKey": "grade" })).unwrap();
+
+        remove_table_state(&path, "1").unwrap();
+        let states = read_table_states(&path);
+        assert_eq!(states.len(), 1);
+        assert!(states.contains_key("2"));
+
+        clear_table_states(&path).unwrap();
+        assert!(read_table_states(&path).is_empty());
+        assert_eq!(read_showcase_catalog_layout(&path), "rail");
+    }
+
+    #[test]
+    fn table_states_cap_an_oversized_payload() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = temp_path(&dir);
+        let oversized = serde_json::json!({
+            "sortKey": "id",
+            "padding": "x".repeat(MAX_TABLE_STATES_JSON_LEN),
+        });
+
+        assert_eq!(write_table_state(&path, "1", &oversized).unwrap(), None);
+        assert!(read_table_states(&path).is_empty());
     }
 }
