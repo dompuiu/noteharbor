@@ -4,6 +4,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.24.0] - 2026-11-21
+
 ### Fixed
 
 - Table screen: each collection's sort column, direction, and column choice now survive a desktop app restart. The desktop shell saves them beside its other preferences, because every launch serves the UI from a new local origin and would otherwise start from the defaults.
