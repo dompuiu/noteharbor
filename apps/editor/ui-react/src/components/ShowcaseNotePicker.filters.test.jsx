@@ -9,7 +9,7 @@ vi.mock("../lib/api.js", () => ({
 
 import { ShowcaseNotePicker } from "./ShowcaseNotePicker.jsx";
 import { getAllNotes } from "../lib/api.js";
-import { chooseFilterField } from "../test/filterBar.js";
+import { chooseFilterField, filterFieldButton } from "../test/filterBar.js";
 
 function note(id, overrides = {}) {
   return {
@@ -105,6 +105,29 @@ beforeEach(() => {
 });
 
 describe("ShowcaseNotePicker filter bar", () => {
+  // The picker opens inside the Add dialog's scrim. Its filter surfaces are
+  // portalled to <body>, so each one carries the raised layer class that keeps
+  // it clickable above that scrim.
+  test("its filter menus carry the raised layer class", async () => {
+    const user = userEvent.setup();
+
+    renderPicker();
+    await screen.findByRole("dialog", { name: "Add notes" });
+
+    await user.click(filterFieldButton());
+    const menu = await screen.findByRole("menu", { name: "Filter field" });
+    expect(menu).toHaveClass("showcase-picker-popover");
+
+    await user.keyboard("{Escape}");
+    await chooseFilterField(user, "Tags");
+    await user.type(filterInput("Tags"), "R");
+
+    const suggestions = await screen.findByRole("listbox", {
+      name: "Tag suggestions",
+    });
+    expect(suggestions).toHaveClass("showcase-picker-popover");
+  });
+
   test("commits chips with Replace and clears another field's chips", async () => {
     const user = userEvent.setup();
 

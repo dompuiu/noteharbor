@@ -6,12 +6,12 @@ import { AnchoredPopover } from "./AnchoredPopover.jsx";
 // type scale and selected state match the rest of the toolbar. The shared
 // popover shell owns Escape, dismissal and positioning, and menuNavigation
 // owns the roving focus; this file picks which items the traversal walks.
-export function FilterFieldMenu({ onChange, options, value }) {
+export function FilterFieldMenu({ onChange, options, popoverClassName = "", value }) {
   const current = options.find((option) => option.key === value);
 
   return (
     <AnchoredPopover
-      className="table-filter-menu"
+      className={`table-filter-menu${popoverClassName ? ` ${popoverClassName}` : ""}`}
       // Land keyboard focus on the checked field, so arrows move from the
       // current choice rather than the top of the list.
       initialFocus={(panel) =>

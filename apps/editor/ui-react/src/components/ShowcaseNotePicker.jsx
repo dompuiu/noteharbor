@@ -899,6 +899,7 @@ function ShowcaseNotePicker({
           onConditionsChange={setConditions}
           onEscape={onClose}
           onFirstRow={focusFirstRow}
+          popoverClassName="showcase-picker-popover"
           ref={filterBarRef}
           searchColumns={pickerColumns}
           tagNames={tagNames}

@@ -48,6 +48,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
     onConditionsChange,
     onEscape = null,
     onFirstRow,
+    popoverClassName = "",
     searchColumns,
     tagNames,
   },
@@ -510,6 +511,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
               label: filterFieldLabel(column.key),
             })),
           ]}
+          popoverClassName={popoverClassName}
           value={filterField}
         />
         <span aria-hidden="true" className="table-search-divider" />
@@ -619,7 +621,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
         ? createPortal(
             <div
               aria-label="Tag suggestions"
-              className="tags-filter-dropdown"
+              className={`tags-filter-dropdown${popoverClassName ? ` ${popoverClassName}` : ""}`}
               id="table-filter-tag-suggestions"
               ref={tagSuggestionListRef}
               role="listbox"
@@ -679,7 +681,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
           {visibleChipUnits.map(renderChipUnit)}
           {hiddenChipUnits.length ? (
             <AnchoredPopover
-              className="table-filter-chips--popover"
+              className={`table-filter-chips--popover${popoverClassName ? ` ${popoverClassName}` : ""}`}
               initialFocus={(panel) =>
                 panel.querySelector("button:not([disabled])")
               }

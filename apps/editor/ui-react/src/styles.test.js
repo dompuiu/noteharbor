@@ -3027,6 +3027,41 @@ describe("showcase canvas", () => {
   });
 });
 
+// The Add dialog's Notes tab and the standalone finder both sit in a
+// .showcase-manager-backdrop scrim. The filter bar portals its field menu and
+// tag suggestions to <body>, so those surfaces must clear that scrim: painted
+// underneath it, they read as "the menu never opened" and a click on one
+// dismisses the dialog instead.
+describe("showcase picker filter popovers", () => {
+  function zIndex(selector) {
+    // Comments can sit between rules, so read the declarations from a copy
+    // without them; a grouped selector list still counts as one rule.
+    const source = styles.replace(/\/\*[\s\S]*?\*\//g, "");
+    const rule = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find(
+      ([, selectors]) =>
+        selectors
+          .split(",")
+          .map((part) => part.trim())
+          .includes(selector),
+    );
+    expect(rule, selector).toBeTruthy();
+
+    return Number(rule[2].match(/z-index:\s*(\d+)/)?.[1]);
+  }
+
+  test("the field menu, tag list and more-filters menu clear the scrim", () => {
+    const scrim = zIndex(".showcase-manager-backdrop");
+
+    for (const selector of [
+      ".table-filter-menu.showcase-picker-popover",
+      ".tags-filter-dropdown.showcase-picker-popover",
+      ".table-filter-chips--popover.showcase-picker-popover",
+    ]) {
+      expect(zIndex(selector), selector).toBeGreaterThan(scrim);
+    }
+  });
+});
+
 // The Add dialog's Notes tab and the standalone finder both scroll their
 // picker body. The filter field's ring is painted outside its box, so the
 // scrollport's padding edge has to sit at least its reach (outline plus

@@ -3963,6 +3963,18 @@ input[type="radio"] {
   flex: 1 1 100%;
 }
 
+/* The filter bar's three floating surfaces (field menu, tag suggestions and
+   the +N more chips) are portalled to <body>, outside the picker's own
+   dialog. Both picker surfaces open inside .showcase-manager-backdrop (155),
+   so their panels need to clear that scrim; painted underneath it they look
+   closed, and a click lands on the scrim and dismisses the dialog. 160 stays
+   under the confirm and shortcuts overlays (200). */
+.table-filter-menu.showcase-picker-popover,
+.tags-filter-dropdown.showcase-picker-popover,
+.table-filter-chips--popover.showcase-picker-popover {
+  z-index: 160;
+}
+
 .showcase-picker-note {
   margin: 0;
   color: var(--text-muted);
@@ -7106,7 +7118,8 @@ th[aria-sort="descending"] .sort-chevron {
 .tags-filter-dropdown {
   position: fixed;
   /* Above the edit overlay (110) so the portaled list shows in add/edit,
-     below the scrape-conflict (120) and shortcuts (200) modals. */
+     below the scrape-conflict (120) and shortcuts (200) modals. The picker
+     overrides this above its dialog scrim; see .showcase-picker-popover. */
   z-index: 115;
   display: flex;
   flex-direction: column;
