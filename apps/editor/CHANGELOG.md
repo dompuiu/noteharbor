@@ -4,6 +4,12 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.24.2] - 2026-11-23
+
+### Fixed
+
+- Showcase: the Add dialog's note picker lets you choose any filter field again. Its field menu, tag suggestions and **+N** more-filters list painted under the dialog scrim, so clicking them dismissed the dialog and only the default Catalog field could be used.
+
 ## [2.24.1] - 2026-11-21
 
 ### Fixed
