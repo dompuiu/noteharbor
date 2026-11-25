@@ -2314,12 +2314,18 @@ describe("slideshow overlay styles", () => {
     expect(screen[1]).toMatch(/margin:\s*0 auto/);
   });
 
-  test("the routed note editor's card scrolls to its last fields", () => {
+  test("the routed note editor scrolls like the collection overlay", () => {
+    const screen = styles.match(/\.note-editor-screen\s*\{([^}]*)\}/);
+    expect(screen).not.toBeNull();
+    expect(screen[1]).toMatch(/overflow-y:\s*auto/);
+    expect(screen[1]).toMatch(/padding-block-end:\s*28px/);
+
     const panel = styles.match(
       /\.note-editor-screen > \.panel\s*\{([^}]*)\}/,
     );
     expect(panel).not.toBeNull();
-    expect(panel[1]).toMatch(/overflow-y:\s*auto/);
+    expect(panel[1]).toMatch(/overflow:\s*visible/);
+    expect(panel[1]).toMatch(/flex:\s*0 0 auto/);
   });
 
   test("the note editor's action row wraps and Delete stands apart", () => {

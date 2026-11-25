@@ -8487,13 +8487,17 @@ td.drag-cell {
 .note-editor-screen {
   width: min(100%, var(--note-editor-width));
   margin: 0 auto;
+  /* Scroll the whole editor, exactly as the overlay opened from a collection
+     does: the card keeps its natural height and the header scrolls with the
+     fields instead of staying pinned above an inner scrollport. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-block-end: 28px;
 }
 
-/* The standalone Note editor is a full-screen route with the same long form
-   as the overlay. Let its card scroll instead of clipping the Collection and
-   position fields below the fold. */
 .note-editor-screen > .panel {
-  overflow-y: auto;
+  flex: 0 0 auto;
+  overflow: visible;
 }
 
 /* The Note editor's header splits context from action: position and its one
