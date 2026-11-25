@@ -8485,18 +8485,20 @@ td.drag-cell {
    the two-column fields. The dedicated width keeps the toolbar clear of the
    padding and gives the fields room without changing other narrow screens. */
 .note-editor-screen {
-  width: min(100%, var(--note-editor-width));
-  margin: 0 auto;
+  width: auto;
+  margin: 0 -24px;
   /* Scroll the whole editor, exactly as the overlay opened from a collection
-     does: the card keeps its natural height and the header scrolls with the
-     fields instead of staying pinned above an inner scrollport. */
+     does. The negative gutters carry the scrollbar to the screen edge; the
+     card stays on the editor's own working width. */
   overflow-x: hidden;
   overflow-y: auto;
-  padding-block-end: 28px;
+  padding: 0 24px 28px;
 }
 
 .note-editor-screen > .panel {
   flex: 0 0 auto;
+  width: min(100%, var(--note-editor-width));
+  margin: 0 auto;
   overflow: visible;
 }
 

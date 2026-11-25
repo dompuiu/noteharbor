@@ -12,6 +12,7 @@ import {
 } from "../lib/allNotesColumns.js";
 import { useCollections } from "../lib/collections.jsx";
 import { reportConnectionFailure } from "../lib/connection.js";
+import { isEditableElement } from "../lib/editableElement.js";
 import { allNotesListFields } from "../lib/noteFields.js";
 import {
   addTagCondition,
@@ -23,6 +24,7 @@ import { CATALOG_ROUTES } from "../lib/routes.js";
 import { collectTagNames } from "../lib/tagNames.js";
 import { dataColumns, validSortKeys } from "../lib/tableColumns.js";
 import { AllNotesTable } from "./AllNotesTable.jsx";
+import { NoteEditForm } from "./NoteEditForm.jsx";
 import { TableCard } from "./TableCard.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 
@@ -77,6 +79,8 @@ export function AllNotesScreen() {
   } = useCollections();
   const [notes, setNotes] = useState([]);
   const [notesLoading, setNotesLoading] = useState(true);
+  const [creatingNote, setCreatingNote] = useState(false);
+  const imagePreviewOpenRef = useRef(false);
   const [loadError, setLoadError] = useState("");
   const [reloadToken, setReloadToken] = useState(0);
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(
@@ -296,6 +300,45 @@ export function AllNotesScreen() {
       detailMountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!creatingNote) {
+      return undefined;
+    }
+
+    function handleKeyDown(event) {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      // The Image popover is its own layer; it closes first.
+      if (imagePreviewOpenRef.current) {
+        return;
+      }
+
+      if (
+        event.target instanceof Element &&
+        event.target.closest(
+          "[role='dialog'], [role='menu'], [role='listbox'], .select-dropdown, .scrape-conflict-overlay",
+        )
+      ) {
+        return;
+      }
+
+      // A focused field takes the first Escape: blurring it keeps the draft.
+      if (isEditableElement(event.target)) {
+        event.target.blur();
+        return;
+      }
+
+      event.preventDefault();
+      setCreatingNote(false);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [creatingNote]);
 
   useEffect(() => {
     if (!slideshowActive || slideshowIndex < 0) {
@@ -554,9 +597,19 @@ export function AllNotesScreen() {
   }
 
   function handleAddNote() {
-    navigate(CATALOG_ROUTES.noteCreate, {
-      state: { returnTo: `${location.pathname}${location.search}` },
-    });
+    imagePreviewOpenRef.current = false;
+    setCreatingNote(true);
+  }
+
+  function handleCloseCreateNote() {
+    imagePreviewOpenRef.current = false;
+    setCreatingNote(false);
+  }
+
+  function handleCreateNoteSaved() {
+    imagePreviewOpenRef.current = false;
+    setCreatingNote(false);
+    setReloadToken((current) => current + 1);
   }
 
   function handleCloseSlideshow() {
@@ -729,7 +782,7 @@ export function AllNotesScreen() {
 
   return (
     <section className="screen-stack all-notes-screen">
-      <div className="screen-body" inert={slideshowOpen}>
+      <div className="screen-body" inert={slideshowOpen || creatingNote}>
         <div className="panel-heading panel-heading--compact">
           <div className="panel-heading-copy">
             <h1>All notes</h1>
@@ -806,6 +859,28 @@ export function AllNotesScreen() {
           />
         )}
       </div>
+
+      {creatingNote ? (
+        <section className="edit-note-overlay">
+          <div
+            className="edit-note-overlay-frame"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <NoteEditForm
+              cancelLabel="Close"
+              noteId={null}
+              onCancel={handleCloseCreateNote}
+              onImagePreviewChange={(open) => {
+                imagePreviewOpenRef.current = open;
+              }}
+              onSaveSuccess={handleCreateNoteSaved}
+              overlay
+              selectedCollectionId={null}
+              showCounter={false}
+            />
+          </div>
+        </section>
+      ) : null}
 
       {slideshowOpen ? (
         <Slideshow

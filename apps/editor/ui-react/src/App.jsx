@@ -32,22 +32,7 @@ import {
 
 // The note editor can't open onto a collection that doesn't exist, so an empty
 // library explains the two ways to get data instead of showing a dead form.
-function NoteEditorDestination({
-  create = false,
-  emptyLibrary,
-  selectedCollectionId,
-}) {
-  const location = useLocation();
-  // All notes hands back the view that opened the form, filters and sort
-  // included. A hand-typed or stale address falls back to the screen itself.
-  const requestedReturnTo = location.state?.returnTo;
-  const returnTo = create
-    ? (typeof requestedReturnTo === "string" &&
-        requestedReturnTo.startsWith(CATALOG_ROUTES.allNotes) &&
-        requestedReturnTo) ||
-      CATALOG_ROUTES.allNotes
-    : null;
-
+function NoteEditorDestination({ emptyLibrary, selectedCollectionId }) {
   if (emptyLibrary) {
     return (
       <section className="screen-stack narrow-stack">
@@ -67,17 +52,7 @@ function NoteEditorDestination({
     );
   }
 
-  // The All notes screen's Add note opens this route without a collection:
-  // a new note has no home until the collector picks one, so the form starts
-  // with the destination unselected and holds Save until it is.
-  return (
-    <NoteEditForm
-      cancelTo={returnTo}
-      noteId={create ? null : undefined}
-      selectedCollectionId={create ? null : selectedCollectionId}
-      showCounter={!create}
-    />
-  );
+  return <NoteEditForm selectedCollectionId={selectedCollectionId} />;
 }
 
 // The collections home has no canvas of its own: it resolves to the first
@@ -320,15 +295,6 @@ function ShellContent() {
                     />
                   )}
                   path={CATALOG_ROUTES.importExport}
-                />
-                <Route
-                  element={
-                    <NoteEditorDestination
-                      create
-                      emptyLibrary={showEmptyLibrary}
-                    />
-                  }
-                  path={CATALOG_ROUTES.noteCreate}
                 />
                 <Route
                   element={

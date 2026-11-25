@@ -274,7 +274,6 @@ function TagSuggestionCloud({ limit = 16, onSelect, query = "", selected = [], v
 
 function NoteEditForm({
   cancelLabel = "Cancel",
-  cancelTo = null,
   currentNotePosition = null,
   initialPositionMode = "end",
   initialPositionReferenceId = null,
@@ -562,11 +561,6 @@ function NoteEditForm({
   function handleCancel() {
     if (onCancel) {
       onCancel();
-      return;
-    }
-
-    if (cancelTo) {
-      navigate(cancelTo);
       return;
     }
 
@@ -1536,11 +1530,6 @@ function NoteEditForm({
 
     if (onSaveSuccess) {
       onSaveSuccess(note, null, collection, saveIntentRef.current, message);
-      return;
-    }
-
-    if (cancelTo) {
-      navigate(cancelTo);
       return;
     }
 

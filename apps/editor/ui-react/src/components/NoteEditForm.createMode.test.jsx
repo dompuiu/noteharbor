@@ -1,4 +1,4 @@
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -27,10 +27,6 @@ vi.mock("../lib/collections.jsx", () => ({
 
 import { createNote, getNote, getNotes, getTags, reorderNotes } from "../lib/api.js";
 
-function LocationProbe() {
-  const location = useLocation();
-  return <output data-testid="location">{location.pathname}</output>;
-}
 
 function firstNotePayload() {
   return {
@@ -245,8 +241,9 @@ describe("Note editor create mode over the table", () => {
     expect(createNote).not.toHaveBeenCalled();
   });
 
-  test("a collection-less new note can stay on All notes after saving", async () => {
+  test("a collection-less new note reports its save to the host", async () => {
     const user = userEvent.setup();
+    const onSaveSuccess = vi.fn();
     const savedNote = {
       ...firstNotePayload(),
       id: 9,
@@ -261,21 +258,16 @@ describe("Note editor create mode over the table", () => {
 
     render(
       <MemoryRouter initialEntries={["/catalog/notes/new/edit"]}>
-        <LocationProbe />
         <Routes>
           <Route
             path="/catalog/notes/new/edit"
             element={
               <NoteEditForm
-                cancelTo="/catalog/all-notes"
                 noteId={null}
+                onSaveSuccess={onSaveSuccess}
                 selectedCollectionId={null}
               />
             }
-          />
-          <Route
-            element={<div>All notes screen</div>}
-            path="/catalog/all-notes"
           />
         </Routes>
       </MemoryRouter>,
@@ -291,8 +283,12 @@ describe("Note editor create mode over the table", () => {
 
     expect(createNote).toHaveBeenCalledWith(expect.anything(), 2);
     await waitFor(() => {
-      expect(screen.getByTestId("location")).toHaveTextContent(
-        "/catalog/all-notes",
+      expect(onSaveSuccess).toHaveBeenCalledWith(
+        savedNote,
+        null,
+        expect.objectContaining({ id: 2, name: "Second" }),
+        expect.any(String),
+        "Note added to Second.",
       );
     });
   });

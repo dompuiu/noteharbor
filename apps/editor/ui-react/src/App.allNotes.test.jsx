@@ -191,7 +191,7 @@ describe("All notes screen", () => {
     expect(getAllNotes).toHaveBeenCalledWith(COLLECTIONS, allNotesListFields);
   });
 
-  test("Add note opens a blank Note editor without a collection chosen", async () => {
+  test("Add note opens a blank Note editor over All notes", async () => {
     const user = userEvent.setup();
     renderAllNotes();
     await screen.findByText("Fr. 2300");
@@ -199,8 +199,11 @@ describe("All notes screen", () => {
     await user.click(screen.getByRole("button", { name: "Add note" }));
 
     expect(await screen.findByText("Note editor screen")).toBeInTheDocument();
+    expect(
+      screen.getByText("Note editor screen").closest(".edit-note-overlay"),
+    ).not.toBeNull();
     expect(screen.getByTestId("pathname")).toHaveTextContent(
-      "/catalog/notes/new/edit",
+      "/catalog/all-notes",
     );
   });
 

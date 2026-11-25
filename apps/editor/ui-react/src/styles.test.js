@@ -2308,17 +2308,24 @@ describe("slideshow overlay styles", () => {
   test("the note editor's routed screen matches the overlay width", () => {
     const screen = styles.match(/\.note-editor-screen\s*\{([^}]*)\}/);
     expect(screen).not.toBeNull();
-    expect(screen[1]).toMatch(
+    expect(screen[1]).toMatch(/width:\s*auto/);
+    expect(screen[1]).toMatch(/margin:\s*0\s+-24px/);
+
+    const panel = styles.match(
+      /\.note-editor-screen > \.panel\s*\{([^}]*)\}/,
+    );
+    expect(panel).not.toBeNull();
+    expect(panel[1]).toMatch(
       /width:\s*min\(100%,\s*var\(--note-editor-width\)\)/,
     );
-    expect(screen[1]).toMatch(/margin:\s*0 auto/);
+    expect(panel[1]).toMatch(/margin:\s*0 auto/);
   });
 
   test("the routed note editor scrolls like the collection overlay", () => {
     const screen = styles.match(/\.note-editor-screen\s*\{([^}]*)\}/);
     expect(screen).not.toBeNull();
     expect(screen[1]).toMatch(/overflow-y:\s*auto/);
-    expect(screen[1]).toMatch(/padding-block-end:\s*28px/);
+    expect(screen[1]).toMatch(/padding:\s*0 24px 28px/);
 
     const panel = styles.match(
       /\.note-editor-screen > \.panel\s*\{([^}]*)\}/,
