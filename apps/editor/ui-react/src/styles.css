@@ -8489,6 +8489,13 @@ td.drag-cell {
   margin: 0 auto;
 }
 
+/* The standalone Note editor is a full-screen route with the same long form
+   as the overlay. Let its card scroll instead of clipping the Collection and
+   position fields below the fold. */
+.note-editor-screen > .panel {
+  overflow-y: auto;
+}
+
 /* The Note editor's header splits context from action: position and its one
    command on the left, the save path alone on the right. Both halves wrap
    instead of pushing a control off the panel. */

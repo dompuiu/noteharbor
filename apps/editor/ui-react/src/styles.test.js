@@ -201,7 +201,7 @@ describe("table styles", () => {
     expect(reset[1]).toMatch(/outline:\s*none/);
 
     const halo = styles.match(
-      /\.table-sticky-cell\.align-center:has\(> input\[type="checkbox"\]:focus-visible\)::before\s*\{([^}]*)\}/,
+      /\.table-sticky-cell\.align-center:has\(\s*>\s*input\[type="checkbox"\]:focus-visible\s*\)::before\s*\{([^}]*)\}/,
     );
     expect(halo).not.toBeNull();
     expect(halo[1]).toMatch(/position:\s*absolute/);
@@ -1827,7 +1827,7 @@ describe("sidebar styles", () => {
       /\.sidebar-dock \.sidebar-group-label\s*\{[^}]*display:\s*none/,
     );
     expect(styles).toMatch(
-      /\.sidebar-dock:not\(\.sidebar-dock--open\):not\(\.sidebar-dock--pinned\):not\(:hover\):not\(:has\(:focus-visible\)\) \.sidebar-group-label[^{]*\{[^}]*justify-content:\s*center/,
+      /\.sidebar-dock:not\(\.sidebar-dock--open\):not\(\.sidebar-dock--pinned\):not\(\s*:hover\s*\):not\(:has\(:focus-visible\)\)\s+\.sidebar-group-label[^{]*\{[^}]*justify-content:\s*center/,
     );
   });
 
@@ -1849,7 +1849,7 @@ describe("sidebar styles", () => {
     // collapsed-state rule excludes all three, so it cannot win in expanded
     // states (and needs no later display re-enable).
     expect(styles).toMatch(
-      /\.sidebar-dock:not\(\.sidebar-dock--open\):not\(\.sidebar-dock--pinned\):not\(:hover\):not\(:has\(:focus-visible\)\) \.sidebar-row-moves\s*\{[^}]*display:\s*none/,
+      /\.sidebar-dock:not\(\.sidebar-dock--open\):not\(\.sidebar-dock--pinned\):not\(\s*:hover\s*\):not\(:has\(:focus-visible\)\)\s+\.sidebar-row-moves\s*\{[^}]*display:\s*none/,
     );
     expect(styles).not.toMatch(
       /\.sidebar-dock \.sidebar-row-moves\s*\{[^}]*display:\s*none/,
@@ -1991,7 +1991,7 @@ describe("sidebar styles", () => {
     // (or pinned), or they would fight the open layout whenever focus
     // visibility flickers between key presses.
     expect(styles).toMatch(
-      /\.sidebar-dock:not\(\.sidebar-dock--open\):not\(\.sidebar-dock--pinned\):not\(:hover\):not\(:has\(:focus-visible\)\) \.sidebar-link--cursor/,
+      /\.sidebar-dock:not\(\.sidebar-dock--open\):not\(\.sidebar-dock--pinned\):not\(\s*:hover\s*\):not\(:has\(:focus-visible\)\)\s+\.sidebar-link--cursor/,
     );
   });
 
@@ -2312,6 +2312,14 @@ describe("slideshow overlay styles", () => {
       /width:\s*min\(100%,\s*var\(--note-editor-width\)\)/,
     );
     expect(screen[1]).toMatch(/margin:\s*0 auto/);
+  });
+
+  test("the routed note editor's card scrolls to its last fields", () => {
+    const panel = styles.match(
+      /\.note-editor-screen > \.panel\s*\{([^}]*)\}/,
+    );
+    expect(panel).not.toBeNull();
+    expect(panel[1]).toMatch(/overflow-y:\s*auto/);
   });
 
   test("the note editor's action row wraps and Delete stands apart", () => {

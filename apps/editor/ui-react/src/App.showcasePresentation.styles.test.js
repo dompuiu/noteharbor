@@ -277,7 +277,7 @@ describe("showcase focus: proof frame", () => {
 
   test("the catalog code turns accent while the card holds focus", () => {
     const code = styles.match(
-      /\.showcase-reorder-cell:has\(\.showcase-card:focus-visible\) \.showcase-catalog-code\s*\{([^}]*)\}/,
+      /\.showcase-reorder-cell:has\(\.showcase-card:focus-visible\)\s+\.showcase-catalog-code\s*\{([^}]*)\}/,
     );
     expect(code).not.toBeNull();
     expect(code[1]).toMatch(/color:\s*var\(--accent-strong\)/);
