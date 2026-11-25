@@ -37,7 +37,14 @@ vi.mock("./components/ImportScreen.jsx", () => ({
 }));
 
 vi.mock("./components/NoteEditForm.jsx", () => ({
-  NoteEditForm: () => <div>Note editor screen</div>,
+  NoteEditForm: ({ noteId, selectedCollectionId }) => (
+    <div
+      data-note-id={noteId === null ? "new" : String(noteId)}
+      data-selected-collection-id={String(selectedCollectionId)}
+    >
+      Note editor screen
+    </div>
+  ),
 }));
 
 import { ShellContent } from "./App.jsx";
@@ -147,6 +154,15 @@ describe("Catalog route prefixes", () => {
 
     expect(await screen.findByText("Note editor screen")).toBeInTheDocument();
     expect(currentPath()).toBe("/catalog/notes/7/edit");
+  });
+
+  test("the Add note route opens a blank editor with no collection chosen", async () => {
+    renderAt(CATALOG_ROUTES.noteCreate);
+
+    const editor = await screen.findByText("Note editor screen");
+    expect(currentPath()).toBe("/catalog/notes/new/edit");
+    expect(editor).toHaveAttribute("data-note-id", "new");
+    expect(editor).toHaveAttribute("data-selected-collection-id", "null");
   });
 });
 

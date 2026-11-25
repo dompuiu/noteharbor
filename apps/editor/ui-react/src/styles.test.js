@@ -3212,8 +3212,12 @@ describe("primary buttons", () => {
       join(process.cwd(), "src", "components", "NotesTable.jsx"),
       "utf8",
     );
+    const button = readFileSync(
+      join(process.cwd(), "src", "components", "AddNoteButton.jsx"),
+      "utf8",
+    );
     expect(table).not.toMatch(/table-add-note/);
-    expect(table).toMatch(
+    expect(button).toMatch(
       /aria-label="Add note"[\s\S]{0,200}?className="button button-primary"/,
     );
   });

@@ -67,6 +67,7 @@ import {
 import { noteThumbnailPath } from "../lib/tableCells.jsx";
 import { makeCondition, parseFilterInput } from "../lib/tableFilters.js";
 import { collectTagNames } from "../lib/tagNames.js";
+import { AddNoteButton } from "./AddNoteButton.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 import { BulkOwnershipPanel } from "./BulkOwnershipPanel.jsx";
 import { BulkTagPanel } from "./BulkTagPanel.jsx";
@@ -4860,29 +4861,10 @@ function NotesTable({
           onToggleColumn={toggleColumnVisibility}
           railStart={
             !isCollectionEditing && !showingNewCollectionForm ? (
-              <button
-                aria-label="Add note"
-                className="button button-primary"
-                data-shortcut="a"
+              <AddNoteButton
                 disabled={noCollections || isNewCollection}
                 onClick={openCreateNote}
-                type="button"
-              >
-                <svg
-                  aria-hidden="true"
-                  fill="none"
-                  focusable="false"
-                  height="15"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeWidth="2"
-                  viewBox="0 0 24 24"
-                  width="15"
-                >
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-                <span className="table-rail-button-label">Add note</span>
-              </button>
+              />
             ) : null
           }
           rows={deferredOrderedNotes}

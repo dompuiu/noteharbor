@@ -21,6 +21,8 @@ function CollectionPositionFields({
   onPositionModeChange,
   onPositionReferenceChange,
   onShowCollectionAfterChange,
+  positionError = "",
+  positionLoading = false,
   positionMode,
   positionNotes,
   positionReferenceId,
@@ -33,8 +35,10 @@ function CollectionPositionFields({
   const targetCollection =
     collections.find((collection) => collection.id === selectedCollectionId) ??
     null;
+  const hasCollection =
+    selectedCollectionId != null && selectedCollectionId !== "";
   const choosingDifferentCollection =
-    selectedCollectionId !== currentCollectionId;
+    hasCollection && selectedCollectionId !== currentCollectionId;
   const positionNeedsReference = needsPositionReference(positionMode);
 
   return (
@@ -48,10 +52,19 @@ function CollectionPositionFields({
             label: collection.name,
             value: collection.id,
           }))}
-          value={selectedCollectionId}
+          placeholder="Select a collection"
+          value={selectedCollectionId ?? ""}
         />
       </div>
-      {positionNotes.length > 0 ? (
+      {!hasCollection ? (
+        <p className="muted field-block full-span">
+          Select a collection to set the note’s position and save.
+        </p>
+      ) : positionLoading ? (
+        <p className="muted field-block full-span">Loading notes…</p>
+      ) : positionError ? (
+        <p className="error-text field-block full-span">{positionError}</p>
+      ) : positionNotes.length > 0 ? (
         <div className="field-block full-span">
           <span>Position in collection</span>
           <SelectField

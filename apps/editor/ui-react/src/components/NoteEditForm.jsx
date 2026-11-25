@@ -274,6 +274,7 @@ function TagSuggestionCloud({ limit = 16, onSelect, query = "", selected = [], v
 
 function NoteEditForm({
   cancelLabel = "Cancel",
+  cancelTo = null,
   currentNotePosition = null,
   initialPositionMode = "end",
   initialPositionReferenceId = null,
@@ -307,6 +308,7 @@ function NoteEditForm({
   // edit instead of a blank form.
   const noteId = noteIdProp !== undefined ? noteIdProp : routeNoteId;
   const isCreateMode = !noteId;
+  const sourceCollectionSelected = Number.isInteger(selectedCollectionId);
   const [form, setForm] = useState(emptyForm);
   const [suggestions, setSuggestions] = useState([]);
   const [tagCloudQuery, setTagCloudQuery] = useState("");
@@ -341,6 +343,8 @@ function NoteEditForm({
   );
   const [showCollectionAfterSave, setShowCollectionAfterSave] = useState(true);
   const [destinationNotesOverride, setDestinationNotesOverride] = useState(null);
+  const [destinationNotesLoading, setDestinationNotesLoading] = useState(false);
+  const [destinationNotesError, setDestinationNotesError] = useState("");
   const destinationRequestRef = useRef(0);
   const [scraping, setScraping] = useState(false);
   const [scrapeToast, setScrapeToast] = useState(null);
@@ -442,6 +446,7 @@ function NoteEditForm({
   const movingToDifferentCollection =
     !isCreateMode && destinationCollectionId !== selectedCollectionId;
   const targetCollectionId = destinationCollectionId ?? selectedCollectionId;
+  const hasTargetCollection = Number.isInteger(targetCollectionId);
   const targetCollection =
     collections.find(
       (collection) => collection.id === targetCollectionId,
@@ -463,6 +468,7 @@ function NoteEditForm({
   function handleDestinationCollectionChange(rawCollectionId) {
     const nextCollectionId = Number(rawCollectionId);
     const requestId = ++destinationRequestRef.current;
+    const isCurrentRequest = () => destinationRequestRef.current === requestId;
 
     setDestinationCollectionId(nextCollectionId);
     setPositionReferenceId(null);
@@ -470,22 +476,46 @@ function NoteEditForm({
 
     if (nextCollectionId === selectedCollectionId) {
       setDestinationNotesOverride(null);
+      setDestinationNotesLoading(false);
+      setDestinationNotesError("");
       setPositionMode(isCreateMode ? initialPositionMode : "keep");
       return;
     }
 
-    setDestinationNotesOverride(null);
+    // The picker must not fall back to the notes the form started with while
+    // the destination's own list loads: those belong to another collection.
+    setDestinationNotesOverride([]);
+    setDestinationNotesLoading(true);
+    setDestinationNotesError("");
 
     getNotes(nextCollectionId)
       .then((payload) => {
-        if (destinationRequestRef.current !== requestId) return;
-        const notes = payload.notes ?? [];
-        setDestinationNotesOverride(notes);
+        if (!isCurrentRequest()) return;
+        setDestinationNotesOverride(payload.notes ?? []);
       })
       .catch((fetchError) => {
-        if (destinationRequestRef.current !== requestId) return;
+        if (!isCurrentRequest()) return;
+        setDestinationNotesError("Could not load this collection’s notes.");
         setError(fetchError.message);
+      })
+      .finally(() => {
+        if (!isCurrentRequest()) return;
+        setDestinationNotesLoading(false);
       });
+
+    // Only the collection-less create form steers tag suggestions: its first
+    // collection is chosen here. Moving an existing Note keeps the suggestions
+    // it loaded with its own collection.
+    if (!sourceCollectionSelected) {
+      getTags(nextCollectionId)
+        .then((payload) => {
+          if (!isCurrentRequest()) return;
+          setSuggestions((payload.tags ?? []).map((tag) => tag.name));
+        })
+        .catch(() => {
+          // A missing suggestion list never blocks the save.
+        });
+    }
   }
 
   async function refreshScrapeBrowserAvailability() {
@@ -535,6 +565,11 @@ function NoteEditForm({
       return;
     }
 
+    if (cancelTo) {
+      navigate(cancelTo);
+      return;
+    }
+
     navigate(
       Number.isInteger(selectedCollectionId)
         ? CATALOG_ROUTES.collection(selectedCollectionId)
@@ -559,6 +594,8 @@ function NoteEditForm({
     setPositionReferenceId(noteId ? null : initialPositionReferenceId);
     setDestinationCollectionId(selectedCollectionId);
     setDestinationNotesOverride(null);
+    setDestinationNotesLoading(false);
+    setDestinationNotesError("");
     destinationRequestRef.current += 1;
     setShowCollectionAfterSave(true);
     setScraping(false);
@@ -571,17 +608,19 @@ function NoteEditForm({
     setPendingScrapedImages({});
     clearScrapeBrowserPollTimer();
 
+    const tagsPromise = sourceCollectionSelected
+      ? getTags(selectedCollectionId)
+      : Promise.resolve({ tags: [] });
+    const notesPromise = sourceCollectionSelected
+      ? getNotes(selectedCollectionId)
+      : Promise.resolve({ notes: [] });
     const dataPromise = noteId
       ? Promise.all([
           getNote(noteId, selectedCollectionId),
-          getTags(selectedCollectionId),
-          getNotes(selectedCollectionId),
+          tagsPromise,
+          notesPromise,
         ])
-      : Promise.all([
-          Promise.resolve(null),
-          getTags(selectedCollectionId),
-          getNotes(selectedCollectionId),
-        ]);
+      : Promise.all([Promise.resolve(null), tagsPromise, notesPromise]);
 
     dataPromise
       .then(([notePayload, tagsPayload, notesPayload]) => {
@@ -627,7 +666,13 @@ function NoteEditForm({
       active = false;
       clearScrapeBrowserPollTimer();
     };
-  }, [initialPositionMode, initialPositionReferenceId, noteId, selectedCollectionId]);
+  }, [
+    initialPositionMode,
+    initialPositionReferenceId,
+    noteId,
+    selectedCollectionId,
+    sourceCollectionSelected,
+  ]);
 
   useEffect(() => {
     refreshScrapeBrowserAvailability();
@@ -1494,6 +1539,11 @@ function NoteEditForm({
       return;
     }
 
+    if (cancelTo) {
+      navigate(cancelTo);
+      return;
+    }
+
     navigate(CATALOG_ROUTES.collection(collectionId));
   }
 
@@ -1533,6 +1583,12 @@ function NoteEditForm({
 
   async function handleSubmit(event) {
     event.preventDefault();
+
+    if (!hasTargetCollection) {
+      setError("Select a collection before saving the note.");
+      return;
+    }
+
     setSaving(true);
     setError("");
     setSaveAnnouncement("");
@@ -2007,7 +2063,7 @@ function NoteEditForm({
               onClick={() => {
                 saveIntentRef.current = "return";
               }}
-              disabled={saving || positionInvalid}
+              disabled={saving || positionInvalid || !hasTargetCollection}
               type="submit"
             >
               {isCreateMode ? "Add & close" : "Save & close"}
@@ -2019,7 +2075,7 @@ function NoteEditForm({
               onClick={() => {
                 saveIntentRef.current = "stay";
               }}
-              disabled={saving || positionInvalid}
+              disabled={saving || positionInvalid || !hasTargetCollection}
               type="submit"
             >
               {saving
@@ -2447,6 +2503,8 @@ function NoteEditForm({
             }}
             onPositionReferenceChange={setPositionReferenceId}
             onShowCollectionAfterChange={setShowCollectionAfterSave}
+            positionError={destinationNotesError}
+            positionLoading={destinationNotesLoading}
             positionMode={positionMode}
             positionNotes={otherNotes}
             positionReferenceId={positionReferenceId}

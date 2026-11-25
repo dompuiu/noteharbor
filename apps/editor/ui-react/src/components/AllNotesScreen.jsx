@@ -553,6 +553,12 @@ export function AllNotesScreen() {
     navigate(allNotesUrl(`#slideshow/${note.id}`));
   }
 
+  function handleAddNote() {
+    navigate(CATALOG_ROUTES.noteCreate, {
+      state: { returnTo: `${location.pathname}${location.search}` },
+    });
+  }
+
   function handleCloseSlideshow() {
     navigate(allNotesUrl(), { replace: true });
   }
@@ -777,6 +783,7 @@ export function AllNotesScreen() {
             hideableColumns={hideableAllNotesColumns}
             notes={visibleNotes}
             rowsPending={rowsPending}
+            onAddNote={handleAddNote}
             onApplyTagFilter={handleApplyTagFilter}
             onClearFilters={handleClearFilters}
             onCollectionChange={handleCollectionChange}
@@ -788,7 +795,7 @@ export function AllNotesScreen() {
             onToggleColumn={handleToggleColumn}
             searchColumns={searchColumns}
             selectedCollectionId={selectedCollectionId}
-            showToolbar={!emptyLibrary}
+            showToolbar={collectionCount > 0}
             slideshowActive={slideshowActive}
             sortDirection={sortDirection}
             sortKey={sortKey}

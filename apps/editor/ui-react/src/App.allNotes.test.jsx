@@ -24,6 +24,10 @@ vi.mock("@tanstack/react-virtual", async () => {
   return { useVirtualizer: makeWindowedVirtualizer({ rowHeight: 45 }) };
 });
 
+vi.mock("./components/NoteEditForm.jsx", () => ({
+  NoteEditForm: () => <div>Note editor screen</div>,
+}));
+
 import { ShellContent } from "./App.jsx";
 import { CollectionsProvider } from "./lib/collections.jsx";
 import { ShowcasesProvider } from "./lib/showcases.jsx";
@@ -185,6 +189,19 @@ describe("All notes screen", () => {
     ).toBeInTheDocument();
     // The list asks for the lean projection, not the whole note row.
     expect(getAllNotes).toHaveBeenCalledWith(COLLECTIONS, allNotesListFields);
+  });
+
+  test("Add note opens a blank Note editor without a collection chosen", async () => {
+    const user = userEvent.setup();
+    renderAllNotes();
+    await screen.findByText("Fr. 2300");
+
+    await user.click(screen.getByRole("button", { name: "Add note" }));
+
+    expect(await screen.findByText("Note editor screen")).toBeInTheDocument();
+    expect(screen.getByTestId("pathname")).toHaveTextContent(
+      "/catalog/notes/new/edit",
+    );
   });
 
   test("Catalog is the default filter field and finds a note by catalog number", async () => {
@@ -443,6 +460,16 @@ describe("All notes screen", () => {
       within(emptyState).getByRole("link", { name: "Import / Export" }),
     ).toHaveAttribute("href", "/catalog/import-export");
     expect(getAllNotes).not.toHaveBeenCalled();
+  });
+
+  test("collections with no notes still offer Add note", async () => {
+    getAllNotes.mockResolvedValue({ notes: [] });
+    renderAllNotes();
+
+    expect(await screen.findByText("No notes yet")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add note" }),
+    ).toBeEnabled();
   });
 
   test("no matches names the filters, not an empty library, and clears in one action", async () => {

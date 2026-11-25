@@ -3,6 +3,7 @@ import { allNotesDefaultSortKey } from "../lib/allNotesColumns.js";
 import { isEditableElement } from "../lib/editableElement.js";
 import { useNotesTable } from "../lib/useNotesTable.js";
 import { getTableColumn } from "../lib/tableColumns.js";
+import { AddNoteButton } from "./AddNoteButton.jsx";
 import { NotesTableView } from "./NotesTableView.jsx";
 import { SelectField } from "./SelectField.jsx";
 
@@ -33,6 +34,7 @@ export function AllNotesTable({
   hideableColumns,
   lastVisibleDataColumnKey,
   notes,
+  onAddNote,
   onApplyTagFilter,
   onClearFilters,
   onCollectionChange,
@@ -380,7 +382,16 @@ export function AllNotesTable({
       onCloseShortcuts={() => setShowShortcutsHelp(false)}
       onResetView={onResetView}
       onToggleColumn={onToggleColumn}
-      railStart={collectionPicker}
+      railStart={
+        <>
+          <AddNoteButton
+            disabled={collectionCount === 0}
+            onClick={onAddNote}
+            shortcut={null}
+          />
+          {collectionPicker}
+        </>
+      }
       resetTitle="Clears the collection scope, filters and sort — keeps your columns"
       rows={notes}
       showShortcutsHelp={showShortcutsHelp}

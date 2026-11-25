@@ -6,6 +6,7 @@ export const CATALOG_ROUTES = {
   noteSlideshow: (collectionId, noteId) =>
     `/catalog/collections/${collectionId}/view#slideshow/${noteId}`,
   importExport: "/catalog/import-export",
+  noteCreate: "/catalog/notes/new/edit",
   noteEdit: (id) => `/catalog/notes/${id}/edit`,
 };
 

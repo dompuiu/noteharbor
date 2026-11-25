@@ -1,7 +1,9 @@
-import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { render, screen } from "@testing-library/react";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NoteEditForm } from "./NoteEditForm.jsx";
+import { chooseSelectOption } from "../test/selectField.js";
 
 vi.mock("../lib/api.js", () => ({
   createNote: vi.fn(),
@@ -15,10 +17,20 @@ vi.mock("../lib/api.js", () => ({
 }));
 
 vi.mock("../lib/collections.jsx", () => ({
-  useCollections: () => ({ collections: [{ id: 1, name: "Test" }] }),
+  useCollections: () => ({
+    collections: [
+      { id: 1, name: "Test" },
+      { id: 2, name: "Second" },
+    ],
+  }),
 }));
 
-import { getNote, getNotes, getTags } from "../lib/api.js";
+import { createNote, getNote, getNotes, getTags, reorderNotes } from "../lib/api.js";
+
+function LocationProbe() {
+  const location = useLocation();
+  return <output data-testid="location">{location.pathname}</output>;
+}
 
 function firstNotePayload() {
   return {
@@ -166,5 +178,122 @@ describe("Note editor create mode over the table", () => {
       "FIRSTNOTE",
     );
     expect(getNote).toHaveBeenCalledWith("1", 1);
+  });
+
+  test("a new note with no collection waits for one before it saves", async () => {
+    const user = userEvent.setup();
+    getNotes.mockResolvedValue({
+      notes: [{ ...firstNotePayload(), id: 9, display_order: 1 }],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/catalog/notes/new/edit"]}>
+        <Routes>
+          <Route
+            path="/catalog/notes/new/edit"
+            element={<NoteEditForm noteId={null} selectedCollectionId={null} />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByLabelText("Denomination");
+    expect(
+      screen.getByRole("combobox", { name: "Collection" }),
+    ).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Add" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Add & close" })).toBeDisabled();
+    expect(
+      screen.queryByRole("combobox", { name: "Position in collection" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Select a collection to set the note’s position and save."),
+    ).toBeInTheDocument();
+    expect(getNotes).not.toHaveBeenCalled();
+    expect(getTags).not.toHaveBeenCalled();
+
+    await chooseSelectOption(user, "Collection", "Second");
+
+    await waitFor(() => {
+      expect(getNotes).toHaveBeenCalledWith(2);
+    });
+    expect(
+      await screen.findByRole("combobox", { name: "Position in collection" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Add & close" })).toBeEnabled();
+  });
+
+  test("submitting without a collection reports what is missing", async () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={["/catalog/notes/new/edit"]}>
+        <Routes>
+          <Route
+            path="/catalog/notes/new/edit"
+            element={<NoteEditForm noteId={null} selectedCollectionId={null} />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByLabelText("Denomination");
+    fireEvent.submit(container.querySelector("#edit-note-form"));
+
+    expect(
+      await screen.findByText("Select a collection before saving the note."),
+    ).toBeInTheDocument();
+    expect(createNote).not.toHaveBeenCalled();
+  });
+
+  test("a collection-less new note can stay on All notes after saving", async () => {
+    const user = userEvent.setup();
+    const savedNote = {
+      ...firstNotePayload(),
+      id: 9,
+      collection_id: 2,
+      display_order: 1,
+    };
+    getNotes.mockResolvedValue({
+      notes: [{ ...firstNotePayload(), id: 8, display_order: 1 }],
+    });
+    createNote.mockResolvedValue({ note: savedNote });
+    reorderNotes.mockResolvedValue({ notes: [savedNote] });
+
+    render(
+      <MemoryRouter initialEntries={["/catalog/notes/new/edit"]}>
+        <LocationProbe />
+        <Routes>
+          <Route
+            path="/catalog/notes/new/edit"
+            element={
+              <NoteEditForm
+                cancelTo="/catalog/all-notes"
+                noteId={null}
+                selectedCollectionId={null}
+              />
+            }
+          />
+          <Route
+            element={<div>All notes screen</div>}
+            path="/catalog/all-notes"
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByLabelText("Denomination");
+    await chooseSelectOption(user, "Collection", "Second");
+    await screen.findByRole("combobox", { name: "Position in collection" });
+    await user.click(
+      screen.getByRole("checkbox", { name: "Show Second after saving" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Add & close" }));
+
+    expect(createNote).toHaveBeenCalledWith(expect.anything(), 2);
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        "/catalog/all-notes",
+      );
+    });
   });
 });
