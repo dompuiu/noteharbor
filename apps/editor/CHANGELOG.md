@@ -4,6 +4,16 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.24.3] - 2026-11-27
+
+### Added
+
+- All notes screen: a new **Add note** button in the rail opens the create form over the table, so the current collection, filters, and sort stay in place behind it. The form starts without a collection, and Save stays off until one is chosen; tag suggestions follow the choice. Escape closes the form from any point, and a saved note reloads the table.
+
+### Fixed
+
+- Note editor: the full-screen note route now scrolls like the overlay. The header scrolls with the form instead of staying pinned above an inner scroll area, so the Collection and position fields are no longer cut off below the fold.
+
 ## [2.24.2] - 2026-11-23
 
 ### Fixed
