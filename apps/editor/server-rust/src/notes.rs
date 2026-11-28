@@ -1593,11 +1593,12 @@ async fn build_next_images(
             .await
             .map_err(|error| format!("Thumbnail generation failed: {error}"))??;
         let Some(record) = generated else { continue };
-        let key = image_slot_key(image_type, "thumbnail");
-        if let Some(stale) = by_slot.remove(&key) {
-            images::remove_file_if_managed(images_dir, Some(&stale.local_path));
-        }
-        by_slot.insert(key, record);
+        // Replace the slot record only. The writer already replaced the slot
+        // file in place (a regenerate keeps the same `front-thumbnail.webp`
+        // path), so deleting the old record's `localPath` here would delete
+        // the file just written; the save's stale-file sweep cleans up any
+        // other orphan after the write.
+        by_slot.insert(image_slot_key(image_type, "thumbnail"), record);
     }
 
     Ok(IMAGE_SLOTS

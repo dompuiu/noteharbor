@@ -1426,6 +1426,61 @@ async fn update_generate_flag_builds_a_thumbnail_from_the_full_image() {
 }
 
 #[tokio::test]
+async fn update_generate_flag_replaces_an_existing_thumbnail_on_disk() {
+    // Regression: the generated file was written into the slot, then the
+    // stale record for that slot (same basename, e.g. `front-thumbnail.webp`)
+    // was cleaned up and deleted the freshly written file. The note kept a
+    // `localPath` that no longer existed, so the editor said "Image
+    // unavailable" after saving with Generate thumbnail checked.
+    let (dir, state) = fresh_state();
+    let app = create_app(state);
+    let collection = create_collection(app.clone(), "Generate Over Existing").await;
+    let id = collection["id"].as_i64().unwrap();
+    let full = png_bytes(1200, 800);
+    let old_thumbnail = png_bytes(300, 200);
+
+    let boundary = "generateoverexisting";
+    let body = multipart_body(boundary, vec![
+        ("denomination", None, b"5 Lei", "text/plain"),
+        ("image_front_full", Some("front.png"), &full, "image/png"),
+        ("image_front_thumbnail", Some("front-thumb.png"), &old_thumbnail, "image/png"),
+    ]);
+    let (status, created) = call_multipart(
+        app.clone(), "POST", &format!("/api/collections/{id}/notes"), body, boundary,
+    ).await;
+    assert_eq!(status, StatusCode::CREATED, "{created:?}");
+    let note_id = created["note"]["id"].as_i64().unwrap();
+    let note_dir = dir.path().join("images").join("notes").join(note_id.to_string());
+    assert!(note_dir.join("front-thumbnail.webp").is_file());
+
+    let (status, updated) = call(
+        app.clone(), "PUT", &format!("/api/collections/{id}/notes/{note_id}"),
+        Some(json!({ "denomination": "5 Lei", "generate_image_front_thumbnail_from_full": true })),
+    ).await;
+    assert_eq!(status, StatusCode::OK, "{updated:?}");
+    let images = updated["note"]["images"].as_array().unwrap();
+    let thumbnail = images
+        .iter()
+        .find(|image| image["variant"] == json!("thumbnail"))
+        .expect("thumbnail record survives");
+    assert_eq!(thumbnail["origin"], json!("generated"));
+    let local_path = thumbnail["localPath"].as_str().unwrap();
+    assert_eq!(local_path, format!("/api/images/notes/{note_id}/front-thumbnail.webp"));
+    let file_name = local_path.rsplit('/').next().unwrap();
+    assert!(
+        note_dir.join(file_name).is_file(),
+        "generated thumbnail file {local_path} was deleted by stale cleanup"
+    );
+    let stored = std::fs::read(note_dir.join(file_name)).expect("thumbnail file reads");
+    let decoded = image::load_from_memory(&stored).expect("thumbnail decodes");
+    assert_eq!(
+        decoded.width(),
+        editor_server_rust::images::THUMBNAIL_MAX_WIDTH,
+        "thumbnail comes from the full scan, not the old thumbnail"
+    );
+}
+
+#[tokio::test]
 async fn image_url_validation_rejects_before_any_download() {
     let (_dir, state) = fresh_state();
     let app = create_app(state);
