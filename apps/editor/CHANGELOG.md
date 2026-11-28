@@ -4,6 +4,12 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.24.4] - 2026-11-27
+
+### Fixed
+
+- Note editor: checking **Generate thumbnail** on a note that already had a thumbnail no longer deletes the freshly generated file during the save. The saved note now shows the generated thumbnail instead of "Image unavailable".
+
 ## [2.24.3] - 2026-11-27
 
 ### Added
